@@ -135,6 +135,12 @@ def _resolve_win_colors(away: dict[str, Any], home: dict[str, Any]) -> None:
     home["win_color"] = home_win
 
 
+def _is_between_innings(status_detail: str | None) -> bool:
+    if not status_detail:
+        return False
+    return bool(re.search(r"\b(mid|middle|end)\b", status_detail.strip().lower()))
+
+
 def _batting_side_from_status(status_detail: str | None) -> str | None:
     if not status_detail:
         return None
@@ -145,6 +151,11 @@ def _batting_side_from_status(status_detail: str | None) -> str | None:
         return "home"
     if re.search(r"\b(mid|middle)\b", detail):
         return "home"
+    if re.search(r"\bend\b", detail):
+        # "End 5th" (top half done) — away just batted; explicit half wins when present.
+        if re.search(r"\b(bot|bottom)\b", detail):
+            return "home"
+        return "away"
     return None
 
 
@@ -185,6 +196,12 @@ def _resolve_batting_side(
     home: dict[str, Any] | None,
     status_detail: str | None,
 ) -> str | None:
+    # Between innings, ESPN summary often clears the batter while status still
+    # reflects the half; prefer status so detail matches the scoreboard card.
+    if _is_between_innings(status_detail):
+        status_side = _batting_side_from_status(status_detail)
+        if status_side:
+            return status_side
     side = _batting_side_from_situation(situation, away, home)
     if side:
         return side
@@ -251,7 +268,20 @@ def parse_game(event: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+STRIP_CARDS_PER_PAGE = 4
+
 _STATUS_SORT_ORDER = {"in": 0, "pre": 1, "post": 2}
+
+
+def strip_initial_page(
+    strip_games: list[dict[str, Any]],
+    game_id: str,
+) -> int:
+    """Carousel page for game detail strip (card 0 is the scoreboard link)."""
+    for index, game in enumerate(strip_games):
+        if str(game.get("id")) == str(game_id):
+            return (index + 1) // STRIP_CARDS_PER_PAGE
+    return 0
 
 
 def _scoreboard_sort_key(game: dict[str, Any]) -> tuple[int, str]:

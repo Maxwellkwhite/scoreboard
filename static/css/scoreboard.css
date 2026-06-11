@@ -907,20 +907,190 @@ html[data-scoreboard-view="standings"] #tab-standings {
   max-width: 720px;
 }
 
-.game-detail-back {
-  display: inline-flex;
+.game-detail-live-strip-wrap {
+  --strip-card-width: 132px;
+  --strip-gap: 0.65rem;
+  display: flex;
+  justify-content: center;
   align-items: center;
-  gap: 0.35rem;
-  color: #3d6ea8;
-  text-decoration: none;
-  font-size: 0.9rem;
-  font-weight: 600;
-  margin-bottom: 1.25rem;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
 }
 
-.game-detail-back:hover {
-  color: #25518a;
-  text-decoration: underline;
+.game-detail-live-strip {
+  overflow: hidden;
+  flex: 0 0 auto;
+  width: calc(4 * var(--strip-card-width) + 3 * var(--strip-gap));
+}
+
+.game-strip-scoreboard-card {
+  flex: 0 0 var(--strip-card-width);
+  width: var(--strip-card-width);
+  padding: 0.55rem 0.6rem 0.5rem;
+  gap: 0.45rem;
+  box-shadow: 0 1px 6px rgba(26, 35, 50, 0.06);
+}
+
+.game-strip-scoreboard-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-height: 3.5rem;
+  justify-content: center;
+}
+
+.game-strip-scoreboard-card__title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #1a2332;
+  letter-spacing: 0.02em;
+}
+
+.game-strip-scoreboard-card__desc {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #6b7789;
+  line-height: 1.25;
+}
+
+.game-strip-scoreboard-card .status-pill {
+  font-size: 0.58rem;
+  padding: 0.14rem 0.4rem;
+  align-self: flex-start;
+}
+
+.game-detail-live-strip__track {
+  display: flex;
+  gap: var(--strip-gap);
+  transition: transform 0.25s ease;
+  will-change: transform;
+}
+
+.game-detail-live-strip-wrap:not(.is-ready) .game-detail-live-strip__track {
+  transition: none;
+}
+
+.game-detail-live-strip__arrow {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: #e4e9f0;
+  color: #1a2332;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.game-detail-live-strip__arrow:hover {
+  background: #d5dce6;
+  color: #1a2332;
+}
+
+.game-detail-live-strip__arrow:focus-visible {
+  outline: 2px solid #3d6ea8;
+  outline-offset: 2px;
+}
+
+.game-detail-live-strip__arrow.is-disabled {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.game-mini-card {
+  flex: 0 0 auto;
+  width: var(--strip-card-width, 132px);
+  background: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.55rem 0.6rem 0.5rem;
+  box-shadow: 0 1px 6px rgba(26, 35, 50, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.game-mini-card--link {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.game-mini-card--link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(26, 35, 50, 0.1);
+  color: inherit;
+}
+
+.game-mini-card--active {
+  background: #f7f9fc;
+}
+
+.game-mini-card .status-pill {
+  font-size: 0.58rem;
+  padding: 0.14rem 0.4rem;
+  align-self: flex-start;
+}
+
+.game-mini-card .status-pill--in.status-pill--batting-team {
+  background: color-mix(in srgb, var(--batting-team-color, #22a06b) 16%, white);
+  color: var(--batting-team-color, #137a4d);
+}
+
+.game-mini-card__teams {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.game-mini-card__team {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.game-mini-card__logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.game-mini-card__logo-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #eef1f5;
+  font-size: 0.55rem;
+  font-weight: 800;
+  color: #5c6778;
+}
+
+.game-mini-card__abbr {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--team-color, #1a2332);
+  letter-spacing: 0.02em;
+}
+
+.game-mini-card__score {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--team-color, #1a2332);
+  font-variant-numeric: tabular-nums;
+}
+
+.game-mini-card__team--loser {
+  opacity: 0.38;
+  filter: grayscale(0.45);
 }
 
 .game-detail-header h1 {
@@ -1200,6 +1370,7 @@ html[data-scoreboard-view="standings"] #tab-standings {
 .game-detail-tabs {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 0.45rem;
   margin-bottom: 1rem;
 }

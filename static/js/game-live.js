@@ -284,6 +284,103 @@
     }
   }
 
+  function formatPreGameTime(el) {
+    var iso = el.getAttribute('data-start-time');
+    if (!iso) return;
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return;
+    el.textContent = d.toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  }
+
+  function miniCardStatusLabel(game) {
+    if (game.status_detail && /rain delay/i.test(game.status_detail)) {
+      return 'Rain Delay';
+    }
+    return game.status_detail || '';
+  }
+
+  function applyMiniCard(card, game) {
+    var isLink = card.tagName === 'A';
+    var color = battingTeamColor(game);
+
+    if (game.status_state === 'in' && color) {
+      card.style.setProperty('--batting-team-color', color);
+    } else {
+      card.style.removeProperty('--batting-team-color');
+    }
+
+    card.className = 'game-mini-card game-mini-card--' + game.status_state +
+      (isLink ? ' game-mini-card--link' : ' game-mini-card--active');
+
+    var pill = card.querySelector('.status-pill');
+    if (pill) {
+      pill.className = 'status-pill status-pill--' + game.status_state;
+      if (game.status_state === 'in' && color) {
+        pill.classList.add('status-pill--batting-team');
+      }
+      if (game.status_state === 'pre' && game.start_time) {
+        pill.setAttribute('data-start-time', game.start_time);
+        formatPreGameTime(pill);
+      } else {
+        pill.removeAttribute('data-start-time');
+        pill.textContent = miniCardStatusLabel(game);
+      }
+    }
+
+    var hasWinner = Boolean(game.away && game.away.winner) ||
+      Boolean(game.home && game.home.winner);
+    var teamRows = card.querySelectorAll('.game-mini-card__team');
+    var sides = [
+      { team: game.away },
+      { team: game.home }
+    ];
+
+    sides.forEach(function (entry, index) {
+      var team = entry.team;
+      var row = teamRows[index];
+      if (!row || !team) return;
+
+      var rowClass = 'game-mini-card__team';
+      if (team.winner) {
+        rowClass += ' game-mini-card__team--winner';
+      } else if (game.status_state === 'post' && hasWinner) {
+        rowClass += ' game-mini-card__team--loser';
+      }
+      row.className = rowClass;
+      row.style.setProperty(
+        '--team-color',
+        team.win_color || team.color || '#1a2332'
+      );
+
+      var scoreEl = row.querySelector('.game-mini-card__score');
+      if (scoreEl) {
+        scoreEl.textContent = game.status_state === 'pre'
+          ? '—'
+          : (team.score != null ? team.score : '0');
+      }
+    });
+  }
+
+  function updateStripGames(games) {
+    var track = document.querySelector('.game-detail-live-strip__track');
+    if (!track || !games || !games.length) return;
+
+    var gamesById = {};
+    games.forEach(function (game) {
+      gamesById[String(game.id)] = game;
+    });
+
+    track.querySelectorAll('.game-mini-card[data-game-id]').forEach(function (card) {
+      var id = card.getAttribute('data-game-id');
+      if (gamesById[id]) {
+        applyMiniCard(card, gamesById[id]);
+      }
+    });
+  }
+
   function applyGame(game) {
     var pill = document.getElementById('game-status-pill');
     var countEl = document.getElementById('game-count');
@@ -423,6 +520,9 @@
       .then(function (data) {
         if (!data.game) return;
         applyGame(data.game);
+        if (data.strip_games) {
+          updateStripGames(data.strip_games);
+        }
         schedulePoll(data.game.status_state === 'in' ? POLL_MS_LIVE : POLL_MS_FINAL);
       })
       .catch(function () {});

@@ -1014,27 +1014,36 @@ def api_mlb_scoreboard_today():
 
 @app.route('/game/<game_id>', methods=['GET'], endpoint='mlb_game_page')
 def mlb_game_page(game_id):
-    from espn_mlb import fetch_game_summary
+    from espn_mlb import fetch_game_summary, fetch_scoreboard, strip_initial_page
 
     try:
         game = fetch_game_summary(str(game_id))
     except (requests.RequestException, ValueError):
         abort(404)
 
+    strip_games = fetch_scoreboard(date.today())
+
     template = 'game_preview.html' if game.get('status_state') == 'pre' else 'game_live.html'
-    return render_template(template, game=game)
+    return render_template(
+        template,
+        game=game,
+        strip_games=strip_games,
+        current_game_id=str(game_id),
+        strip_initial_page=strip_initial_page(strip_games, str(game_id)),
+    )
 
 
 @app.route('/api/mlb/game/<game_id>', methods=['GET'], endpoint='api_mlb_game')
 def api_mlb_game(game_id):
-    from espn_mlb import fetch_game_summary
+    from espn_mlb import fetch_game_summary, fetch_scoreboard
 
     try:
         game = fetch_game_summary(str(game_id), force_refresh=True)
     except (requests.RequestException, ValueError):
         return jsonify({'error': 'Game not found'}), 404
 
-    return jsonify({'game': game})
+    strip_games = fetch_scoreboard(date.today(), force_refresh=True)
+    return jsonify({'game': game, 'strip_games': strip_games})
 
 
 @app.route('/api/mlb/scoreboard/yesterday', methods=['GET'])

@@ -1,0 +1,98 @@
+<div class="game-detail-live-strip-wrap" data-initial-page="{{ strip_initial_page }}">
+  <button type="button" class="game-detail-live-strip__arrow game-detail-live-strip__arrow--prev is-disabled" aria-label="Previous games" disabled>
+    <i class="bi bi-chevron-left" aria-hidden="true"></i>
+  </button>
+  <nav class="game-detail-live-strip" aria-label="Today's games">
+    <div class="game-detail-live-strip__track" style="transform: translateX(calc(-1 * {{ strip_initial_page }} * 4 * (var(--strip-card-width) + var(--strip-gap))));">
+      {% include "partials/game_strip_home_card.html" %}
+      {% for strip_game in strip_games %}
+        {% with game=strip_game, current_game_id=current_game_id %}
+          {% include "partials/game_mini_card.html" %}
+        {% endwith %}
+      {% endfor %}
+    </div>
+  </nav>
+  <button type="button" class="game-detail-live-strip__arrow game-detail-live-strip__arrow--next is-disabled" aria-label="Next games" disabled>
+    <i class="bi bi-chevron-right" aria-hidden="true"></i>
+  </button>
+</div>
+<script>
+  (function () {
+    var CARDS_PER_PAGE = 4;
+    var wrap = document.querySelector('.game-detail-live-strip-wrap');
+    if (!wrap) return;
+
+    var track = wrap.querySelector('.game-detail-live-strip__track');
+    var prevBtn = wrap.querySelector('.game-detail-live-strip__arrow--prev');
+    var nextBtn = wrap.querySelector('.game-detail-live-strip__arrow--next');
+    var page = parseInt(wrap.getAttribute('data-initial-page') || '0', 10);
+
+    function getCards() {
+      return track.querySelectorAll('.game-strip-scoreboard-card, .game-mini-card');
+    }
+
+    function trackGap() {
+      return parseFloat(getComputedStyle(track).gap) || 0;
+    }
+
+    function cardStep() {
+      var cards = getCards();
+      if (!cards.length) return 0;
+      return cards[0].offsetWidth + trackGap();
+    }
+
+    function totalPages() {
+      var cards = getCards();
+      return Math.max(1, Math.ceil(cards.length / CARDS_PER_PAGE));
+    }
+
+    function updateStrip(animate) {
+      var cards = getCards();
+      var pages = totalPages();
+      page = Math.max(0, Math.min(page, pages - 1));
+
+      if (animate === false) {
+        track.style.transition = 'none';
+      }
+
+      track.style.transform = 'translateX(' + (-page * CARDS_PER_PAGE * cardStep()) + 'px)';
+
+      var showArrows = cards.length > CARDS_PER_PAGE;
+      var prevDisabled = !showArrows || page <= 0;
+      var nextDisabled = !showArrows || page >= pages - 1;
+      prevBtn.disabled = prevDisabled;
+      nextBtn.disabled = nextDisabled;
+      prevBtn.classList.toggle('is-disabled', prevDisabled);
+      nextBtn.classList.toggle('is-disabled', nextDisabled);
+
+      if (animate === false) {
+        void track.offsetWidth;
+        track.style.transition = '';
+      }
+    }
+
+    prevBtn.addEventListener('click', function () {
+      page -= 1;
+      updateStrip(true);
+    });
+
+    nextBtn.addEventListener('click', function () {
+      page += 1;
+      updateStrip(true);
+    });
+
+    updateStrip(false);
+    wrap.classList.add('is-ready');
+
+    document.querySelectorAll('.game-mini-card .status-pill[data-start-time]').forEach(function (el) {
+      var iso = el.getAttribute('data-start-time');
+      if (!iso) return;
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return;
+      el.textContent = d.toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        minute: '2-digit'
+      });
+    });
+  })();
+</script>

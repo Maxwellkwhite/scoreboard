@@ -17,7 +17,7 @@
   </nav>
 
   <main class="scoreboard-main game-detail-main">
-    <a href="{{ url_for('home_page') }}" class="game-detail-back"><i class="bi bi-arrow-left"></i> Back to scores</a>
+    {% include "partials/game_live_strip.html" %}
 
     <header class="game-detail-header">
       <p class="game-detail-kicker">{% if game.status_state == 'in' %}Live Game{% else %}Game Summary{% endif %}</p>
