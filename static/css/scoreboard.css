@@ -274,21 +274,12 @@ html[data-scoreboard-view="standings"] #tab-standings {
   box-shadow: 0 1px 2px rgba(26, 35, 50, 0.04);
 }
 
-.standings-team-row--leader {
-  background: color-mix(in srgb, var(--team-color) 10%, #fff);
-  border-color: color-mix(in srgb, var(--team-color) 28%, #e8edf3);
-}
-
 .standings-team-row__rank {
   font-size: 0.68rem;
   font-weight: 700;
   color: #8a95a5;
   text-align: center;
   font-variant-numeric: tabular-nums;
-}
-
-.standings-team-row--leader .standings-team-row__rank {
-  color: var(--team-color);
 }
 
 .standings-team-row__logo-wrap {
@@ -334,13 +325,6 @@ html[data-scoreboard-view="standings"] #tab-standings {
   letter-spacing: 0.02em;
 }
 
-.standings-team-row__record {
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: #6b7789;
-  font-variant-numeric: tabular-nums;
-}
-
 .standings-team-row__stats {
   display: flex;
   align-items: center;
@@ -351,10 +335,19 @@ html[data-scoreboard-view="standings"] #tab-standings {
 }
 
 .standings-team-row__pct {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #6b7789;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.standings-team-row__record {
   min-width: 2.35rem;
   text-align: right;
   font-weight: 700;
   color: #1a2332;
+  line-height: 1.1;
 }
 
 .standings-team-row__gb {
@@ -496,10 +489,6 @@ html[data-scoreboard-view="standings"] #tab-standings {
   filter: grayscale(0.45);
 }
 
-.game-card--post .game-card-team--loser .game-card-score {
-  color: #8a95a5;
-}
-
 .game-card-logo {
   width: 40px;
   height: 40px;
@@ -530,6 +519,11 @@ html[data-scoreboard-view="standings"] #tab-standings {
   line-height: 1.2;
 }
 
+.game-card--link .game-card-team .game-card-abbr,
+.game-card--link .game-card-team .game-card-score {
+  color: var(--team-color, #1a2332);
+}
+
 .game-card-name {
   font-size: 0.78rem;
   color: #6b7789;
@@ -551,15 +545,15 @@ html[data-scoreboard-view="standings"] #tab-standings {
 @keyframes game-card-score-pulse {
   0% {
     transform: scale(1);
-    color: #1a2332;
+    color: var(--team-color, #1a2332);
   }
   35% {
     transform: scale(1.28);
-    color: var(--score-pulse-color, #22a06b);
+    color: var(--score-pulse-color, var(--team-color, #22a06b));
   }
   100% {
     transform: scale(1);
-    color: #1a2332;
+    color: var(--team-color, #1a2332);
   }
 }
 

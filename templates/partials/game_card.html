@@ -12,7 +12,7 @@
   <div class="game-card-teams">
     {% for side in [('away', game.away), ('home', game.home)] %}
     {% set team = side[1] %}
-    <div class="game-card-team game-card-team--{{ side[0] }}{% if team.winner %} game-card-team--winner{% elif game.status_state == 'post' and has_winner %} game-card-team--loser{% endif %}">
+    <div class="game-card-team game-card-team--{{ side[0] }}{% if team.winner %} game-card-team--winner{% elif game.status_state == 'post' and has_winner %} game-card-team--loser{% endif %}" style="--team-color: {{ team.win_color or team.color or '#1a2332' }};">
       {% if team.logo %}
       <img class="game-card-logo" src="{{ team.logo }}" alt="" width="40" height="40" loading="lazy">
       {% else %}

@@ -1,3 +1,6 @@
 Main scoreboard page:
 - visual updates when something happens - already implemented pulse for score
 - 
+
+Individual Game page:
+- Replace back with mini cards of games to click on

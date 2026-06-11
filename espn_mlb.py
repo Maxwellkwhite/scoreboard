@@ -806,6 +806,11 @@ def _parse_standing_team(
     }
 
 
+def _division_short_name(division: dict[str, Any]) -> str:
+    short_name = division.get("shortName") or division.get("name", "")
+    return short_name.replace(" Cent", " Central")
+
+
 def parse_standings(
     payload: dict[str, Any],
     teams_lookup: dict[str, dict[str, Any]] | None = None,
@@ -823,7 +828,7 @@ def parse_standings(
             divisions.append({
                 "abbr": division.get("abbreviation", ""),
                 "name": division.get("name", ""),
-                "short_name": division.get("shortName") or division.get("name", ""),
+                "short_name": _division_short_name(division),
                 "teams": teams,
             })
         leagues.append({

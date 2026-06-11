@@ -133,6 +133,10 @@
         teamClass += ' game-card-team--loser';
       }
       entry.el.className = teamClass;
+      entry.el.style.setProperty(
+        '--team-color',
+        entry.team.win_color || entry.team.color || '#1a2332'
+      );
       var scoreEl = entry.el.querySelector('.game-card-score');
       if (!scoreEl) return;
 

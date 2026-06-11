@@ -12,7 +12,7 @@
         <h4 class="standings-division__title">{{ division.short_name }}</h4>
         <ol class="standings-teams">
           {% for team in division.teams %}
-          <li class="standings-team-row{% if loop.first %} standings-team-row--leader{% endif %}" style="--team-color: {{ team.color }};">
+          <li class="standings-team-row" style="--team-color: {{ team.color }};">
             <span class="standings-team-row__rank" aria-hidden="true">{{ loop.index }}</span>
             <span class="standings-team-row__logo-wrap">
               {% if team.logo %}
@@ -23,10 +23,10 @@
             </span>
             <div class="standings-team-row__main">
               <span class="standings-team-row__name" title="{{ team.name }}">{{ team.abbr }}</span>
-              <span class="standings-team-row__record">{{ team.wins or '0' }}–{{ team.losses or '0' }}</span>
+              <span class="standings-team-row__pct">{{ team.pct or '—' }}</span>
             </div>
             <div class="standings-team-row__stats">
-              <span class="standings-team-row__pct">{{ team.pct or '—' }}</span>
+              <span class="standings-team-row__record">{{ team.wins or '0' }}–{{ team.losses or '0' }}</span>
               <span class="standings-team-row__gb">{% if team.gb and team.gb != '-' %}{{ team.gb }}{% else %}—{% endif %}</span>
               {% if team.streak and team.streak[0] == 'W' %}
               <span class="standings-team-row__streak standings-team-row__streak--win">{{ team.streak }}</span>
