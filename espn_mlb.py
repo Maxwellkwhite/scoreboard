@@ -575,11 +575,64 @@ def _runner_name(value: Any, player_map: dict[str, str]) -> str | None:
     return player_map.get(player_id)
 
 
+def _player_batting_stats_map(payload: dict[str, Any]) -> dict[str, dict[str, str]]:
+    stats_map: dict[str, dict[str, str]] = {}
+    for team_block in (payload.get("boxscore") or {}).get("players") or []:
+        for stat_group in team_block.get("statistics") or []:
+            if stat_group.get("type") != "batting":
+                continue
+            keys = stat_group.get("keys") or []
+            for entry in stat_group.get("athletes") or []:
+                athlete = entry.get("athlete") or {}
+                player_id = athlete.get("id")
+                if not player_id:
+                    continue
+                values = entry.get("stats") or []
+                stats_map[str(player_id)] = {
+                    str(key): str(value)
+                    for key, value in zip(keys, values)
+                    if value is not None
+                }
+    return stats_map
+
+
+def _parse_due_up(
+    situation: dict[str, Any],
+    player_map: dict[str, str],
+    batting_stats_map: dict[str, dict[str, str]] | None = None,
+) -> list[dict[str, Any]]:
+    batting_stats_map = batting_stats_map or {}
+    due_up: list[dict[str, Any]] = []
+    for entry in situation.get("dueUp") or []:
+        athlete = entry.get("athlete") or {}
+        player_id = entry.get("playerId") or athlete.get("id")
+        name = None
+        if player_id:
+            name = player_map.get(str(player_id))
+        if not name:
+            name = athlete.get("shortName") or athlete.get("displayName")
+        if not name:
+            continue
+
+        stats = batting_stats_map.get(str(player_id), {}) if player_id else {}
+        due_up.append({
+            "name": name,
+            "bat_order": entry.get("batOrder"),
+            "line": stats.get("hits-atBats") or "0-0",
+            "runs": stats.get("runs") or "0",
+            "hits": stats.get("hits") or "0",
+            "rbi": stats.get("RBIs") or "0",
+        })
+    return due_up
+
+
 def _parse_live_situation(
     situation: dict[str, Any] | None,
     plays: list[dict[str, Any]] | None,
     competitors: list[dict[str, Any]] | None = None,
     player_map: dict[str, str] | None = None,
+    status_detail: str | None = None,
+    batting_stats_map: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     situation = situation or {}
     notes = [
@@ -610,6 +663,12 @@ def _parse_live_situation(
     if not batter_name and batter_id:
         batter_name = players.get(str(batter_id))
 
+    due_up = _parse_due_up(situation, players, batting_stats_map)
+    show_due_up = _is_between_innings(status_detail) and bool(due_up)
+    if show_due_up:
+        pitcher_name = None
+        batter_name = None
+
     return {
         "balls": situation.get("balls"),
         "strikes": situation.get("strikes"),
@@ -624,6 +683,8 @@ def _parse_live_situation(
         "matchup_text": matchup_text,
         "pitcher_name": pitcher_name,
         "batter_name": batter_name,
+        "due_up": due_up,
+        "show_due_up": show_due_up,
     }
 
 
@@ -716,11 +777,14 @@ def parse_game_detail(payload: dict[str, Any]) -> dict[str, Any]:
     live_win_pct = _parse_win_probability(payload.get("winprobability"))
     plays = payload.get("plays") or []
     player_map = _player_map_from_game(payload, comp.get("competitors"))
+    batting_stats_map = _player_batting_stats_map(payload)
     live_situation = _parse_live_situation(
         payload.get("situation"),
         plays,
         comp.get("competitors"),
         player_map,
+        status_detail=game.get("status_detail"),
+        batting_stats_map=batting_stats_map,
     )
 
     if live_situation.get("balls") is not None:

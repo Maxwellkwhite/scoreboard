@@ -4,3 +4,5 @@ Main scoreboard page:
 
 Individual Game page:
 - Replace back with mini cards of games to click on
+- Ensure due up is working
+- Add lineup tab, make sure game stats are shown, along with season stats

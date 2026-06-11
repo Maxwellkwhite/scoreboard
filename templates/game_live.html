@@ -40,7 +40,7 @@
           {% for side in [('away', game.away), ('home', game.home)] %}
           {% set team = side[1] %}
           {% set team_role = 'batting' if game.status_state == 'in' and game.batting_side == side[0] else ('pitching' if game.status_state == 'in' and game.batting_side and game.batting_side != side[0] else none) %}
-          <div id="game-team-{{ side[0] }}" class="game-card-team game-card-team--{{ side[0] }}{% if team.winner %} game-card-team--winner{% endif %}">
+          <div id="game-team-{{ side[0] }}" class="game-card-team game-card-team--{{ side[0] }}{% if team.winner %} game-card-team--winner{% endif %}" style="--team-color: {{ team.win_color or team.color or '#1a2332' }};">
             {% if team.logo %}
             <img class="game-card-logo" src="{{ team.logo }}" alt="" width="48" height="48" loading="lazy">
             {% else %}
@@ -88,8 +88,19 @@
 
       {% if game.status_state == 'in' %}
       <aside class="game-hero-side">
-        <section class="game-card game-detail-side-card" id="game-situation-section">
-          <div class="bases-diagram" id="game-bases"{% if batting_team and pitching_team %} style="--batting-team-color: {{ batting_team.win_color or batting_team.color }}; --pitching-team-color: {{ pitching_team.win_color or pitching_team.color }};"{% endif %}>
+        <section class="game-card game-detail-side-card{% if game.live.situation.show_due_up %} is-due-up{% endif %}" id="game-situation-section"{% if batting_team and pitching_team %} style="--batting-team-color: {{ batting_team.win_color or batting_team.color }}; --pitching-team-color: {{ pitching_team.win_color or pitching_team.color }};"{% endif %}>
+          <div class="situation-due-up" id="game-due-up-panel"{% if not game.live.situation.show_due_up %} hidden{% endif %}>
+            <p class="situation-due-up__title">Due Up</p>
+            <ul class="due-up-list" id="game-due-up">
+              {% for batter in game.live.situation.due_up or [] %}
+              <li class="due-up-row">
+                <span class="due-up-name">{{ batter.name }}</span>
+                <span class="due-up-stats">{{ batter.line }}, {{ batter.runs }} R, {{ batter.rbi }} RBI</span>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          <div class="bases-diagram" id="game-bases"{% if game.live.situation.show_due_up %} hidden{% endif %}>
             <div class="base base--2nd{% if game.live.situation.on_second %} base--occupied{% endif %}" aria-label="2nd base"></div>
             <div class="base base--3rd{% if game.live.situation.on_third %} base--occupied{% endif %}" aria-label="3rd base"></div>
             <div class="base base--1st{% if game.live.situation.on_first %} base--occupied{% endif %}" aria-label="1st base"></div>

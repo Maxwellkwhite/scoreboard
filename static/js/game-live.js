@@ -188,6 +188,13 @@
       '<div class="team-stats__rows">' + rows + '</div>';
   }
 
+  function formatDueUpStats(batter) {
+    var line = batter.line || '0-0';
+    var runs = batter.runs != null ? batter.runs : '0';
+    var rbi = batter.rbi != null ? batter.rbi : '0';
+    return line + ', ' + runs + ' R, ' + rbi + ' RBI';
+  }
+
   function renderSituation(live, statusState) {
     var section = document.getElementById('game-situation-section');
     if (!live || !live.situation || statusState !== 'in') {
@@ -197,6 +204,38 @@
 
     if (section) section.hidden = false;
     var situation = live.situation;
+    var showDueUp = !!(situation.show_due_up && situation.due_up && situation.due_up.length);
+    var dueUpPanel = document.getElementById('game-due-up-panel');
+    var bases = document.getElementById('game-bases');
+
+    if (section) section.classList.toggle('is-due-up', showDueUp);
+    if (dueUpPanel) dueUpPanel.hidden = !showDueUp;
+    if (bases) bases.hidden = showDueUp;
+
+    var dueUpList = document.getElementById('game-due-up');
+    if (dueUpList) {
+      dueUpList.textContent = '';
+      if (showDueUp) {
+        situation.due_up.forEach(function (batter) {
+          var row = document.createElement('li');
+          row.className = 'due-up-row';
+
+          var nameEl = document.createElement('span');
+          nameEl.className = 'due-up-name';
+          nameEl.textContent = batter.name;
+
+          var statsEl = document.createElement('span');
+          statsEl.className = 'due-up-stats';
+          statsEl.textContent = formatDueUpStats(batter);
+
+          row.appendChild(nameEl);
+          row.appendChild(statsEl);
+          dueUpList.appendChild(row);
+        });
+      }
+    }
+
+    if (showDueUp) return;
 
   var baseConfig = [
       { base: '1st', occupiedKey: 'on_first', runnerKey: 'first_runner', runnerId: 'game-runner-first' },
@@ -249,20 +288,22 @@
   }
 
   function applySituationTheme(game) {
+    var section = document.getElementById('game-situation-section');
     var bases = document.getElementById('game-bases');
-    if (!bases) return;
+    if (!section && !bases) return;
 
     var battingColor = battingTeamColor(game);
     var pitchingColor = pitchingTeamColor(game);
+    var themeTarget = section || bases;
 
     if (game.status_state === 'in' && battingColor) {
-      bases.style.setProperty('--batting-team-color', battingColor);
+      themeTarget.style.setProperty('--batting-team-color', battingColor);
       if (pitchingColor) {
-        bases.style.setProperty('--pitching-team-color', pitchingColor);
+        themeTarget.style.setProperty('--pitching-team-color', pitchingColor);
       }
     } else {
-      bases.style.removeProperty('--batting-team-color');
-      bases.style.removeProperty('--pitching-team-color');
+      themeTarget.style.removeProperty('--batting-team-color');
+      themeTarget.style.removeProperty('--pitching-team-color');
     }
   }
 
@@ -408,6 +449,10 @@
       if (!row || !team) return;
 
       row.classList.toggle('game-card-team--winner', !!team.winner);
+      row.style.setProperty(
+        '--team-color',
+        team.win_color || team.color || '#1a2332'
+      );
 
       var scoreEl = document.getElementById('game-' + side + '-score');
       if (scoreEl) {

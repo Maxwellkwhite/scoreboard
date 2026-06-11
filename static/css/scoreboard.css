@@ -653,6 +653,53 @@ html[data-scoreboard-view="standings"] #tab-standings {
   right: 22%;
 }
 
+.game-detail-side-card.is-due-up {
+  justify-content: flex-start;
+}
+
+.situation-due-up {
+  width: 100%;
+}
+
+.situation-due-up__title {
+  margin: 0 0 0.75rem;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8a95a5;
+  text-align: center;
+}
+
+.due-up-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.due-up-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.due-up-name {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--batting-team-color, #1a2332);
+  line-height: 1.2;
+}
+
+.due-up-stats {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #5c6778;
+  line-height: 1.25;
+}
+
 .game-detail-side-card .bases-pitcher {
   top: 56%;
   transform: translate(-50%, -50%);
@@ -779,6 +826,11 @@ html[data-scoreboard-view="standings"] #tab-standings {
 .game-detail-hero .game-card-team {
   grid-template-columns: 48px 1fr auto;
   gap: 0.75rem;
+}
+
+.game-detail-hero .game-card-team .game-card-abbr,
+.game-detail-hero .game-card-team .game-card-score {
+  color: var(--team-color, #1a2332);
 }
 
 .game-detail-hero .game-card-score-wrap {
