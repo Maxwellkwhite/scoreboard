@@ -126,6 +126,62 @@ def _resolve_win_colors(away: dict[str, Any], home: dict[str, Any]) -> None:
     home["win_color"] = home_win
 
 
+def _batting_side_from_status(status_detail: str | None) -> str | None:
+    if not status_detail:
+        return None
+    detail = status_detail.strip().lower()
+    if re.search(r"\b(top)\b", detail):
+        return "away"
+    if re.search(r"\b(bot|bottom)\b", detail):
+        return "home"
+    if re.search(r"\b(mid|middle)\b", detail):
+        return "home"
+    return None
+
+
+def _batting_side_from_situation(
+    situation: dict[str, Any] | None,
+    away: dict[str, Any] | None,
+    home: dict[str, Any] | None,
+) -> str | None:
+    situation = situation or {}
+
+    def side_for_team_id(team_id: Any) -> str | None:
+        if not team_id:
+            return None
+        team_id = str(team_id)
+        if away and str(away.get("id")) == team_id:
+            return "away"
+        if home and str(home.get("id")) == team_id:
+            return "home"
+        return None
+
+    batter = situation.get("batter") or {}
+    side = side_for_team_id((batter.get("athlete") or {}).get("team", {}).get("id"))
+    if side:
+        return side
+
+    due_up = situation.get("dueUp") or []
+    if due_up:
+        side = side_for_team_id((due_up[0].get("athlete") or {}).get("team", {}).get("id"))
+        if side:
+            return side
+
+    return None
+
+
+def _resolve_batting_side(
+    situation: dict[str, Any] | None,
+    away: dict[str, Any] | None,
+    home: dict[str, Any] | None,
+    status_detail: str | None,
+) -> str | None:
+    side = _batting_side_from_situation(situation, away, home)
+    if side:
+        return side
+    return _batting_side_from_status(status_detail)
+
+
 def _parse_team(competitor: dict[str, Any]) -> dict[str, Any]:
     team = competitor.get("team") or {}
     return {
@@ -159,16 +215,20 @@ def parse_game(event: dict[str, Any]) -> dict[str, Any]:
     if away and home:
         _resolve_win_colors(away, home)
 
+    status_detail = (
+        status_type.get("shortDetail")
+        or status_type.get("detail")
+        or status_type.get("description", "")
+    )
+    batting_side = _resolve_batting_side(situation, away, home, status_detail)
+
     return {
         "id": str(game_id) if game_id is not None else None,
         "name": event.get("shortName") or event.get("name", ""),
         "start_time": event.get("date"),
         "status_state": status_type.get("state", "pre"),
-        "status_detail": (
-            status_type.get("shortDetail")
-            or status_type.get("detail")
-            or status_type.get("description", "")
-        ),
+        "status_detail": status_detail,
+        "batting_side": batting_side,
         "away": away,
         "home": home,
         "inning": situation.get("inning"),
@@ -316,7 +376,7 @@ def _parse_linescore(competitors: list[dict[str, Any]]) -> dict[str, Any] | None
     if not away_side or not home_side:
         return None
 
-    inning_count = max(len(away_side["innings"]), len(home_side["innings"]))
+    inning_count = max(9, len(away_side["innings"]), len(home_side["innings"]))
     columns = []
     for index in range(inning_count):
         columns.append({
@@ -622,6 +682,13 @@ def parse_game_detail(payload: dict[str, Any]) -> dict[str, Any]:
         game["on_first"] = live_situation["on_first"]
         game["on_second"] = live_situation["on_second"]
         game["on_third"] = live_situation["on_third"]
+
+    game["batting_side"] = _resolve_batting_side(
+        payload.get("situation"),
+        game.get("away"),
+        game.get("home"),
+        game.get("status_detail"),
+    )
 
     game["preview"] = {
         "venue": venue.get("fullName"),

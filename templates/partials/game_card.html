@@ -1,6 +1,7 @@
-<a href="/game/{{ game.id }}" class="game-card game-card--{{ game.status_state }} game-card--link" data-game-id="{{ game.id }}">
+{% set batting_team = game.away if game.batting_side == 'away' else (game.home if game.batting_side == 'home' else none) %}
+<a href="/game/{{ game.id }}" class="game-card game-card--{{ game.status_state }} game-card--link" data-game-id="{{ game.id }}"{% if game.status_state == 'in' and batting_team %} style="--batting-team-color: {{ batting_team.win_color or batting_team.color }};"{% endif %}>
   <div class="game-card-status">
-    <span class="status-pill status-pill--{{ game.status_state }}"
+    <span class="status-pill status-pill--{{ game.status_state }}{% if game.status_state == 'in' and batting_team %} status-pill--batting-team{% endif %}"
       {% if game.status_state == 'pre' and game.start_time %}data-start-time="{{ game.start_time }}"{% endif %}>{{ game.status_detail }}</span>
     {% if game.status_state == 'in' and game.balls is not none %}
     <span class="game-card-count">{{ game.balls }}-{{ game.strikes }}, {{ game.outs }} out{% if game.outs != 1 %}s{% endif %}</span>

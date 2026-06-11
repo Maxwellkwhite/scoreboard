@@ -32,14 +32,9 @@
     });
 
     if (!items.length) {
-      container.innerHTML = '';
-      var section = container.closest('.game-detail-section');
-      if (section) section.hidden = true;
+      container.innerHTML = '<li class="play-feed-empty">No plays yet.</li>';
       return;
     }
-
-    var section = container.closest('.game-detail-section');
-    if (section) section.hidden = false;
 
     container.innerHTML = items.map(function (play) {
       var score = '';
@@ -59,7 +54,12 @@
     }).join('');
   }
 
-  function renderLinescore(linescore) {
+  function linescoreTeamColor(team) {
+    if (!team) return '';
+    return team.win_color || team.color || '';
+  }
+
+  function renderLinescore(linescore, awayTeam, homeTeam) {
     var table = document.getElementById('game-linescore-table');
     if (!table || !linescore) return;
 
@@ -69,8 +69,10 @@
     });
     headerCells.push('<th>R</th>', '<th>H</th>', '<th>E</th>');
 
-    function row(side) {
+    function row(side, teamMeta) {
       var team = linescore[side];
+      var color = linescoreTeamColor(teamMeta);
+      var rowStyle = color ? ' style="--linescore-team-color:' + color + '"' : '';
       var cells = ['<th>' + linescore[side + '_abbr'] + '</th>'];
       linescore.columns.forEach(function (col) {
         cells.push('<td>' + col[side] + '</td>');
@@ -80,47 +82,110 @@
         '<td>' + team.hits + '</td>',
         '<td>' + team.errors + '</td>'
       );
-      return '<tr>' + cells.join('') + '</tr>';
+      return '<tr class="linescore-row"' + rowStyle + '>' + cells.join('') + '</tr>';
     }
 
     table.innerHTML =
       '<thead><tr>' + headerCells.join('') + '</tr></thead>' +
-      '<tbody>' + row('away') + row('home') + '</tbody>';
+      '<tbody>' + row('away', awayTeam) + row('home', homeTeam) + '</tbody>';
 
-    var section = document.getElementById('game-linescore-section');
-    if (section) section.hidden = false;
   }
 
-  function renderTeamBox(teamBox) {
+  var TEAM_BOX_STATS = [
+    ['batting_hits', 'Hits'],
+    ['batting_runs', 'Runs'],
+    ['batting_strikeouts', 'Strikeouts'],
+    ['batting_walks', 'Walks']
+  ];
+
+  function teamBoxEntry(teamBox, side) {
+    if (!teamBox || !teamBox.length) return null;
+    for (var i = 0; i < teamBox.length; i++) {
+      if (teamBox[i].home_away === side) return teamBox[i];
+    }
+    return side === 'away' ? teamBox[0] : teamBox[1];
+  }
+
+  function teamBoxStatValue(team, key) {
+    if (!team) return '—';
+    var value = team[key];
+    return value != null && value !== '' ? value : '—';
+  }
+
+  function teamBoxNumericValue(team, key) {
+    if (!team || team[key] == null || team[key] === '') return null;
+    var num = parseFloat(String(team[key]).replace(/[^\d.-]/g, ''));
+    return isNaN(num) ? null : num;
+  }
+
+  function teamStatsLogo(team) {
+    if (!team) return '';
+    if (team.logo) {
+      return '<img class="team-stats__logo" src="' + team.logo + '" alt="" width="32" height="32" loading="lazy">';
+    }
+    return '<span class="team-stats__logo-fallback">' + (team.abbr || '') + '</span>';
+  }
+
+  function teamStatsBar(awayNum, homeNum) {
+    if (awayNum == null || homeNum == null) return '';
+    var total = awayNum + homeNum;
+    var awayPct = total > 0 ? (awayNum / total * 100) : 50;
+    var homePct = total > 0 ? (homeNum / total * 100) : 50;
+    return '<div class="team-stats__bar"' + (total === 0 ? ' team-stats__bar--even' : '') + ' role="presentation">' +
+      '<span class="team-stats__bar-away" style="width:' + awayPct.toFixed(1) + '%;"></span>' +
+      '<span class="team-stats__bar-home" style="width:' + homePct.toFixed(1) + '%;"></span>' +
+      '</div>';
+  }
+
+  function renderTeamBox(teamBox, awayTeam, homeTeam) {
     var container = document.getElementById('game-team-box');
     if (!container) return;
 
     if (!teamBox || !teamBox.length) {
-      var section = document.getElementById('game-team-box-section');
-      if (section) section.hidden = true;
+      container.innerHTML = '<p class="play-feed-empty">No team stats yet.</p>';
       return;
     }
 
-    var section = document.getElementById('game-team-box-section');
-    if (section) section.hidden = false;
+    var awayBox = teamBoxEntry(teamBox, 'away');
+    var homeBox = teamBoxEntry(teamBox, 'home');
+    var awayColor = linescoreTeamColor(awayTeam) || '#1a2332';
+    var homeColor = linescoreTeamColor(homeTeam) || '#1a2332';
+    var awayAbbr = (awayBox && awayBox.abbr) || (awayTeam && awayTeam.abbr) || '';
+    var homeAbbr = (homeBox && homeBox.abbr) || (homeTeam && homeTeam.abbr) || '';
 
-    container.innerHTML = teamBox.map(function (team) {
-      var stats = [];
-      if (team.batting_hits != null) stats.push(['Hits', team.batting_hits]);
-      if (team.batting_runs != null) stats.push(['Runs', team.batting_runs]);
-      if (team.batting_strikeouts != null) stats.push(['Strikeouts', team.batting_strikeouts]);
-      if (team.batting_walks != null) stats.push(['Walks', team.batting_walks]);
-      if (team.pitching_strikeouts != null) stats.push(['Pitcher K', team.pitching_strikeouts]);
-      if (team.pitching_hits != null) stats.push(['Pitcher H', team.pitching_hits]);
-
-      return '<div class="team-box-card">' +
-        '<p class="team-box-abbr">' + team.abbr + '</p>' +
-        '<ul class="team-box-stats">' +
-        stats.map(function (item) {
-          return '<li><span>' + item[0] + '</span><strong>' + item[1] + '</strong></li>';
-        }).join('') +
-        '</ul></div>';
+    var rows = TEAM_BOX_STATS.filter(function (item) {
+      var key = item[0];
+      return (awayBox && awayBox[key] != null) || (homeBox && homeBox[key] != null);
+    }).map(function (item) {
+      var key = item[0];
+      var awayNum = teamBoxNumericValue(awayBox, key);
+      var homeNum = teamBoxNumericValue(homeBox, key);
+      var comparable = awayNum != null && homeNum != null;
+      var awayLead = comparable && awayNum >= homeNum;
+      var homeLead = comparable && homeNum >= awayNum;
+      return '<div class="team-stats__row">' +
+        '<div class="team-stats__values">' +
+        '<div class="team-stats__cell team-stats__cell--away' + (awayLead ? ' team-stats__cell--lead' : '') + '">' +
+        '<span class="team-stats__value">' + teamBoxStatValue(awayBox, key) + '</span></div>' +
+        '<div class="team-stats__label">' + item[1] + '</div>' +
+        '<div class="team-stats__cell team-stats__cell--home' + (homeLead ? ' team-stats__cell--lead' : '') + '">' +
+        '<span class="team-stats__value">' + teamBoxStatValue(homeBox, key) + '</span></div>' +
+        '</div>' +
+        teamStatsBar(awayNum, homeNum) +
+        '</div>';
     }).join('');
+
+    container.className = 'team-stats';
+    container.style.setProperty('--away-team-color', awayColor);
+    container.style.setProperty('--home-team-color', homeColor);
+    container.innerHTML =
+      '<div class="team-stats__head">' +
+      '<div class="team-stats__team team-stats__team--away">' +
+      teamStatsLogo(awayTeam) + '<span class="team-stats__abbr">' + awayAbbr + '</span></div>' +
+      '<div class="team-stats__team team-stats__team--home">' +
+      teamStatsLogo(homeTeam) + '<span class="team-stats__abbr">' + homeAbbr + '</span></div>' +
+      '</div>' +
+      '<div class="team-stats__rows">' + rows + '</div>';
   }
 
   function renderSituation(live, statusState) {
@@ -167,19 +232,69 @@
     }
   }
 
-  function applyGame(game) {
-    var pill = document.getElementById('game-status-pill');
-    var countEl = document.getElementById('game-count');
+  function battingTeamColor(game) {
+    var side = game.batting_side;
+    if (!side || !game[side]) return null;
+    var team = game[side];
+    return team.win_color || team.color || null;
+  }
 
+  function pitchingTeamColor(game) {
+    var batting = game.batting_side;
+    if (!batting) return null;
+    var pitching = batting === 'away' ? 'home' : 'away';
+    if (!game[pitching]) return null;
+    var team = game[pitching];
+    return team.win_color || team.color || null;
+  }
+
+  function applySituationTheme(game) {
+    var bases = document.getElementById('game-bases');
+    if (!bases) return;
+
+    var battingColor = battingTeamColor(game);
+    var pitchingColor = pitchingTeamColor(game);
+
+    if (game.status_state === 'in' && battingColor) {
+      bases.style.setProperty('--batting-team-color', battingColor);
+      if (pitchingColor) {
+        bases.style.setProperty('--pitching-team-color', pitchingColor);
+      }
+    } else {
+      bases.style.removeProperty('--batting-team-color');
+      bases.style.removeProperty('--pitching-team-color');
+    }
+  }
+
+  function applyBattingTheme(game) {
     var matchup = document.getElementById('game-matchup');
+    var pill = document.getElementById('game-status-pill');
+    var color = battingTeamColor(game);
+
     if (matchup) {
       matchup.className = 'game-card game-card--' + game.status_state + ' game-detail-hero';
     }
+
+    if (game.status_state === 'in' && color && matchup) {
+      matchup.style.setProperty('--batting-team-color', color);
+      if (pill) pill.classList.add('status-pill--batting-team');
+    } else {
+      if (matchup) matchup.style.removeProperty('--batting-team-color');
+      if (pill) pill.classList.remove('status-pill--batting-team');
+    }
+  }
+
+  function applyGame(game) {
+    var pill = document.getElementById('game-status-pill');
+    var countEl = document.getElementById('game-count');
 
     if (pill) {
       pill.className = 'status-pill status-pill--' + game.status_state;
       pill.textContent = game.status_detail || '';
     }
+
+    applyBattingTheme(game);
+    applySituationTheme(game);
 
     if (countEl) {
       if (game.status_state === 'in' && game.balls !== null && game.balls !== undefined) {
@@ -200,6 +315,23 @@
       var scoreEl = document.getElementById('game-' + side + '-score');
       if (scoreEl) {
         scoreEl.textContent = team.score != null ? team.score : '0';
+      }
+
+      var roleEl = document.getElementById('game-' + side + '-role');
+      if (!roleEl) return;
+
+      if (game.status_state === 'in' && game.batting_side) {
+        var role = game.batting_side === side ? 'batting' : 'pitching';
+        var color = team.win_color || team.color;
+        roleEl.hidden = false;
+        roleEl.textContent = role === 'batting' ? 'Batting' : 'Pitching';
+        roleEl.className = 'game-card-role game-card-role--' + role;
+        if (color) {
+          roleEl.style.color = color;
+          roleEl.style.borderColor = color;
+        }
+      } else {
+        roleEl.hidden = true;
       }
     });
 
@@ -236,13 +368,43 @@
     }
 
     var live = game.live || {};
-    if (live.linescore) renderLinescore(live.linescore);
-    renderTeamBox(live.team_box);
+    if (live.linescore) renderLinescore(live.linescore, game.away, game.home);
+    renderTeamBox(live.team_box, game.away, game.home);
     renderSituation(live, game.status_state);
     renderPlayList('game-scoring-plays', live.scoring_plays, false);
     renderPlayList('game-recent-plays', live.recent_plays, false);
 
     document.title = game.away.abbr + ' @ ' + game.home.abbr + ' — Scoreboard';
+  }
+
+  function initDetailTabs() {
+    var tabs = document.getElementById('game-detail-tabs');
+    if (!tabs) return;
+
+    var buttons = tabs.querySelectorAll('.game-detail-tab');
+    var panels = document.querySelectorAll('.game-detail-panel');
+
+    function showPanel(panelId) {
+      buttons.forEach(function (btn) {
+        var isActive = btn.getAttribute('data-panel') === panelId;
+        btn.classList.toggle('is-active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+      panels.forEach(function (panel) {
+        panel.hidden = panel.getAttribute('data-panel') !== panelId;
+      });
+    }
+
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        showPanel(btn.getAttribute('data-panel'));
+      });
+    });
+
+    var active = tabs.querySelector('.game-detail-tab.is-active');
+    if (active) {
+      showPanel(active.getAttribute('data-panel'));
+    }
   }
 
   function schedulePoll(ms) {
@@ -266,5 +428,6 @@
       .catch(function () {});
   }
 
+  initDetailTabs();
   refreshGame();
 })();

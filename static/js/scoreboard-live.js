@@ -37,6 +37,26 @@
     return String(team.score);
   }
 
+  function battingTeamColor(game) {
+    var side = game.batting_side;
+    if (!side || !game[side]) return null;
+    var team = game[side];
+    return team.win_color || team.color || null;
+  }
+
+  function applyBattingTheme(card, game) {
+    var pill = card.querySelector('.status-pill');
+    var color = battingTeamColor(game);
+
+    if (game.status_state === 'in' && color) {
+      card.style.setProperty('--batting-team-color', color);
+      if (pill) pill.classList.add('status-pill--batting-team');
+    } else {
+      card.style.removeProperty('--batting-team-color');
+      if (pill) pill.classList.remove('status-pill--batting-team');
+    }
+  }
+
   function applyGameToCard(card, game) {
     card.className = 'game-card game-card--' + game.status_state + ' game-card--link';
     card.setAttribute('data-game-id', game.id);
@@ -82,6 +102,8 @@
         scoreEl.textContent = scoreForTeam(game, entry.team);
       }
     });
+
+    applyBattingTheme(card, game);
   }
 
   function updateGameCards(games) {

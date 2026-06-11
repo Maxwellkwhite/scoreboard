@@ -23,10 +23,12 @@
       <p class="game-detail-kicker">{% if game.status_state == 'in' %}Live Game{% else %}Game Summary{% endif %}</p>
     </header>
 
+    {% set batting_team = game.away if game.batting_side == 'away' else (game.home if game.batting_side == 'home' else none) %}
+    {% set pitching_team = game.home if game.batting_side == 'away' else (game.away if game.batting_side == 'home' else none) %}
     <div class="game-hero-layout{% if game.status_state != 'in' %} game-hero-layout--solo{% endif %}">
-      <section class="game-card game-card--{{ game.status_state }} game-detail-hero" id="game-matchup">
+      <section class="game-card game-card--{{ game.status_state }} game-detail-hero" id="game-matchup"{% if game.status_state == 'in' and batting_team %} style="--batting-team-color: {{ batting_team.win_color or batting_team.color }};"{% endif %}>
         <div class="game-card-status">
-          <span id="game-status-pill" class="status-pill status-pill--{{ game.status_state }}">{{ game.status_detail }}</span>
+          <span id="game-status-pill" class="status-pill status-pill--{{ game.status_state }}{% if game.status_state == 'in' and batting_team %} status-pill--batting-team{% endif %}">{{ game.status_detail }}</span>
           <span id="game-count" class="game-card-count"{% if game.status_state != 'in' or game.balls is none %} hidden{% endif %}>
             {%- if game.status_state == 'in' and game.balls is not none -%}
             {{ game.balls }}-{{ game.strikes }}, {{ game.outs }} out{% if game.outs != 1 %}s{% endif %}
@@ -37,6 +39,7 @@
         <div class="game-card-teams">
           {% for side in [('away', game.away), ('home', game.home)] %}
           {% set team = side[1] %}
+          {% set team_role = 'batting' if game.status_state == 'in' and game.batting_side == side[0] else ('pitching' if game.status_state == 'in' and game.batting_side and game.batting_side != side[0] else none) %}
           <div id="game-team-{{ side[0] }}" class="game-card-team game-card-team--{{ side[0] }}{% if team.winner %} game-card-team--winner{% endif %}">
             {% if team.logo %}
             <img class="game-card-logo" src="{{ team.logo }}" alt="" width="48" height="48" loading="lazy">
@@ -48,7 +51,10 @@
               <span class="game-card-name">{{ team.short_name or team.name }}</span>
               {% if team.record %}<span class="game-card-record">{{ team.record }}</span>{% endif %}
             </div>
-            <span class="game-card-score" id="game-{{ side[0] }}-score">{{ team.score if team.score is not none else '0' }}</span>
+            <div class="game-card-score-wrap">
+              <span class="game-card-role{% if team_role %} game-card-role--{{ team_role }}{% endif %}" id="game-{{ side[0] }}-role"{% if not team_role %} hidden{% endif %}{% if team_role %} style="color: {{ team.win_color or team.color }}; border-color: {{ team.win_color or team.color }};"{% endif %}>{% if team_role == 'batting' %}Batting{% elif team_role == 'pitching' %}Pitching{% endif %}</span>
+              <span class="game-card-score" id="game-{{ side[0] }}-score">{{ team.score if team.score is not none else '0' }}</span>
+            </div>
           </div>
           {% endfor %}
         </div>
@@ -83,7 +89,7 @@
       {% if game.status_state == 'in' %}
       <aside class="game-hero-side">
         <section class="game-card game-detail-side-card" id="game-situation-section">
-          <div class="bases-diagram" id="game-bases">
+          <div class="bases-diagram" id="game-bases"{% if batting_team and pitching_team %} style="--batting-team-color: {{ batting_team.win_color or batting_team.color }}; --pitching-team-color: {{ pitching_team.win_color or pitching_team.color }};"{% endif %}>
             <div class="base base--2nd{% if game.live.situation.on_second %} base--occupied{% endif %}" aria-label="2nd base"></div>
             <div class="base base--3rd{% if game.live.situation.on_third %} base--occupied{% endif %}" aria-label="3rd base"></div>
             <div class="base base--1st{% if game.live.situation.on_first %} base--occupied{% endif %}" aria-label="1st base"></div>
@@ -104,9 +110,36 @@
       {% endif %}
     </div>
 
+    {% set tab_ns = namespace(first=true) %}
+  {% if game.live.linescore or game.live.team_box or game.live.scoring_plays or game.live.recent_plays or game.preview.venue or game.preview.weather_temp is not none or game.preview.broadcasts or game.preview.series_summary %}
+    <nav class="game-detail-tabs" id="game-detail-tabs" aria-label="Game details">
+      {% if game.live.linescore %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="linescore" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Line Score</button>
+      {% set tab_ns.first = false %}
+      {% endif %}
+      {% if game.live.team_box %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="team-stats" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Team Stats</button>
+      {% set tab_ns.first = false %}
+      {% endif %}
+      {% if game.live.scoring_plays %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="scoring-plays" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Scoring Plays</button>
+      {% set tab_ns.first = false %}
+      {% endif %}
+      {% if game.live.recent_plays %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="recent-plays" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Recent Plays</button>
+      {% set tab_ns.first = false %}
+      {% endif %}
+      {% if game.preview.venue or game.preview.weather_temp is not none or game.preview.broadcasts or game.preview.series_summary %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="park-info" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Park Info</button>
+      {% set tab_ns.first = false %}
+      {% endif %}
+    </nav>
+  {% endif %}
+
+    {% set panel_ns = namespace(first=true) %}
     {% if game.live.linescore %}
-    <section class="game-detail-section" id="game-linescore-section">
-      <h3>Line Score</h3>
+    <section class="game-detail-section game-detail-panel" id="game-linescore-section" data-panel="linescore"{% if not panel_ns.first %} hidden{% endif %}>
+    {% set panel_ns.first = false %}
       <div class="linescore-wrap">
         <table class="linescore-table" id="game-linescore-table">
           <thead>
@@ -121,7 +154,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
+            <tr class="linescore-row" style="--linescore-team-color: {{ game.away.win_color or game.away.color or '#1a2332' }};">
               <th>{{ game.live.linescore.away_abbr }}</th>
               {% for col in game.live.linescore.columns %}
               <td>{{ col.away }}</td>
@@ -130,7 +163,7 @@
               <td id="linescore-away-h">{{ game.live.linescore.away.hits }}</td>
               <td id="linescore-away-e">{{ game.live.linescore.away.errors }}</td>
             </tr>
-            <tr>
+            <tr class="linescore-row" style="--linescore-team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};">
               <th>{{ game.live.linescore.home_abbr }}</th>
               {% for col in game.live.linescore.columns %}
               <td>{{ col.home }}</td>
@@ -146,28 +179,76 @@
     {% endif %}
 
     {% if game.live.team_box %}
-    <section class="game-detail-section" id="game-team-box-section">
-      <h3>Team Stats</h3>
-      <div class="team-box-grid" id="game-team-box">
-        {% for team in game.live.team_box %}
-        <div class="team-box-card">
-          <p class="team-box-abbr">{{ team.abbr }}</p>
-          <ul class="team-box-stats">
-            {% if team.batting_hits is not none %}<li><span>Hits</span><strong>{{ team.batting_hits }}</strong></li>{% endif %}
-            {% if team.batting_runs is not none %}<li><span>Runs</span><strong>{{ team.batting_runs }}</strong></li>{% endif %}
-            {% if team.batting_strikeouts is not none %}<li><span>Strikeouts</span><strong>{{ team.batting_strikeouts }}</strong></li>{% endif %}
-            {% if team.batting_walks is not none %}<li><span>Walks</span><strong>{{ team.batting_walks }}</strong></li>{% endif %}
-            {% if team.pitching_strikeouts is not none %}<li><span>Pitcher K</span><strong>{{ team.pitching_strikeouts }}</strong></li>{% endif %}
-            {% if team.pitching_hits is not none %}<li><span>Pitcher H</span><strong>{{ team.pitching_hits }}</strong></li>{% endif %}
-          </ul>
+    <section class="game-detail-section game-detail-panel" id="game-team-box-section" data-panel="team-stats"{% if not panel_ns.first %} hidden{% endif %}>
+    {% set panel_ns.first = false %}
+      {% set away_box = game.live.team_box | selectattr('home_away', 'equalto', 'away') | list | first %}
+      {% set home_box = game.live.team_box | selectattr('home_away', 'equalto', 'home') | list | first %}
+      <div class="team-stats" id="game-team-box" style="--away-team-color: {{ game.away.win_color or game.away.color or '#1a2332' }}; --home-team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};">
+        <div class="team-stats__head">
+          <div class="team-stats__team team-stats__team--away">
+            {% if game.away.logo %}
+            <img class="team-stats__logo" src="{{ game.away.logo }}" alt="" width="32" height="32" loading="lazy">
+            {% else %}
+            <span class="team-stats__logo-fallback">{{ game.away.abbr }}</span>
+            {% endif %}
+            <span class="team-stats__abbr">{{ away_box.abbr if away_box else game.away.abbr }}</span>
+          </div>
+          <div class="team-stats__team team-stats__team--home">
+            {% if game.home.logo %}
+            <img class="team-stats__logo" src="{{ game.home.logo }}" alt="" width="32" height="32" loading="lazy">
+            {% else %}
+            <span class="team-stats__logo-fallback">{{ game.home.abbr }}</span>
+            {% endif %}
+            <span class="team-stats__abbr">{{ home_box.abbr if home_box else game.home.abbr }}</span>
+          </div>
         </div>
+        <div class="team-stats__rows">
+        {% for stat_key, stat_label in [
+          ('batting_hits', 'Hits'),
+          ('batting_runs', 'Runs'),
+          ('batting_strikeouts', 'Strikeouts'),
+          ('batting_walks', 'Walks')
+        ] %}
+        {% if (away_box and away_box[stat_key] is not none) or (home_box and home_box[stat_key] is not none) %}
+        {% set away_raw = away_box[stat_key] if away_box and away_box[stat_key] is not none else none %}
+        {% set home_raw = home_box[stat_key] if home_box and home_box[stat_key] is not none else none %}
+        {% set away_num = away_raw | int if away_raw is not none else none %}
+        {% set home_num = home_raw | int if home_raw is not none else none %}
+        {% set away_lead = away_num is not none and home_num is not none and away_num >= home_num %}
+        {% set home_lead = away_num is not none and home_num is not none and home_num >= away_num %}
+        {% set stat_total = (away_num + home_num) if away_num is not none and home_num is not none else 0 %}
+        <div class="team-stats__row">
+          <div class="team-stats__values">
+            <div class="team-stats__cell team-stats__cell--away{% if away_lead %} team-stats__cell--lead{% endif %}">
+              <span class="team-stats__value">{{ away_raw if away_raw is not none else '—' }}</span>
+            </div>
+            <div class="team-stats__label">{{ stat_label }}</div>
+            <div class="team-stats__cell team-stats__cell--home{% if home_lead %} team-stats__cell--lead{% endif %}">
+              <span class="team-stats__value">{{ home_raw if home_raw is not none else '—' }}</span>
+            </div>
+          </div>
+          {% if stat_total > 0 %}
+          <div class="team-stats__bar" role="presentation">
+            <span class="team-stats__bar-away" style="width: {{ (away_num / stat_total * 100) | round(1) }}%;"></span>
+            <span class="team-stats__bar-home" style="width: {{ (home_num / stat_total * 100) | round(1) }}%;"></span>
+          </div>
+          {% elif away_num is not none and home_num is not none %}
+          <div class="team-stats__bar team-stats__bar--even" role="presentation">
+            <span class="team-stats__bar-away" style="width: 50%;"></span>
+            <span class="team-stats__bar-home" style="width: 50%;"></span>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
         {% endfor %}
+        </div>
       </div>
     </section>
     {% endif %}
 
     {% if game.live.scoring_plays %}
-    <section class="game-detail-section" id="game-scoring-section">
+    <section class="game-detail-section game-detail-panel" id="game-scoring-section" data-panel="scoring-plays"{% if not panel_ns.first %} hidden{% endif %}>
+    {% set panel_ns.first = false %}
       <h3>Scoring Plays</h3>
       <ul class="play-feed" id="game-scoring-plays">
         {% for play in game.live.scoring_plays %}
@@ -182,7 +263,8 @@
     {% endif %}
 
     {% if game.live.recent_plays %}
-    <section class="game-detail-section" id="game-plays-section">
+    <section class="game-detail-section game-detail-panel" id="game-plays-section" data-panel="recent-plays"{% if not panel_ns.first %} hidden{% endif %}>
+    {% set panel_ns.first = false %}
       <h3>Recent Plays</h3>
       <ul class="play-feed" id="game-recent-plays">
         {% for play in game.live.recent_plays %}
@@ -198,7 +280,10 @@
     </section>
     {% endif %}
 
-    <section class="game-detail-section game-detail-facts">
+    {% if game.preview.venue or game.preview.weather_temp is not none or game.preview.broadcasts or game.preview.series_summary %}
+    <section class="game-detail-section game-detail-panel game-detail-facts" id="game-park-section" data-panel="park-info"{% if not panel_ns.first %} hidden{% endif %}>
+      <h3>Park Information</h3>
+    {% set panel_ns.first = false %}
       {% if game.preview.venue %}
       <div class="fact-item">
         <span class="fact-label">Venue</span>
@@ -224,6 +309,7 @@
       </div>
       {% endif %}
     </section>
+    {% endif %}
 
     {% if game.preview.last_five %}
     <section class="game-detail-section">
