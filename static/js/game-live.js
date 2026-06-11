@@ -481,6 +481,24 @@
     var buttons = tabs.querySelectorAll('.game-detail-tab');
     var panels = document.querySelectorAll('.game-detail-panel');
 
+    function panelFromHash() {
+      var hash = (location.hash || '').replace(/^#/, '').toLowerCase();
+      if (!hash) return null;
+      for (var i = 0; i < buttons.length; i++) {
+        if (buttons[i].getAttribute('data-panel') === hash) {
+          return hash;
+        }
+      }
+      return null;
+    }
+
+    function setPanelHash(panelId) {
+      var nextHash = '#' + panelId;
+      if (location.hash !== nextHash) {
+        history.replaceState(null, '', nextHash);
+      }
+    }
+
     function showPanel(panelId) {
       buttons.forEach(function (btn) {
         var isActive = btn.getAttribute('data-panel') === panelId;
@@ -492,15 +510,38 @@
       });
     }
 
+    function scrollToPanel(panelId) {
+      var panel = document.querySelector('.game-detail-panel[data-panel="' + panelId + '"]');
+      if (!panel || panel.hidden) return;
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
     buttons.forEach(function (btn) {
       btn.addEventListener('click', function () {
-        showPanel(btn.getAttribute('data-panel'));
+        var panelId = btn.getAttribute('data-panel');
+        showPanel(panelId);
+        setPanelHash(panelId);
+        requestAnimationFrame(function () {
+          scrollToPanel(panelId);
+        });
       });
     });
 
-    var active = tabs.querySelector('.game-detail-tab.is-active');
-    if (active) {
-      showPanel(active.getAttribute('data-panel'));
+    window.addEventListener('hashchange', function () {
+      var panelId = panelFromHash();
+      if (panelId) {
+        showPanel(panelId);
+      }
+    });
+
+    var initial = panelFromHash();
+    if (initial) {
+      showPanel(initial);
+    } else {
+      var active = tabs.querySelector('.game-detail-tab.is-active');
+      if (active) {
+        showPanel(active.getAttribute('data-panel'));
+      }
     }
   }
 

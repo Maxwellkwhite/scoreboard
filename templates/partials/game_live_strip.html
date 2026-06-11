@@ -3,7 +3,7 @@
     <i class="bi bi-chevron-left" aria-hidden="true"></i>
   </button>
   <nav class="game-detail-live-strip" aria-label="Today's games">
-    <div class="game-detail-live-strip__track" style="transform: translateX(calc(-1 * {{ strip_initial_page }} * 4 * (var(--strip-card-width) + var(--strip-gap))));">
+    <div class="game-detail-live-strip__track" style="transform: translateX(calc(-1 * {{ strip_initial_page }} * var(--strip-cards-per-page) * (var(--strip-card-width) + var(--strip-gap))));">
       {% include "partials/game_strip_home_card.html" %}
       {% for strip_game in strip_games %}
         {% with game=strip_game, current_game_id=current_game_id %}
@@ -18,17 +18,22 @@
 </div>
 <script>
   (function () {
-    var CARDS_PER_PAGE = 4;
     var wrap = document.querySelector('.game-detail-live-strip-wrap');
     if (!wrap) return;
 
     var track = wrap.querySelector('.game-detail-live-strip__track');
     var prevBtn = wrap.querySelector('.game-detail-live-strip__arrow--prev');
     var nextBtn = wrap.querySelector('.game-detail-live-strip__arrow--next');
-    var page = parseInt(wrap.getAttribute('data-initial-page') || '0', 10);
+    var page = 0;
+    var resizeTimer;
 
     function getCards() {
       return track.querySelectorAll('.game-strip-scoreboard-card, .game-mini-card');
+    }
+
+    function cardsPerPage() {
+      var value = parseInt(getComputedStyle(wrap).getPropertyValue('--strip-cards-per-page'), 10);
+      return value > 0 ? value : 4;
     }
 
     function trackGap() {
@@ -43,11 +48,23 @@
 
     function totalPages() {
       var cards = getCards();
-      return Math.max(1, Math.ceil(cards.length / CARDS_PER_PAGE));
+      return Math.max(1, Math.ceil(cards.length / cardsPerPage()));
+    }
+
+    function pageForActiveCard() {
+      var cards = getCards();
+      var perPage = cardsPerPage();
+      for (var i = 0; i < cards.length; i++) {
+        if (cards[i].classList.contains('game-mini-card--active')) {
+          return Math.floor(i / perPage);
+        }
+      }
+      return parseInt(wrap.getAttribute('data-initial-page') || '0', 10);
     }
 
     function updateStrip(animate) {
       var cards = getCards();
+      var perPage = cardsPerPage();
       var pages = totalPages();
       page = Math.max(0, Math.min(page, pages - 1));
 
@@ -55,9 +72,9 @@
         track.style.transition = 'none';
       }
 
-      track.style.transform = 'translateX(' + (-page * CARDS_PER_PAGE * cardStep()) + 'px)';
+      track.style.transform = 'translateX(' + (-page * perPage * cardStep()) + 'px)';
 
-      var showArrows = cards.length > CARDS_PER_PAGE;
+      var showArrows = cards.length > perPage;
       var prevDisabled = !showArrows || page <= 0;
       var nextDisabled = !showArrows || page >= pages - 1;
       prevBtn.disabled = prevDisabled;
@@ -81,6 +98,15 @@
       updateStrip(true);
     });
 
+    window.addEventListener('resize', function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () {
+        page = pageForActiveCard();
+        updateStrip(false);
+      }, 100);
+    });
+
+    page = pageForActiveCard();
     updateStrip(false);
     wrap.classList.add('is-ready');
 

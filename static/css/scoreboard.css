@@ -596,6 +596,10 @@ html[data-scoreboard-view="standings"] #tab-standings {
   gap: 1rem;
   align-items: stretch;
   margin-bottom: 1.25rem;
+  width: 100%;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .game-hero-layout--solo {
@@ -910,6 +914,7 @@ html[data-scoreboard-view="standings"] #tab-standings {
 .game-detail-live-strip-wrap {
   --strip-card-width: 132px;
   --strip-gap: 0.65rem;
+  --strip-cards-per-page: 3;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -920,7 +925,42 @@ html[data-scoreboard-view="standings"] #tab-standings {
 .game-detail-live-strip {
   overflow: hidden;
   flex: 0 0 auto;
-  width: calc(4 * var(--strip-card-width) + 3 * var(--strip-gap));
+  width: calc(
+    var(--strip-cards-per-page) * var(--strip-card-width)
+    + (var(--strip-cards-per-page) - 1) * var(--strip-gap)
+  );
+}
+
+@media (max-width: 559px) {
+  .game-detail-live-strip-wrap {
+    --strip-cards-per-page: 2;
+  }
+}
+
+@media (min-width: 640px) {
+  .game-detail-live-strip-wrap {
+    --strip-cards-per-page: 4;
+  }
+}
+
+@media (min-width: 960px) {
+  .game-detail-main {
+    max-width: 820px;
+  }
+
+  .game-detail-live-strip-wrap {
+    --strip-cards-per-page: 5;
+  }
+}
+
+@media (min-width: 1120px) {
+  .game-detail-main {
+    max-width: 960px;
+  }
+
+  .game-detail-live-strip-wrap {
+    --strip-cards-per-page: 6;
+  }
 }
 
 .game-strip-scoreboard-card {
@@ -1091,6 +1131,13 @@ html[data-scoreboard-view="standings"] #tab-standings {
 .game-mini-card__team--loser {
   opacity: 0.38;
   filter: grayscale(0.45);
+}
+
+.game-detail-header {
+  width: 100%;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .game-detail-header h1 {
@@ -1410,6 +1457,10 @@ html[data-scoreboard-view="standings"] #tab-standings {
   border-radius: 12px;
   padding: 1.25rem;
   margin-bottom: 1rem;
+}
+
+.game-detail-panel {
+  scroll-margin-top: 1rem;
 }
 
 .game-detail-panel[hidden] {
