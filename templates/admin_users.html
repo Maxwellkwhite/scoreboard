@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
+  <title>Admin — Users | EmailsConfirmed</title>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K9BVXXLJD3"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-K9BVXXLJD3');
+  </script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+</head>
+<body>
+  <aside class="sidebar sidebar--collapsed" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="EmailsConfirmed" style="width: 100%; height: 100%; object-fit: contain; padding: 4px;">
+      </div>
+      <a href="#" class="sidebar-brand">EmailsConfirmed</a>
+      <button type="button" class="sidebar-expand-btn" id="sidebarDesktopExpand" aria-label="Expand sidebar" aria-expanded="false">
+        <i class="bi bi-chevron-double-right" aria-hidden="true"></i>
+      </button>
+    </div>
+    <nav class="sidebar-menu">
+      <div class="menu-section">
+        <a href="/dashboard" class="menu-item">
+          <i class="bi bi-house-door"></i>
+          <span class="menu-item-text">Dashboard</span>
+        </a>
+        <a href="{{ url_for('email_list_validation') }}" class="menu-item">
+          <i class="bi bi-envelope"></i>
+          <span class="menu-item-text">Email</span>
+        </a>
+        <a href="/feedback" class="menu-item">
+          <i class="bi bi-chat-left-text"></i>
+          <span class="menu-item-text">Feedback</span>
+        </a>
+        <a href="/preferences" class="menu-item">
+          <i class="bi bi-gear"></i>
+          <span class="menu-item-text">Preferences</span>
+        </a>
+        <a href="#" class="menu-item" data-bs-toggle="modal" data-bs-target="#helpContactModal" role="button">
+          <i class="bi bi-question-circle"></i>
+          <span class="menu-item-text">Help</span>
+        </a>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="sidebar-toggle" id="sidebarToggle" type="button">
+          <i class="bi bi-list"></i>
+        </button>
+        <h1 class="page-title">Admin — Users</h1>
+      </div>
+      <div class="topbar-right">
+        <a href="{{ url_for('logout') }}" class="topbar-icon" title="Logout">
+          <i class="bi bi-box-arrow-right"></i>
+        </a>
+      </div>
+    </div>
+
+    <div class="dashboard-content">
+      <div class="page-header">
+        <p class="page-subtitle">All registered accounts.</p>
+      </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category if category else 'info' }} alert-dismissible fade show mb-4" role="alert">
+              <strong>{{ message }}</strong>
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <div class="dashboard-section">
+        <div class="section-header">
+          <h2 class="section-title">Users</h2>
+          <span class="badge bg-primary">{{ users|length }}</span>
+        </div>
+        <div class="list-container" style="max-height: 70vh; overflow-y: auto;">
+          {% if users %}
+            <div class="list-group list-group-flush">
+              {% for user in users %}
+                {% set m = user_admin_metrics[user.id] %}
+                <div class="list-group-item border-0 px-0 py-3 border-bottom">
+                  <div class="d-flex w-100 justify-content-between align-items-start gap-3">
+                    <div class="flex-grow-1 min-width-0">
+                      <h6 class="mb-1">{{ user.name }}</h6>
+                      <p class="mb-1 small text-muted">{{ user.email }}</p>
+                      <small class="text-muted">ID: {{ user.id }} · Premium: {{ user.premium_level }}</small>
+                      <div class="row g-2 mt-2">
+                        <div class="col-6 col-sm-4 col-xl-3">
+                          <div class="border rounded-2 px-2 py-2 text-center bg-body-tertiary bg-opacity-50">
+                            <div class="small text-muted text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.03em;">Runs</div>
+                            <div class="fw-semibold">{{ m.run_count }}</div>
+                            <div class="small text-muted" style="font-size: 0.7rem;">validation sessions</div>
+                          </div>
+                        </div>
+                        <div class="col-6 col-sm-4 col-xl-3">
+                          <div class="border rounded-2 px-2 py-2 text-center bg-body-tertiary bg-opacity-50">
+                            <div class="small text-muted text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.03em;">Emails</div>
+                            <div class="fw-semibold">{{ m.emails_validated }}</div>
+                            <div class="small text-muted" style="font-size: 0.7rem;">total validated</div>
+                          </div>
+                        </div>
+                        <div class="col-6 col-sm-4 col-xl-3">
+                          <div class="border rounded-2 px-2 py-2 text-center bg-body-tertiary bg-opacity-50">
+                            <div class="small text-muted text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.03em;">Bulk</div>
+                            <div class="fw-semibold">{{ m.bulk_jobs_completed }}</div>
+                            <div class="small text-muted" style="font-size: 0.7rem;">lists completed</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <small class="text-muted text-nowrap flex-shrink-0">{{ user.date_of_signup.strftime('%Y-%m-%d') if user.date_of_signup else '—' }}</small>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="text-muted mb-0">No users.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="dashboard-section mt-4">
+        <div class="section-header">
+          <h2 class="section-title">Email list queue (last 7 days)</h2>
+          <span class="badge bg-secondary">{{ recent_queue_jobs|length }}</span>
+        </div>
+        <p class="text-muted small mb-3">Bulk validation jobs by status and progress. Newest first.</p>
+        <div class="table-responsive" style="max-height: 50vh; overflow: auto;">
+          {% if recent_queue_jobs %}
+            <table class="table table-sm table-hover align-middle mb-0">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th scope="col">ID</th>
+                  <th scope="col">User</th>
+                  <th scope="col">File</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Progress</th>
+                  <th scope="col">Retries</th>
+                  <th scope="col">Created</th>
+                  <th scope="col">Completed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in recent_queue_jobs %}
+                  {% set job = row.job %}
+                  <tr>
+                    <td class="text-muted">{{ job.id }}</td>
+                    <td>
+                      <div class="small fw-semibold">{{ row.user_name or '—' }}</div>
+                      <div class="small text-muted text-truncate" style="max-width: 12rem;" title="{{ row.user_email }}">{{ row.user_email }}</div>
+                    </td>
+                    <td class="small text-truncate" style="max-width: 10rem;" title="{{ job.file_name }}">{{ job.file_name }}</td>
+                    <td>
+                      {% if job.status == 'completed' %}
+                        <span class="badge bg-success">completed</span>
+                      {% elif job.status == 'processing' %}
+                        <span class="badge bg-primary">processing</span>
+                      {% elif job.status == 'pending' %}
+                        <span class="badge bg-warning text-dark">pending</span>
+                      {% elif job.status == 'failed' %}
+                        <span class="badge bg-danger">failed</span>
+                      {% else %}
+                        <span class="badge bg-secondary">{{ job.status }}</span>
+                      {% endif %}
+                    </td>
+                    <td class="small text-nowrap">
+                      {% if job.progress_total %}
+                        {{ job.progress_processed or 0 }} / {{ job.progress_total }}
+                      {% elif job.status == 'processing' or job.status == 'pending' %}
+                        <span class="text-muted">—</span>
+                      {% else %}
+                        {{ job.progress_processed or 0 }}
+                      {% endif %}
+                    </td>
+                    <td class="small">{{ job.retry_count or 0 }}</td>
+                    <td class="small text-nowrap text-muted">{{ job.created_at.strftime('%Y-%m-%d %H:%M') if job.created_at else '—' }}</td>
+                    <td class="small text-nowrap text-muted">{{ job.completed_at.strftime('%Y-%m-%d %H:%M') if job.completed_at else '—' }}</td>
+                  </tr>
+                  {% if job.status == 'failed' and job.error_message %}
+                    <tr class="table-light">
+                      <td colspan="8" class="small text-danger py-2 border-top-0">{{ job.error_message[:500] }}{% if job.error_message|length > 500 %}…{% endif %}</td>
+                    </tr>
+                  {% endif %}
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <p class="text-muted mb-0">No email list jobs in the last 7 days.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </main>
+
+  {% include 'partials/help_contact_modal.html' %}
+
+  <script src="{{ url_for('static', filename='js/app-sidebar.js') }}"></script>
+</body>
+</html>

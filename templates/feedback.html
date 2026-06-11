@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
+  <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/logo.png') }}">
+  <title>Feedback | EmailsConfirmed</title>
+  <meta name="description" content="Share feedback and feature ideas for EmailsConfirmed. We read every submission.">
+  <meta name="keywords" content="EmailsConfirmed feedback, feature requests, product feedback">
+  <meta property="og:title" content="Feedback | EmailsConfirmed">
+  <meta property="og:description" content="Share feedback and feature ideas for EmailsConfirmed.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Feedback | EmailsConfirmed">
+  <meta name="twitter:description" content="Share feedback and feature ideas for EmailsConfirmed.">
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K9BVXXLJD3"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-K9BVXXLJD3');
+  </script>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+  <style>
+    .btn-primary, .btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+      background-color: #56B6C6 !important;
+      border-color: #56B6C6 !important;
+      color: white !important;
+    }
+    .btn-outline-primary {
+      color: #56B6C6 !important;
+      border-color: #56B6C6 !important;
+    }
+    .btn-outline-primary:hover, .btn-outline-primary:focus, .btn-outline-primary:active {
+      background-color: #56B6C6 !important;
+      border-color: #56B6C6 !important;
+      color: white !important;
+    }
+    .upvote-btn {
+      background-color: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #495057;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .upvote-btn:hover {
+      background-color: #e9ecef;
+      border-color: #adb5bd;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .upvote-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    .upvote-btn.upvoted {
+      background-color: #56B6C6;
+      border-color: #56B6C6;
+      color: white;
+    }
+    .upvote-btn.upvoted:hover {
+      background-color: #469ead;
+      border-color: #469ead;
+      box-shadow: 0 2px 6px rgba(70, 158, 173, 0.35);
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar sidebar--collapsed" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="EmailsConfirmed" style="width: 100%; height: 100%; object-fit: contain; padding: 4px;">
+      </div>
+      <a href="#" class="sidebar-brand">EmailsConfirmed</a>
+      <button type="button" class="sidebar-expand-btn" id="sidebarDesktopExpand" aria-label="Expand sidebar" aria-expanded="false">
+        <i class="bi bi-chevron-double-right" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <nav class="sidebar-menu">
+      <div class="menu-section">
+        <a href="/dashboard" class="menu-item">
+          <i class="bi bi-house-door"></i>
+          <span class="menu-item-text">Dashboard</span>
+        </a>
+        <a href="{{ url_for('email_list_validation') }}" class="menu-item">
+          <i class="bi bi-envelope"></i>
+          <span class="menu-item-text">Email</span>
+        </a>
+        <a href="/feedback" class="menu-item active">
+          <i class="bi bi-chat-left-text"></i>
+          <span class="menu-item-text">Feedback</span>
+        </a>
+        <a href="/preferences" class="menu-item">
+          <i class="bi bi-gear"></i>
+          <span class="menu-item-text">Preferences</span>
+        </a>
+        <a href="#" class="menu-item" data-bs-toggle="modal" data-bs-target="#helpContactModal" role="button">
+          <i class="bi bi-question-circle"></i>
+          <span class="menu-item-text">Help</span>
+        </a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Bar -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="sidebar-toggle" id="sidebarToggle" type="button">
+          <i class="bi bi-list"></i>
+        </button>
+        <h1 class="page-title">Feedback</h1>
+      </div>
+      <div class="topbar-right">
+        <a href="#" class="topbar-icon" id="notificationsIcon" data-bs-toggle="modal" data-bs-target="#notificationsModal">
+          <i class="bi bi-bell"></i>
+        </a>
+        <a href="{{ url_for('logout') }}" class="topbar-icon" title="Logout">
+          <i class="bi bi-box-arrow-right"></i>
+        </a>
+      </div>
+    </div>
+
+    <!-- Dashboard Content -->
+    <div class="dashboard-content">
+      <!-- Feedback Content -->
+      <div class="row g-4">
+        <!-- Feedback Form on the left -->
+        <div class="col-lg-5">
+          <div class="dashboard-section">
+            <div class="section-header">
+              <h2 class="section-title">Provide Feedback</h2>
+            </div>
+            <div class="card-body">
+              {% if current_user.is_authenticated %}
+                <p class="mb-3">Suggest a feature here:</p>
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                  {% if messages %}
+                    {% for category, message in messages %}
+                      {% if 'feedback' in message.lower() %}
+                        <div class="alert alert-{{ category }} {% if 'submitted' in message.lower() %}text-success{% endif %} mb-3">{{ message }}</div>
+                      {% endif %}
+                    {% endfor %}
+                  {% endif %}
+                {% endwith %}
+                {% from "bootstrap5/form.html" import render_form %}
+                {{ render_form(form, novalidate=True, button_map={"submit": "primary"}) }}
+              {% else %}
+                <p class="card-text">Please <a href="{{ url_for('login') }}">sign in</a> to provide feedback.</p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Submitted Feedback on the right -->
+        <div class="col-lg-7">
+          <div class="dashboard-section">
+            <div class="section-header">
+              <h2 class="section-title">Submitted Feedback</h2>
+            </div>
+            <div class="card-body">
+              {% if feedback_list %}
+                <div class="feedback-container" style="max-height: 500px; overflow-y: auto;">
+                  {% for feedback in feedback_list|sort(attribute='upvote_count', reverse=True) %}
+                    <div class="card mb-3">
+                      <div class="card-body">
+                        <h5 class="card-title">{{ feedback.title }}</h5>
+                        <p class="card-text">{{ feedback.feedback }}</p>
+                        <button type="button" id="upvote-btn-{{ feedback.id }}" 
+                                onclick="upvoteFeedback({{ feedback.id }})"
+                                class="upvote-btn {% if feedback.id in upvoted_feedback_ids %}upvoted{% endif %}"
+
+>
+                          ⬆️ <span id="upvote-count-{{ feedback.id }}">{{ feedback.upvote_count }}</span>
+                        </button>
+                        {% if current_user.id == 1 %}
+                          <button type="button" onclick="deleteFeedback({{ feedback.id }})" class="btn btn-danger btn-sm ml-2">Delete</button>
+                        {% endif %}
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <p>No feedback submitted yet.</p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Notifications Modal -->
+  <div class="modal fade" id="notificationsModal" tabindex="-1" aria-labelledby="notificationsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="notificationsModalLabel">Notifications</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="notificationsList">
+          <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% include 'partials/help_contact_modal.html' %}
+
+  <script>
+    function loadNotifications() {
+      fetch('{{ url_for("get_notifications") }}')
+        .then(response => response.json())
+        .then(data => {
+          const notificationsIcon = document.getElementById('notificationsIcon');
+          let badge = document.getElementById('notificationBadge');
+          const notificationsList = document.getElementById('notificationsList');
+          if (data.count > 0) {
+            if (!badge) {
+              badge = document.createElement('span');
+              badge.className = 'notification-badge';
+              badge.id = 'notificationBadge';
+              notificationsIcon.appendChild(badge);
+            }
+            badge.textContent = data.count;
+            badge.style.display = 'inline-flex';
+          } else {
+            if (badge) {
+              badge.remove();
+            }
+          }
+          if (data.notifications.length === 0) {
+            notificationsList.innerHTML = '<p class="text-center text-muted py-4">No new notifications</p>';
+          } else {
+            let html = '';
+            data.notifications.forEach(notif => {
+              html += `<div class="d-flex justify-content-between align-items-start mb-3 pb-3 border-bottom" id="notification-${notif.id}"><div class="flex-grow-1"><p class="mb-1"><a href="{{ url_for('dashboard') }}" class="text-decoration-none" style="color: inherit;">${notif.message}</a></p><small class="text-muted">${new Date(notif.created_at).toLocaleString()}</small></div><button class="btn btn-sm btn-outline-primary ms-3" onclick="markAsRead(${notif.id})">Dismiss</button></div>`;
+            });
+            notificationsList.innerHTML = html;
+          }
+        })
+        .catch(error => {
+          console.error('Error loading notifications:', error);
+          document.getElementById('notificationsList').innerHTML = '<p class="text-center text-danger py-4">Error loading notifications</p>';
+        });
+    }
+    function markAsRead(notificationId) {
+      fetch(`/notifications/${notificationId}/mark-read`, {method: 'POST', headers: {'Content-Type': 'application/json'}})
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            document.getElementById(`notification-${notificationId}`)?.remove();
+            loadNotifications();
+            const notificationsList = document.getElementById('notificationsList');
+            if (notificationsList.querySelectorAll('.border-bottom').length === 0) {
+              notificationsList.innerHTML = '<p class="text-center text-muted py-4">No new notifications</p>';
+            }
+          }
+        })
+        .catch(error => console.error('Error marking notification as read:', error));
+    }
+    loadNotifications();
+    document.getElementById('notificationsModal')?.addEventListener('show.bs.modal', function() { loadNotifications(); });
+    
+    // Feedback functionality
+    if (window.history.replaceState) {
+      window.history.replaceState(null, null, window.location.href);
+    }
+
+    function upvoteFeedback(feedbackId) {
+      fetch(`/upvote/${feedbackId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          alert(data.error);
+        } else {
+          // Update the upvote count display
+          document.getElementById(`upvote-count-${feedbackId}`).textContent = data.upvote_count;
+          // Toggle upvote button appearance
+          const btn = document.getElementById(`upvote-btn-${feedbackId}`);
+          btn.classList.toggle('upvoted');
+        }
+      });
+    }
+
+    function deleteFeedback(feedbackId) {
+      if (confirm('Are you sure you want to delete this feedback?')) {
+        fetch(`/delete-feedback/${feedbackId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.error) {
+            alert(data.error);
+          } else {
+            // Remove the feedback card from the DOM
+            document.querySelector(`.card-body:has(#upvote-btn-${feedbackId})`).closest('.card').remove();
+          }
+        });
+      }
+    }
+
+    // Clear form after successful submission
+    document.addEventListener('DOMContentLoaded', function() {
+      const form = document.querySelector('.dashboard-content form[method="POST"]');
+      const flashMessages = document.querySelectorAll('.alert-success');
+      
+      if (flashMessages.length > 0 && form) {
+        form.reset();
+      }
+    });
+  </script>
+  <script src="{{ url_for('static', filename='js/app-sidebar.js') }}"></script>
+</body>
+</html>

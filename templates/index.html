@@ -1,0 +1,1997 @@
+{% set page_title = "EmailsConfirmed - Email Verification Tool" %}
+{% set page_description = "EmailsConfirmed is an accurate, fast email verification tool for bulk list cleaning and real-time signup validation. Improve deliverability, reduce bounces, and protect sender reputation." %}
+{% set page_keywords = "email verification tool, email validation tool, bulk email verification, real-time email verification, email list cleaning, deliverability, reduce bounces" %}
+{% include "header.html" %}
+
+<!-- SaaS Landing Page for Non-Authenticated Users -->
+<style>
+  /* Landing Page Styles - Optimized for Conversion */
+  :root {
+    --primary-gradient: linear-gradient(135deg, #56B6C6 0%, #469ead 100%);
+    --primary-color: #56B6C6;
+    --secondary-color: #469ead;
+    --accent-gold: #ffd700;
+    --text-dark: #2c3e50;
+    --text-light: #6c757d;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Discount Banner */
+  .discount-banner {
+    background: #d7ad0d;
+    color: #2c3e50;
+    padding: 1rem 2rem;
+    text-align: center;
+    font-weight: 700;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    margin-bottom: 0;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    z-index: 10;
+    cursor: pointer;
+    text-decoration: none;
+    display: block;
+    transition: all 0.3s ease;
+  }
+
+  .discount-banner:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .discount-banner-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .discount-text {
+    font-size: clamp(1rem, 2vw, 1.3rem);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    line-height: 1.6;
+  }
+  
+  .discount-text span {
+    line-height: 1.6;
+  }
+
+  .discount-code {
+    background: #56B6C6;
+    color: white;
+    padding: 0.2rem 1rem;
+    border-radius: 8px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    font-family: monospace;
+    font-size: 1.1rem;
+  }
+
+  .countdown-timer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: clamp(0.9rem, 1.5vw, 1.1rem);
+  }
+
+  .countdown-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(44, 62, 80, 0.1);
+    padding: 0.5rem 0.8rem;
+    border-radius: 8px;
+    min-width: 50px;
+  }
+
+  .countdown-value {
+    font-size: 1.5rem;
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .countdown-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    opacity: 0.8;
+    margin-top: 0.2rem;
+  }
+
+  /* Hero Section — same base + dot texture as .register-page */
+  .landing-hero {
+    background: #56B6C6;
+    color: white;
+    padding: 100px 0 80px;
+    position: relative;
+    overflow: hidden;
+    min-height: 90vh;
+    display: flex;
+    align-items: center;
+  }
+
+  .landing-hero::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image:
+      radial-gradient(circle at 20% 30%, white 2px, transparent 2px),
+      radial-gradient(circle at 60% 70%, white 1.5px, transparent 1.5px),
+      radial-gradient(circle at 80% 20%, white 2.5px, transparent 2.5px),
+      radial-gradient(circle at 40% 80%, white 1px, transparent 1px),
+      radial-gradient(circle at 90% 50%, white 2px, transparent 2px),
+      radial-gradient(circle at 10% 60%, white 1.5px, transparent 1.5px),
+      radial-gradient(circle at 70% 10%, white 2px, transparent 2px),
+      radial-gradient(circle at 30% 90%, white 1.5px, transparent 1.5px),
+      radial-gradient(circle at 50% 40%, white 2px, transparent 2px),
+      radial-gradient(circle at 15% 15%, white 1px, transparent 1px);
+    background-size: 200px 200px, 150px 150px, 180px 180px, 120px 120px, 220px 220px, 160px 160px, 190px 190px, 140px 140px, 170px 170px, 130px 130px;
+    background-position: 0 0, 50px 100px, 120px 30px, 200px 180px, 80px 150px, 30px 200px, 150px 50px, 100px 220px, 180px 80px, 40px 120px;
+    opacity: 0.3;
+    z-index: 0;
+    pointer-events: none;
+  }
+  
+  .landing-hero.has-discount {
+    padding-top: 180px;
+  }
+  
+  .landing-hero .container {
+    position: relative;
+    z-index: 1;
+  }
+  
+  .hero-opening-line {
+    text-align: center;
+    font-size: clamp(1.1rem, 2vw, 1.4rem);
+    font-weight: 600;
+    margin-bottom: 2rem;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  .hero-title {
+    font-size: clamp(2.5rem, 5vw, 4rem);
+    font-weight: 900;
+    line-height: 1.1;
+    margin-bottom: 1.5rem;
+    letter-spacing: -0.03em;
+    text-align: center;
+  }
+  
+  .hero-subtitle {
+    font-size: clamp(1.1rem, 2vw, 1.35rem);
+    font-weight: 400;
+    line-height: 1.7;
+    margin-bottom: 2rem;
+    opacity: 0.95;
+    max-width: 650px;
+  }
+  
+  .hero-stats {
+    display: flex;
+    gap: 3rem;
+    margin: 2.5rem 0;
+    flex-wrap: wrap;
+  }
+  
+  .hero-stat {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .hero-stat-value {
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+  }
+  
+  .hero-stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+  }
+
+  .hero-trust-card {
+    margin: 0 auto 1.5rem;
+    padding: 0.6rem 1.25rem;
+    max-width: 560px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    text-align: center;
+  }
+
+  .hero-trust-card .hero-loved-by,
+  .hero-trust-card .hero-join-line {
+    margin: 0;
+    color: #56B6C6;
+    font-weight: 700;
+  }
+
+  .hero-loved-by {
+    font-size: 1.35rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .hero-loved-by .cta-count {
+    font-weight: 900;
+  }
+
+  .hero-join-line {
+    font-size: 1.45rem;
+    font-weight: 600;
+    opacity: 0.95;
+    line-height: 1.35;
+  }
+
+  .hero-join-line .cta-count {
+    font-weight: 800;
+  }
+  
+  /* CTA Buttons */
+  .cta-buttons {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+  }
+  
+  .btn-cta-primary {
+    background: white;
+    color: #56B6C6;
+    padding: 0.85rem 2rem;
+    font-size: 1rem;
+    font-weight: 700;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+  }
+  
+  .btn-cta-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(86, 182, 198, 0.3);
+    border-color: #56B6C6;
+    background: white;
+    color: #56B6C6;
+  }
+  
+  .btn-cta-secondary {
+    background: #56B6C6;
+    color: white;
+    padding: 0.85rem 2rem;
+    font-size: 1rem;
+    font-weight: 700;
+    border-radius: 12px;
+    border: 2px solid white;
+    transition: all 0.3s ease;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    text-decoration: none;
+    display: inline-block;
+  }
+  
+  .btn-cta-secondary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.35);
+    background: #469ead;
+    color: white;
+  }
+  
+  .google-logo-svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+
+  /* Trust Badges */
+  .trust-badges {
+    display: flex;
+    gap: 2rem;
+    margin-top: 3rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .trust-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    opacity: 0.9;
+    font-size: 0.95rem;
+  }
+
+  .trust-badge i {
+    font-size: 1.2rem;
+  }
+
+  /* Features Section */
+  .features-section {
+    padding: 100px 0;
+    background: #f8f9fa;
+  }
+
+  #pricing {
+    padding-bottom: 50px;
+  }
+
+  #faq {
+    padding-top: 50px;
+    padding-bottom: 50px;
+  }
+
+  .features-section .hero-opening-line {
+    color: #d7ad0d;
+    margin-bottom: 0.5rem;
+  }
+
+  .video-placeholder {
+    width: 100%;
+    max-width: 280px;
+    margin: 0 auto;
+    aspect-ratio: 9 / 16;
+    background: #e9ecef;
+    border-radius: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    font-size: 1rem;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+
+  @media (max-width: 576px) {
+    .video-placeholder {
+      max-width: 220px;
+    }
+  }
+
+  .video-placeholder video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  #features {
+    padding-bottom: 60px !important;
+  }
+
+  .podcast-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-bottom: 0.75rem;
+    text-align: center;
+  }
+
+  .podcast-ranking {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-dark);
+    margin-bottom: 0.75rem;
+    text-align: center;
+    opacity: 0.8;
+  }
+
+  .platform-card {
+    border-radius: 1rem;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: white;
+    padding: 2rem;
+    text-align: center;
+    transition: all 0.3s ease;
+  }
+
+  .platform-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+  }
+
+  .platform-card.supported {
+    border-color: #22c55e;
+    border-width: 2px;
+  }
+
+  .platform-card.coming-soon {
+    opacity: 0.6;
+  }
+
+  .platform-name {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 0.5rem;
+  }
+
+  .platform-status {
+    font-size: 0.9rem;
+    color: var(--text-light);
+    margin-top: 0.5rem;
+  }
+
+  .platform-status.supported {
+    color: #22c55e;
+    font-weight: 600;
+  }
+
+  .platform-status.coming-soon {
+    color: var(--text-light);
+    font-style: italic;
+  }
+
+  /* Pricing Cards */
+  .pricing-card {
+    border-radius: 1rem;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    background: white;
+    padding: 2.5rem 2rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pricing-card.featured {
+    border-color: rgba(86, 182, 198, 0.55);
+    border-width: 2px;
+    position: relative;
+    overflow: visible;
+  }
+
+  .pricing-lifetime-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    z-index: 2;
+    padding: 0.42rem 0.95rem 0.48rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    line-height: 1;
+    color: #fff;
+    background: #56B6C6;
+    border: 2px solid rgba(86, 182, 198, 0.75);
+    border-radius: 0 calc(1rem - 2px) 0 0.75rem;
+    box-shadow: 0 4px 12px rgba(70, 158, 173, 0.22);
+    pointer-events: none;
+  }
+
+  .pricing-card.featured .pricing-price-discounted {
+    color: #56B6C6;
+  }
+
+  #pricing .pricing-card.featured .small.text-muted {
+    color: var(--text-dark) !important;
+  }
+
+  .pricing-card.featured .pricing-pay-once-note,
+  .pricing-card.basic .pricing-pay-once-note {
+    font-size: 0.95rem;
+    color: var(--text-light);
+    text-align: center;
+    margin: 0.75rem 0 0 0;
+    line-height: 1.4;
+  }
+
+  .pricing-card.basic {
+    border-color: rgba(0, 0, 0, 0.12);
+    background: #fcfcfd;
+  }
+
+  .price-feature-limited {
+    color: #f4b400 !important;
+  }
+
+  .pricing-features li i.bi-x-circle-fill {
+    color: #dc3545 !important;
+  }
+
+  .pricing-current-plan {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(86, 182, 198, 0.25);
+    background: rgba(86, 182, 198, 0.1);
+    color: #3f909f;
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .pricing-description {
+    font-size: 0.95rem;
+    color: var(--text-light);
+    margin-bottom: 1rem;
+    font-style: italic;
+  }
+
+  .pricing-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 1rem;
+  }
+
+  .pricing-price {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--text-dark);
+    margin-bottom: 0.5rem;
+  }
+
+  .pricing-price-original {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: #dc3545;
+    text-decoration: line-through;
+    margin-bottom: 0.25rem;
+    opacity: 0.7;
+  }
+
+  .pricing-price-discounted {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--text-dark);
+    margin-bottom: 0.5rem;
+  }
+
+  #pricing .pricing-features {
+    margin-top: 0.35rem;
+  }
+
+  .pricing-features {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 2rem 0;
+    text-align: left;
+    flex-grow: 1;
+  }
+
+  .pricing-features li {
+    padding: 0.75rem 0;
+    color: var(--text-dark);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  .pricing-features li:last-child {
+    border-bottom: none;
+  }
+
+  .pricing-features li i {
+    color: #22c55e;
+    margin-right: 0.5rem;
+  }
+
+  .pricing-button {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: 0.75rem;
+    border: none;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+  }
+
+  .pricing-button.primary {
+    background: #56B6C6;
+    color: white;
+  }
+
+  .pricing-button.primary:hover {
+    background: #469ead;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(70, 158, 173, 0.35);
+  }
+
+  .pricing-button.secondary {
+    background: #56B6C6;
+    color: white;
+    border: none;
+  }
+
+  .pricing-button.secondary:hover {
+    background: #469ead;
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(70, 158, 173, 0.35);
+  }
+
+  .price-compare-card {
+    border-radius: 1rem;
+    border: 2px solid rgba(0, 0, 0, 0.08);
+    background: white;
+    padding: 1.15rem 1.15rem 1rem;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  }
+
+  /* Let comparison card in #examples render wider than container */
+  #examples .price-compare-card {
+    width: min(1100px, calc(100vw - 2.5rem));
+    margin-left: 50%;
+    transform: translateX(-50%);
+  }
+
+  #examples .section-subtitle {
+    max-width: 980px;
+    margin-bottom: 1rem;
+  }
+
+  .price-compare-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 0.75rem;
+  }
+
+  .price-compare-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .price-compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 0.78rem;
+  }
+
+  @media (max-width: 991.98px) {
+    .price-compare-table {
+      table-layout: auto;
+      width: max-content;
+      min-width: 100%;
+      max-width: none;
+    }
+
+    .price-compare-table thead th,
+    .price-compare-table td {
+      white-space: nowrap;
+    }
+
+    .price-compare-table thead th:first-child,
+    .price-compare-table td:first-child {
+      white-space: normal;
+      max-width: 12rem;
+    }
+  }
+
+  .price-compare-table thead th {
+    text-align: left;
+    background: #f8f9fc;
+    color: #495057;
+    font-weight: 700;
+    border-bottom: 1px solid #e9ecef;
+    padding: 0.42rem 0.35rem;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .price-compare-table td {
+    border-bottom: 1px solid #f1f3f5;
+    padding: 0.42rem 0.35rem;
+    color: #2c3e50;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+
+  .price-compare-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .price-compare-col--clawpod {
+    background: #e8f4f8;
+    font-weight: 700;
+  }
+
+  .price-compare-table thead .price-compare-col--clawpod,
+  .price-compare-table tbody .price-compare-col--clawpod {
+    border-left: 2px solid rgba(86, 182, 198, 0.45);
+    border-right: 2px solid rgba(86, 182, 198, 0.45);
+  }
+
+  .price-compare-table thead .price-compare-col--clawpod {
+    background: #dff3f8;
+    color: #2a7a8a;
+  }
+
+  .price-compare-editable {
+    color: #6b7280;
+    font-style: italic;
+  }
+
+  /* Single “how we price” callout inside #examples (above comparison table) */
+  .examples-pricing-model-card {
+    background: white;
+    border-radius: 1rem;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-left: 4px solid #56B6C6;
+    padding: 1.25rem 1.5rem;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    margin: 0 auto 1.25rem;
+    max-width: min(1100px, calc(100vw - 2.5rem));
+  }
+
+  .examples-pricing-model-section:not(:last-child) {
+    margin-bottom: 1.15rem;
+    padding-bottom: 1.15rem;
+    border-bottom: 1px solid #e9ecef;
+  }
+
+  .examples-pricing-model-section h4 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #56B6C6;
+    margin: 0 0 0.45rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .examples-pricing-model-section p {
+    margin: 0;
+    color: var(--text-light);
+    line-height: 1.75;
+    font-size: clamp(0.95rem, 1.2vw, 1.02rem);
+  }
+
+  .examples-pricing-model-section ul {
+    margin: 0;
+    padding-left: 1.25rem;
+    color: var(--text-light);
+    line-height: 1.75;
+    font-size: clamp(0.95rem, 1.2vw, 1.02rem);
+  }
+
+  .examples-pricing-model-section ul li {
+    margin-bottom: 0.5rem;
+  }
+
+  .examples-pricing-model-section ul li:last-child {
+    margin-bottom: 0;
+  }
+
+  .examples-pricing-model-section ul li::marker {
+    color: #56B6C6;
+  }
+
+  .examples-pricing-model-card a {
+    color: #56B6C6;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .examples-pricing-model-card a:hover {
+    color: #469ead;
+  }
+
+  @media (max-width: 767.98px) {
+    .examples-pricing-model-card {
+      max-width: 100%;
+      margin-left: 0;
+      margin-right: 0;
+    }
+  }
+
+  /* FAQ Section - collapsible cards, same styling as features-section, no hover */
+  .faq-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .faq-item {
+    background: white;
+    border-radius: 1rem;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    margin-bottom: 1rem;
+    overflow: hidden;
+  }
+
+  .faq-item summary {
+    padding: 1.25rem 1.5rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #56B6C6;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .faq-item summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .faq-item summary::after {
+    content: '';
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid var(--text-light);
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+  }
+
+  .faq-item[open] summary::after {
+    transform: rotate(180deg);
+  }
+
+  .faq-item .faq-answer {
+    padding: 1.25rem 1.5rem 1.25rem 1.5rem;
+    color: var(--text-light);
+    line-height: 1.7;
+    font-size: 1rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  .faq-item .faq-answer p {
+    margin: 0;
+  }
+  
+  .section-title {
+    font-size: clamp(2rem, 4vw, 2.8rem);
+    font-weight: 800;
+    text-align: center;
+    margin-bottom: 1rem;
+    color: var(--text-dark);
+  }
+  
+  .section-subtitle {
+    font-size: clamp(1rem, 2vw, 1.25rem);
+    text-align: center;
+    color: var(--text-light);
+    margin-bottom: 4rem;
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  .feature-card {
+    background: white;
+    border-radius: 20px;
+    padding: 2.5rem;
+    height: 100%;
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: var(--primary-gradient);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+  }
+  
+  .feature-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 15px 40px rgba(102, 126, 234, 0.2);
+    border-color: var(--primary-color);
+  }
+
+  .feature-card:hover::before {
+    transform: scaleX(1);
+  }
+  
+  .feature-icon {
+    width: 70px;
+    height: 70px;
+    background: #56B6C6;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: white;
+    margin-bottom: 1.5rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  .feature-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: var(--text-dark);
+  }
+  
+  .feature-description {
+    color: var(--text-light);
+    line-height: 1.7;
+    font-size: 1rem;
+  }
+
+  /* Alternating split layout for Features section */
+  .approach-item {
+    align-items: center;
+  }
+
+  /* Make feature rows look like: text left, card right */
+  #features .approach-item {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center;
+    justify-content: flex-start;
+    gap: clamp(1.35rem, 2.8vw, 2.15rem) !important;
+    max-width: min(100%, 1040px);
+    margin: 0 auto;
+    padding: clamp(0.85rem, 1.6vw, 1.2rem) 0;
+    min-height: 205px;
+  }
+
+  #features .row.gy-5 {
+    --bs-gutter-y: clamp(2.85rem, 4vw, 3.75rem);
+  }
+
+  #features .approach-text {
+    flex: 1 1 48%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  #features .approach-media-wrap {
+    flex: 1 1 52%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .approach-text {
+    padding: 0.25rem 0.25rem 0.25rem 0;
+  }
+
+  .approach-icon {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+    min-height: 52px;
+    flex: 0 0 52px;
+    background: #56B6C6;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    color: white;
+    box-sizing: border-box;
+  }
+
+  .approach-head {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .approach-title {
+    font-size: clamp(1.55rem, 2.4vw, 1.8rem);
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 0;
+  }
+
+  .approach-description {
+    font-size: clamp(1.05rem, 1.35vw, 1.15rem);
+    color: var(--text-light);
+    line-height: 1.75;
+    margin-bottom: 0;
+  }
+
+  .approach-media {
+    width: 100%;
+    border-radius: 1rem;
+    display: block;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    border: 1px solid #ececec;
+  }
+
+  .approach-compare-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
+  }
+
+  .approach-compare-card {
+    background: #ffffff;
+    border: 1px solid #dce3ea;
+    border-radius: 0.9rem;
+    padding: 0.55rem;
+  }
+
+  .approach-compare-label {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    margin-bottom: 0.45rem;
+  }
+
+  .approach-compare-label--good {
+    color: #198754;
+  }
+
+  .approach-compare-label--bad {
+    color: #b02a37;
+  }
+
+  .approach-compare-note {
+    margin: 0.6rem 0 0;
+    font-size: 0.86rem;
+    color: #5f6b7a;
+    line-height: 1.45;
+  }
+
+  /* Slightly enlarge only the first feature media block */
+  #features .row > .col-12:first-child .approach-text {
+    flex-basis: 45%;
+  }
+
+  #features .row > .col-12:first-child .approach-media-wrap {
+    flex-basis: 55%;
+  }
+
+  /* Same media column treatment for first + third feature rows (plain img, no card wrapper) */
+  #features .row > .col-12:first-child .approach-media-wrap,
+  #features .row > .col-12:nth-child(3) .approach-media-wrap {
+    max-width: min(100%, 520px);
+  }
+
+  #features .approach-item--reverse .approach-text {
+    order: 2;
+  }
+  #features .approach-item--reverse .approach-media-wrap {
+    order: 1;
+  }
+
+  /* Stable layout for the comparison row (media left, text right) */
+  #features .row > .col-12:nth-child(2) .approach-item {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    max-width: min(100%, 1040px);
+    gap: clamp(1.35rem, 2.4vw, 1.85rem) !important;
+    min-height: 0;
+    align-items: flex-start;
+  }
+
+  #features .row > .col-12:nth-child(2) .approach-text {
+    max-width: min(100%, 420px);
+    align-self: center;
+    margin-top: auto;
+    margin-bottom: auto;
+  }
+
+  #features .row > .col-12:nth-child(2) .approach-media-wrap {
+    min-width: 0;
+    max-width: min(100%, 520px);
+  }
+
+  #features .row > .col-12:nth-child(2) .approach-compare-grid {
+    grid-template-columns: 1fr;
+    gap: 0.9rem;
+  }
+
+  #features .row > .col-12:nth-child(2) .approach-compare-grid > div {
+    display: block;
+    text-align: left;
+    min-width: 0;
+  }
+
+  #features .row > .col-12:nth-child(2) .approach-compare-label {
+    flex: 0 0 auto;
+    width: fit-content;
+    margin-bottom: 0;
+    line-height: 1.25;
+  }
+
+  #features .row > .col-12:nth-child(2) .approach-compare-grid > div .approach-media {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .approach-media-highlight {
+    position: relative;
+    display: block;
+    border: 2px solid #22a06b;
+    border-radius: 0.9rem;
+    padding: 0;
+    margin-top: 0.55rem;
+    background: #e9f8f0;
+    width: 100%;
+    max-width: 480px;
+  }
+
+  @media (max-width: 767.98px) {
+    #features .row > .col-12:nth-child(2) .approach-item {
+      display: block !important;
+      max-width: min(100%, 1040px);
+      gap: 0.9rem !important;
+    }
+
+    #features .row > .col-12:nth-child(2) .approach-media-wrap {
+      margin-bottom: 0.85rem;
+      max-width: 100%;
+    }
+
+    #features .row > .col-12:nth-child(2) .approach-text {
+      max-width: 100%;
+    }
+  }
+
+  .approach-media-badge {
+    position: absolute;
+    top: -0.78rem;
+    left: 0.65rem;
+    background: #198754;
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 1;
+    padding: 0.24rem 0.5rem;
+    border-radius: 999px;
+    border: 2px solid #22a06b;
+    z-index: 2;
+  }
+
+  .approach-media-highlight--bad {
+    border-color: #d64545;
+    background: #fdecec;
+  }
+
+  .approach-media-badge--bad {
+    background: #b4232f;
+    border-color: #d64545;
+  }
+
+  @media (max-width: 767.98px) {
+    #features .row.gy-5 {
+      --bs-gutter-y: 2.85rem;
+    }
+
+    #features .approach-item {
+      display: block !important;
+      gap: 1.05rem;
+      min-height: 0;
+      padding: 0.5rem 0;
+    }
+    #features .approach-text,
+    #features .approach-media-wrap {
+      max-width: 100%;
+    }
+    #features .approach-item--reverse .approach-text,
+    #features .approach-item--reverse .approach-media-wrap {
+      order: initial;
+    }
+
+    .approach-compare-grid {
+      grid-template-columns: 1fr;
+    }
+
+    #examples .price-compare-card {
+      width: 100%;
+      margin-left: 0;
+      transform: none;
+    }
+  }
+
+  /* How-it-works step badges */
+  #how-it-works .how-step-card {
+    padding-top: 4.25rem;
+  }
+
+  #how-it-works .feature-title,
+  #how-it-works .feature-description {
+    text-align: center;
+  }
+
+  #how-it-works .how-step-number {
+    position: absolute;
+    left: 1.25rem;
+    top: 1.25rem;
+    min-width: 3.1rem;
+    height: 3.1rem;
+    padding: 0 0.95rem;
+    border-radius: 999px;
+    background: #dff6fb;
+    border: 1px solid rgba(86, 182, 198, 0.45);
+    color: #56B6C6;
+    font-weight: 800;
+    font-size: 1.35rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+
+  /* Benefits Section */
+  .benefits-section {
+    padding: 100px 0;
+    background: var(--primary-gradient);
+    color: white;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .benefits-section::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  
+  .benefit-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+    position: relative;
+    z-index: 1;
+  }
+  
+  .benefit-icon {
+    width: 60px;
+    height: 60px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    flex-shrink: 0;
+  }
+  
+  .benefit-content h4 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+  }
+  
+  .benefit-content p {
+    opacity: 0.95;
+    line-height: 1.8;
+    font-size: 1.05rem;
+    margin: 0;
+  }
+
+  /* Social Proof */
+  .social-proof {
+    padding: 80px 0;
+    background: white;
+  }
+
+  .testimonial-card {
+    background: white;
+    border-radius: 16px;
+    padding: 2.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    height: 100%;
+    border: 1px solid #e9ecef;
+  }
+
+  .testimonial-text {
+    font-size: 1.1rem;
+    line-height: 1.8;
+    color: var(--text-dark);
+    margin-bottom: 1.5rem;
+    font-style: italic;
+  }
+
+  .testimonial-author {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .testimonial-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--primary-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+    font-size: 1.2rem;
+  }
+
+  .testimonial-info h5 {
+    margin: 0;
+    font-weight: 700;
+    color: var(--text-dark);
+  }
+
+  .testimonial-info p {
+    margin: 0;
+    color: var(--text-light);
+    font-size: 0.9rem;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .landing-hero {
+      padding: 60px 0 50px;
+      min-height: auto;
+    }
+    
+    .landing-hero.has-discount {
+      padding-top: 200px;
+    }
+    
+    .discount-banner {
+      padding: 0.75rem 1rem;
+      min-height: auto;
+    }
+    
+    .discount-banner-content {
+      gap: 0.75rem;
+    }
+
+    .hero-stats {
+      gap: 2rem;
+    }
+    
+    .cta-buttons {
+      flex-direction: column;
+    }
+    
+    .btn-cta-primary,
+    .btn-cta-secondary {
+      width: 100%;
+      padding: 1rem 2rem;
+    }
+
+    .hero-trust-card {
+      padding: 0.5rem 1rem;
+      margin-left: 1rem;
+      margin-right: 1rem;
+    }
+
+    .hero-join-line {
+      font-size: 1.05rem;
+      line-height: 1.4;
+    }
+
+    .trust-badges {
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .features-section,
+    .benefits-section {
+      padding: 60px 0;
+    }
+
+    .feature-icon {
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .feature-title {
+      text-align: center;
+    }
+
+    .feature-description {
+      text-align: center;
+    }
+
+    .discount-banner-content {
+      flex-direction: column;
+      gap: 1rem;
+    }
+    
+    .discount-text {
+      font-size: 0.9rem;
+      text-align: center;
+      line-height: 1.8;
+    }
+    
+    .discount-text span {
+      line-height: 1.8;
+    }
+
+    .countdown-timer {
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    
+    .countdown-item {
+      min-width: 40px;
+      padding: 0.4rem 0.6rem;
+    }
+    
+    .countdown-value {
+      font-size: 1.2rem;
+    }
+    
+    .countdown-label {
+      font-size: 0.65rem;
+    }
+  }
+</style>
+
+<!-- Hero Section -->
+<section class="landing-hero {% if active_discount and not current_user.is_authenticated %}has-discount{% endif %}">
+  {% if active_discount and not current_user.is_authenticated %}
+  <a href="{{ url_for('register', next=url_for('create_checkout_session', plan='paid')) }}" class="discount-banner" style="text-decoration: none; color: inherit;">
+    <div class="discount-banner-content">
+      <div class="discount-text">
+        <span>🎉 Use code <span class="discount-code">{{ active_discount.discount_code }}</span> at checkout for {{ active_discount.discount_percentage | int }}% off</span>
+      </div>
+      <div class="countdown-timer">
+        <span>Ends in:</span>
+        <div class="countdown-item">
+          <div class="countdown-value" id="countdown-days">00</div>
+          <div class="countdown-label">Days</div>
+        </div>
+        <div class="countdown-item">
+          <div class="countdown-value" id="countdown-hours">00</div>
+          <div class="countdown-label">Hours</div>
+        </div>
+        <div class="countdown-item">
+          <div class="countdown-value" id="countdown-minutes">00</div>
+          <div class="countdown-label">Mins</div>
+        </div>
+        <div class="countdown-item">
+          <div class="countdown-value" id="countdown-seconds">00</div>
+          <div class="countdown-label">Secs</div>
+        </div>
+      </div>
+    </div>
+  </a>
+  {% endif %}
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-10 text-center">
+        <div class="hero-opening-line fade-in">Best Email Verification Tool</div>
+        <h1 class="hero-title fade-in">Verify Emails Before You Send, Improve Your Deliverability</h1>
+        
+        <p class="fade-in" style="font-size: 1.2rem; color: rgba(255, 255, 255, 0.95); max-width: 700px; margin: 2rem auto; line-height: 1.7; text-align: center;">
+          The only UNLIMITED email verification tool on the market. Clean up your email lists to boost inbox deliverability and open rates. No caps, email counts, etc.
+        </p>
+        
+        <div class="cta-buttons fade-in justify-content-center">
+          <a href="{{url_for('google_login') if google_enabled else url_for('register')}}" class="btn btn-cta-primary">
+            <svg class="google-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18">
+              <g fill="#000" fill-rule="evenodd">
+                <path d="M9 3.48c1.69 0 2.83.73 3.48 1.34l2.54-2.48C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l2.91 2.26C4.6 5.05 6.62 3.48 9 3.48z" fill="#EA4335"/>
+                <path d="M17.64 9.2c0-.74-.06-1.28-.19-1.84H9v3.34h4.96c-.21 1.18-.84 2.08-1.79 2.68l2.78 2.16c1.9-1.75 2.69-4.34 2.69-7.34z" fill="#4285F4"/>
+                <path d="M3.88 10.78A5.54 5.54 0 0 1 3.58 9c0-.62.11-1.22.29-1.78L.96 4.96A9.008 9.008 0 0 0 0 9c0 1.45.35 2.82.96 4.04l2.92-2.26z" fill="#FBBC05"/>
+                <path d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.78-2.16c-.76.53-1.78.9-3.18.9-2.38 0-4.4-1.57-5.12-3.74L.96 13.04C2.45 16.98 5.48 18 9 18z" fill="#34A853"/>
+              </g>
+            </svg>
+            Join with Google
+          </a>
+          <a href="{{url_for('register')}}" class="btn btn-cta-secondary">Start Free Verification</a>
+        </div>
+        <p class="fade-in" style="font-size: 1rem; color: rgba(255, 255, 255, 0.98); margin: 1.75rem auto 0; text-align: center; line-height: 1.3; font-weight: 600; letter-spacing: 0.01em; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.24); border-radius: 999px; padding: 0.6rem 1rem; display: inline-block;">
+          100 free verifications, no card needed. Sign up to get started!
+        </p>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How It Works Section -->
+<section id="how-it-works" class="features-section">
+  <div class="container">
+    <div class="hero-opening-line fade-in">HOW IT WORKS</div>
+    <h2 class="section-title fade-in">Verify in 3 <span style="color: #56B6C6;">Simple Steps</span></h2>
+    <p class="section-subtitle fade-in">Get cleaner lists and better inbox placement without changing your workflow.</p>
+
+    <div class="row g-4">
+      <div class="col-12 col-sm-6 col-lg-4">
+        <div class="feature-card fade-in how-step-card">
+          <div class="feature-icon">
+            <i class="bi bi-upload"></i>
+          </div>
+          <h3 class="feature-title">Upload Your Email List</h3>
+          <p class="feature-description">Import your CSV or TXT file, we'll automatically detect the email field. No editing of the list needed before.</p>
+          <div class="how-step-number">1</div>
+        </div>
+      </div>
+
+      <div class="col-12 col-sm-6 col-lg-4">
+        <div class="feature-card fade-in how-step-card">
+          <div class="feature-icon">
+            <i class="bi bi-shield-check"></i>
+          </div>
+          <h3 class="feature-title">Validate Automatically</h3>
+          <p class="feature-description">Real time verification to classify addresses as valid, invalid, or risky. Multi-layered, fast, accurate.</p>
+          <div class="how-step-number">2</div>
+        </div>
+      </div>
+
+      <div class="col-12 col-sm-6 col-lg-4 offset-sm-3 offset-lg-0">
+        <div class="feature-card fade-in how-step-card">
+          <div class="feature-icon">
+            <i class="bi bi-download"></i>
+          </div>
+          <h3 class="feature-title">Export Clean Results</h3>
+          <p class="feature-description">Download filtered output and send with confidence to improve deliverability and open rates.</p>
+          <div class="how-step-number">3</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta-buttons fade-in justify-content-center" style="margin-top: 3rem;">
+      <a href="{{url_for('google_login') if google_enabled else url_for('register')}}" class="btn btn-cta-primary">
+        <svg class="google-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18">
+          <g fill="#000" fill-rule="evenodd">
+            <path d="M9 3.48c1.69 0 2.83.73 3.48 1.34l2.54-2.48C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l2.91 2.26C4.6 5.05 6.62 3.48 9 3.48z" fill="#EA4335"/>
+            <path d="M17.64 9.2c0-.74-.06-1.28-.19-1.84H9v3.34h4.96c-.21 1.18-.84 2.08-1.79 2.68l2.78 2.16c1.9-1.75 2.69-4.34 2.69-7.34z" fill="#4285F4"/>
+            <path d="M3.88 10.78A5.54 5.54 0 0 1 3.58 9c0-.62.11-1.22.29-1.78L.96 4.96A9.008 9.008 0 0 0 0 9c0 1.45.35 2.82.96 4.04l2.92-2.26z" fill="#FBBC05"/>
+            <path d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.78-2.16c-.76.53-1.78.9-3.18.9-2.38 0-4.4-1.57-5.12-3.74L.96 13.04C2.45 16.98 5.48 18 9 18z" fill="#34A853"/>
+          </g>
+        </svg>
+        Join with Google
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- Features Section -->
+<section id="features" class="features-section">
+  <div class="container">
+    <div class="hero-opening-line fade-in">FEATURES</div>
+    <h2 class="section-title fade-in"><span style="color: #56B6C6;">Built for Deliverability</span>, Accuracy, and Scale</h2>
+    <p class="section-subtitle fade-in">The only email verification tool that balances cleaner lists with more email sends.</p>
+    
+    <div class="row gy-5">
+      <div class="col-12">
+        <div class="approach-item fade-in">
+          <div class="approach-text">
+            <div class="approach-head">
+              <div class="approach-icon"><i class="bi bi-sliders2"></i></div>
+              <h3 class="approach-title">Real-Time Validation Checks</h3>
+            </div>
+            <p class="approach-description">We check format, domains, MX/DNS setup, and more...</p>
+          </div>
+          <div class="approach-media-wrap">
+            <img src="{{ url_for('static', filename='images/report-card.png') }}" alt="Bulk email verification dashboard" class="approach-media">
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="approach-item approach-item--reverse fade-in">
+          <div class="approach-text">
+            <div class="approach-head">
+              <div class="approach-icon"><i class="bi bi-shield-check"></i></div>
+              <h3 class="approach-title">Balanced Risk Approach</h3>
+            </div>
+            <p class="approach-description">Balance risk and opportunities lost from the overly harsh rules that competitors use.</p>
+          </div>
+          <div class="approach-media-wrap">
+            <div class="approach-compare-grid">
+              <div>
+                <div class="approach-media-highlight">
+                  <span class="approach-media-badge">EmailsConfirmed</span>
+                  <img src="{{ url_for('static', filename='images/clawpod-correct.png') }}" alt="Accurate email validation output from EmailsConfirmed" class="approach-media">
+                </div>
+              </div>
+              <div>
+                <div class="approach-media-highlight approach-media-highlight--bad">
+                  <span class="approach-media-badge approach-media-badge--bad">Other Providers</span>
+                  <img src="{{ url_for('static', filename='images/competitor-wrong.jpg') }}" alt="Example of inaccurate competitor validation output" class="approach-media">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="approach-item fade-in">
+          <div class="approach-text">
+            <div class="approach-head">
+              <div class="approach-icon"><i class="bi bi-collection"></i></div>
+              <h3 class="approach-title">Bulk Verification</h3>
+            </div>
+            <p class="approach-description">Manage lists of thousands of emails all at one time. Faster than the alternatives.</p>
+          </div>
+          <div class="approach-media-wrap">
+            <img src="{{ url_for('static', filename='images/validated-count.png') }}" alt="Email verification result groups" class="approach-media">
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="cta-buttons fade-in justify-content-center" style="margin-top: 3rem;">
+      <a href="{{url_for('google_login') if google_enabled else url_for('register')}}" class="btn btn-cta-primary">
+        <svg class="google-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18">
+          <g fill="#000" fill-rule="evenodd">
+            <path d="M9 3.48c1.69 0 2.83.73 3.48 1.34l2.54-2.48C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l2.91 2.26C4.6 5.05 6.62 3.48 9 3.48z" fill="#EA4335"/>
+            <path d="M17.64 9.2c0-.74-.06-1.28-.19-1.84H9v3.34h4.96c-.21 1.18-.84 2.08-1.79 2.68l2.78 2.16c1.9-1.75 2.69-4.34 2.69-7.34z" fill="#4285F4"/>
+            <path d="M3.88 10.78A5.54 5.54 0 0 1 3.58 9c0-.62.11-1.22.29-1.78L.96 4.96A9.008 9.008 0 0 0 0 9c0 1.45.35 2.82.96 4.04l2.92-2.26z" fill="#FBBC05"/>
+            <path d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.78-2.16c-.76.53-1.78.9-3.18.9-2.38 0-4.4-1.57-5.12-3.74L.96 13.04C2.45 16.98 5.48 18 9 18z" fill="#34A853"/>
+          </g>
+        </svg>
+        Join with Google
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- Validation Outcomes Section -->
+<section id="examples" class="features-section">
+  <div class="container">
+    <div class="hero-opening-line fade-in">COMPARISON</div>
+    <h2 class="section-title fade-in">Why <span style="color: #56B6C6;">Choose EmailsConfirmed</span> Over the Competition?</h2>
+    <p class="section-subtitle fade-in">When comparing our pricing, our methodology, and our commitment to improving and learning from our customers, it's a no brainer in choosing EmailsConfirmed.</p>
+
+    <div class="examples-pricing-model-card fade-in">
+      <div class="examples-pricing-model-section">
+        <h4>Pay once, unlimited emails</h4>
+        <ul>
+          <li><strong>No subscriptions, no credits:</strong> pay once and get access to unlimited email verifications. Almost every other email validator is a token/subscription—so you pay even when you may not use or need. <a href="#pricing">See pricing</a>.</li>
+          <li><strong>Transparency:</strong> unlimited emails means unlimited emails. We won&apos;t stop you from verifying every last email you need to. And we won&apos;t ask for more money the more you use our platform.</li>
+        </ul>
+      </div>
+      <div class="examples-pricing-model-section">
+        <h4>Commitment to improve</h4>
+        <p>
+          Customer <strong>feedback</strong> and <strong>support</strong> is our differentiator. From a dedicated feedback board to fast email support, you&apos;re covered! We also provide notifications for new features and changes so you can stay on top of the new tools and fun.
+        </p>
+      </div>
+    </div>
+
+    <div class="row g-4 justify-content-center">
+      <div class="col-12">
+        <div class="price-compare-card fade-in">
+          <h3 class="price-compare-title">Email Verification Tool Comparison</h3>
+          <p class="small text-muted mb-2">Estimated pricing comparison by email validation volume.</p>
+          <div class="price-compare-table-wrap">
+            <table class="price-compare-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th class="price-compare-col--clawpod">EmailsConfirmed</th>
+                  <th>ZeroBounce</th>
+                  <th>NeverBounce</th>
+                  <th>Hunter</th>
+                  <th>EmailListVerify</th>
+                  <th>Kickbox</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Model</td>
+                  <td class="price-compare-col--clawpod">One-time payment</td>
+                  <td>Usage-based credits</td>
+                  <td>Usage-based / subscription</td>
+                  <td>Yearly subscription</td>
+                  <td>Usage-based plans</td>
+                  <td>Usage-based credits</td>
+                </tr>
+                <tr>
+                  <td>10,000 Emails</td>
+                  <td class="price-compare-col--clawpod">$149.99</td>
+                  <td class="price-compare-editable">$129</td>
+                  <td class="price-compare-editable">$50</td>
+                  <td class="price-compare-editable">$408</td>
+                  <td class="price-compare-editable">$27.99</td>
+                  <td class="price-compare-editable">$70</td>
+                </tr>
+                <tr>
+                  <td>100,000 Emails</td>
+                  <td class="price-compare-col--clawpod">$149.99</td>
+                  <td class="price-compare-editable">$649</td>
+                  <td class="price-compare-editable">$400</td>
+                  <td class="price-compare-editable">$1,248</td>
+                  <td class="price-compare-editable">$199</td>
+                  <td class="price-compare-editable">$500</td>
+                </tr>
+                <tr>
+                  <td>1,000,000 Emails</td>
+                  <td class="price-compare-col--clawpod">$149.99</td>
+                  <td class="price-compare-editable">$3,199</td>
+                  <td class="price-compare-editable">$2,500</td>
+                  <td class="price-compare-editable">$2,500+</td>
+                  <td class="price-compare-editable">$699</td>
+                  <td class="price-compare-editable">$2,999</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pricing Section -->
+<section id="pricing" class="features-section">
+  <div class="container">
+    <div class="hero-opening-line fade-in">PRICING</div>
+    <h2 class="section-title fade-in">Choose Your Email Verification Plan</h2>
+    
+    <div class="row g-4 justify-content-center align-items-stretch">
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="pricing-card basic fade-in">
+          <div class="pricing-name">Free Plan</div>
+          <div class="pricing-price">$0</div>
+          <ul class="pricing-features">
+            <li><i class="bi bi-dash-circle-fill price-feature-limited"></i> 100 Single Email Validations</li>
+            <li><i class="bi bi-dash-circle-fill price-feature-limited"></i> Standard Customer Service</li>
+            <li><i class="bi bi-x-circle-fill text-danger"></i> No Bulk Email Validations</li>
+            <li><i class="bi bi-x-circle-fill text-danger"></i> No CSV/TXT List Uploads</li>
+          </ul>
+          {% if current_user.is_authenticated %}
+            {% if current_user.premium_level == 0 %}
+              <div class="pricing-current-plan">Current Plan</div>
+            {% else %}
+              <a href="{{ url_for('dashboard') }}" class="pricing-button secondary">Choose Free Plan</a>
+            {% endif %}
+          {% else %}
+            <a href="{{ url_for('register', next=url_for('dashboard')) }}" class="pricing-button secondary">Choose Free Plan</a>
+          {% endif %}
+          <p class="pricing-pay-once-note">Upgrade anytime!</p>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="pricing-card featured fade-in">
+          <span class="pricing-lifetime-badge">Lifetime</span>
+          <div class="pricing-name">Paid Plan</div>
+          {% if active_discount %}
+            {% set original_price = 149.99 %}
+            {% set discounted_price = (original_price * (1 - active_discount.discount_percentage / 100)) | round(2) %}
+            <div class="pricing-price-original">${{ "%.2f"|format(original_price) }}</div>
+            <div class="pricing-price-discounted">${{ "%.2f"|format(discounted_price) }}</div>
+            <div class="small text-muted mb-2">If using {{ active_discount.discount_code }} at checkout</div>
+          {% else %}
+            <div class="pricing-price">$149.99</div>
+          {% endif %}
+          <ul class="pricing-features">
+            <li><i class="bi bi-check-circle-fill"></i> Unlimited Email Validations</li>
+            <li><i class="bi bi-check-circle-fill"></i> Priority Customer Service</li>
+            <li><i class="bi bi-check-circle-fill"></i> Bulk Email Validations</li>
+            <li><i class="bi bi-check-circle-fill"></i> Multiple Formats Supported</li>
+          </ul>
+          {% if current_user.is_authenticated %}
+            <a href="{{ url_for('create_checkout_session', plan='paid') }}" class="pricing-button primary">Choose Paid Plan</a>
+          {% else %}
+            <a href="{{ url_for('register', next=url_for('create_checkout_session', plan='paid')) }}" class="pricing-button primary">Choose Paid Plan</a>
+          {% endif %}
+          <p class="pricing-pay-once-note">Pay once. Validate unlimited emails!</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ Section -->
+<section id="faq" class="features-section">
+  <div class="container">
+    <div class="hero-opening-line fade-in">FAQ</div>
+    <h2 class="section-title fade-in">Frequently Asked Questions</h2>
+    <ul class="faq-list fade-in">
+      <li class="faq-item">
+        <details>
+          <summary>What is email verification?</summary>
+          <div class="faq-answer">
+            <p>Email verification is the process of checking whether an email address is real, reachable, and safe to send to. Verification and validation are often used interchangeably.</p>
+          </div>
+        </details>
+      </li>
+      <li class="faq-item">
+        <details>
+          <summary>Why does email verification matter?</summary>
+          <div class="faq-answer">
+            <p>Invalid and risky addresses drive bounces, spam complaints, and wasted sends. Cleaning your list protects sender reputation and domain health, improves inbox placement, and keeps you from paying to message addresses that will never engage.</p>
+          </div>
+        </details>
+      </li>
+      <li class="faq-item">
+        <details>
+          <summary>How quickly will I see deliverability improvements?</summary>
+          <div class="faq-answer">
+            <p>Most will see bounce-rate improvements immediately after switching to cleaned lists. Inbox placement and engagement improvements are dependent on the sending email and campaign, but should improve over time.</p>
+          </div>
+        </details>
+      </li>
+      <li class="faq-item">
+        <details>
+          <summary>Do you support both bulk and single email verification?</summary>
+          <div class="faq-answer">
+            <p>Yes, both are supported. Bulk email cleaning is only accessible to our paid plan customers.</p>
+          </div>
+        </details>
+      </li>
+      <li class="faq-item">
+        <details>
+          <summary>Can I verify existing lists I already have?</summary>
+          <div class="faq-answer">
+            <p>Yes. Upload existing CSV/TXT lists and run validation right away. You can map columns and export cleaned results for your current ESP or CRM.</p>
+          </div>
+        </details>
+      </li>
+      <li class="faq-item">
+        <details>
+          <summary>Is there a limit to the number of emails or lists I can validate?</summary>
+          <div class="faq-answer">
+            <p>No, there is no limit. Once you have the paid plan, you can validate as many emails and lists as needed.</p>
+          </div>
+        </details>
+      </li>
+      <li class="faq-item">
+        <details>
+          <summary>How accurate is EmailsConfirmed?</summary>
+          <div class="faq-answer">
+            <p>Our methodology is less conservative than many verification providers. Very strict rules can inflate reported accuracy while excluding legitimate addresses. EmailsConfirmed balances precision with fewer false rejections so valid contacts are not removed unnecessarily.</p>
+          </div>
+        </details>
+      </li>
+      <li class="faq-item">
+        <details>
+          <summary>How does the one-time payment work?</summary>
+          <div class="faq-answer">
+            <p>We don't believe in subscriptions, tokens, usage costs, etc. You pay one fee, and no matter how many emails you verify, you don't need to spend another dime.</p>
+          </div>
+        </details>
+      </li>
+      <li class="faq-item">
+        <details>
+          <summary>Can I get a refund?</summary>
+          <div class="faq-answer">
+            <p>We offer refunds within 3 days of purchase.</p>
+          </div>
+        </details>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<script>
+  // Smooth scroll for anchor links
+  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+      e.preventDefault();
+      const target = document.querySelector(this.getAttribute('href'));
+      if (target) {
+        target.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+      }
+    });
+  });
+
+  // Discount countdown timer
+  {% if active_discount and not current_user.is_authenticated %}
+  (function() {
+    const endDate = new Date('{{ active_discount.discount_end_date.strftime("%Y-%m-%d") }}T23:59:59').getTime();
+    
+    function updateCountdown() {
+      const now = new Date().getTime();
+      const distance = endDate - now;
+      
+      if (distance < 0) {
+        // Discount has expired, hide the banner
+        const banner = document.querySelector('.discount-banner');
+        if (banner) {
+          banner.style.display = 'none';
+        }
+        return;
+      }
+      
+      const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+      
+      const daysEl = document.getElementById('countdown-days');
+      const hoursEl = document.getElementById('countdown-hours');
+      const minutesEl = document.getElementById('countdown-minutes');
+      const secondsEl = document.getElementById('countdown-seconds');
+      
+      if (daysEl) daysEl.textContent = String(days).padStart(2, '0');
+      if (hoursEl) hoursEl.textContent = String(hours).padStart(2, '0');
+      if (minutesEl) minutesEl.textContent = String(minutes).padStart(2, '0');
+      if (secondsEl) secondsEl.textContent = String(seconds).padStart(2, '0');
+    }
+    
+    // Update immediately and then every second
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+  })();
+  {% endif %}
+
+  // Force video previews to load on page load
+  (function() {
+    function loadVideoPreview(video) {
+      // Force video to load by calling load()
+      video.load();
+      
+      // Wait for metadata to load, then seek to first frame
+      const loadFrame = function() {
+        if (video.readyState >= 2) { // HAVE_CURRENT_DATA
+          video.currentTime = 0.1; // Small offset to ensure frame loads
+          video.pause();
+        }
+      };
+      
+      if (video.readyState >= 2) {
+        loadFrame();
+      } else {
+        video.addEventListener('loadeddata', loadFrame, { once: true });
+        video.addEventListener('loadedmetadata', loadFrame, { once: true });
+      }
+    }
+    
+    // Use Intersection Observer to load videos when they're about to be visible
+    if ('IntersectionObserver' in window) {
+      const videoObserver = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            loadVideoPreview(entry.target);
+            videoObserver.unobserve(entry.target);
+          }
+        });
+      }, {
+        rootMargin: '50px' // Start loading 50px before video enters viewport
+      });
+      
+      // Observe all videos
+      document.querySelectorAll('video').forEach(function(video) {
+        videoObserver.observe(video);
+      });
+    } else {
+      // Fallback for browsers without Intersection Observer
+      document.querySelectorAll('video').forEach(loadVideoPreview);
+    }
+  })();
+</script>
+
+{% include "footer.html" %}

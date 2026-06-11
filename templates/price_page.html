@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
+  <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/logo.png') }}">
+  <title>Pricing | EmailsConfirmed</title>
+  <meta name="description" content="EmailsConfirmed pricing: plans for email verification, bulk list validation, and higher usage limits.">
+  <meta name="keywords" content="email verification pricing, EmailsConfirmed pricing, bulk validation plans">
+  <meta property="og:title" content="Pricing | EmailsConfirmed">
+  <meta property="og:description" content="Plans for email verification and bulk list validation.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Pricing | EmailsConfirmed">
+  <meta name="twitter:description" content="Plans for email verification and bulk list validation.">
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K9BVXXLJD3"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-K9BVXXLJD3');
+  </script>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --price-text-dark: #2c3e50;
+      --price-text-muted: #6c757d;
+    }
+
+    .price-discount-banner {
+      background: #d7ad0d;
+      color: white;
+      padding: 1rem 1.25rem;
+      border-radius: 12px;
+      font-weight: 700;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
+      margin-bottom: 1.5rem;
+    }
+
+    .price-discount-banner-inner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .price-discount-text {
+      font-size: clamp(0.95rem, 2vw, 1.15rem);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .price-discount-code {
+      background: #56B6C6;
+      color: white;
+      padding: 0.35rem 0.85rem;
+      border-radius: 8px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      font-family: monospace;
+      font-size: 1rem;
+    }
+
+    .price-countdown {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: clamp(0.85rem, 1.5vw, 1rem);
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .price-countdown-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.22);
+      padding: 0.45rem 0.65rem;
+      border-radius: 8px;
+      min-width: 48px;
+    }
+
+    .price-countdown-value {
+      font-size: 1.35rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .price-countdown-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      opacity: 0.95;
+      margin-top: 0.15rem;
+    }
+
+    .pricing-card {
+      border-radius: 1rem;
+      border: 2px solid rgba(0, 0, 0, 0.08);
+      background: white;
+      padding: 2rem 1.75rem;
+      text-align: center;
+      transition: all 0.3s ease;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    }
+
+    .pricing-card.featured {
+      border-color: rgba(86, 182, 198, 0.55);
+    }
+
+    .pricing-card.featured .pricing-price-discounted {
+      color: #56B6C6;
+    }
+
+    .pricing-card.featured .pricing-pay-once-note {
+      font-size: 0.95rem;
+      color: var(--price-text-muted);
+      text-align: center;
+      margin: 0.75rem 0 0 0;
+      line-height: 1.4;
+    }
+
+    .pricing-card.basic {
+      border-color: rgba(0, 0, 0, 0.12);
+      background: #fcfcfd;
+    }
+
+    .pricing-description {
+      font-size: 0.95rem;
+      color: var(--price-text-muted);
+      margin-bottom: 1rem;
+      font-style: italic;
+    }
+
+    .pricing-name {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--price-text-dark);
+      margin-bottom: 1rem;
+    }
+
+    .pricing-price {
+      font-size: 2.25rem;
+      font-weight: 800;
+      color: var(--price-text-dark);
+      margin-bottom: 0.5rem;
+    }
+
+    .pricing-price-original {
+      font-size: 2.25rem;
+      font-weight: 800;
+      color: #dc3545;
+      text-decoration: line-through;
+      margin-bottom: 0.25rem;
+      opacity: 0.75;
+    }
+
+    .pricing-price-discounted {
+      font-size: 2.25rem;
+      font-weight: 800;
+      color: var(--price-text-dark);
+      margin-bottom: 0.5rem;
+    }
+
+    .price-layout-row .pricing-features {
+      margin-top: 0.35rem;
+    }
+
+    .pricing-features {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 1.5rem 0;
+      text-align: left;
+      flex-grow: 1;
+    }
+
+    .pricing-features li {
+      padding: 0.65rem 0;
+      color: var(--price-text-dark);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .pricing-features li:last-child {
+      border-bottom: none;
+    }
+
+    .pricing-features li i {
+      color: #22c55e;
+      margin-right: 0.5rem;
+    }
+
+    .price-feature-limited {
+      color: #f4b400 !important;
+    }
+
+    .pricing-button {
+      width: 100%;
+      padding: 0.85rem;
+      font-size: 1.05rem;
+      font-weight: 600;
+      border-radius: 0.75rem;
+      border: none;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+      text-align: center;
+    }
+
+    .pricing-button.primary,
+    .pricing-button.secondary {
+      background: #56B6C6;
+      color: white;
+    }
+
+    .pricing-button.primary:hover,
+    .pricing-button.secondary:hover {
+      background: #469ead;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(70, 158, 173, 0.35);
+      color: white;
+    }
+
+    .pricing-current-plan {
+      width: 100%;
+      padding: 0.85rem;
+      font-size: 1.05rem;
+      font-weight: 600;
+      border-radius: 0.75rem;
+      border: 1px solid rgba(86, 182, 198, 0.35);
+      background: rgba(86, 182, 198, 0.1);
+      color: #3f909f;
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    .price-compare-card {
+      border-radius: 1rem;
+      border: 2px solid rgba(0, 0, 0, 0.08);
+      background: white;
+      padding: 1.15rem 1.15rem 1rem;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+      height: 100%;
+    }
+
+    .price-compare-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--price-text-dark);
+      margin-bottom: 0.75rem;
+    }
+
+    .price-compare-table-wrap {
+      overflow-x: auto;
+    }
+
+    .price-compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 0;
+      table-layout: fixed;
+      font-size: 0.86rem;
+    }
+
+    .price-compare-table thead th {
+      text-align: left;
+      background: #f8f9fc;
+      color: #495057;
+      font-weight: 700;
+      border-bottom: 1px solid #e9ecef;
+      padding: 0.55rem 0.6rem;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .price-compare-table td {
+      border-bottom: 1px solid #f1f3f5;
+      padding: 0.52rem 0.6rem;
+      color: #2c3e50;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+
+    .price-compare-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .price-compare-col--clawpod {
+      background: #e8f4f8;
+      font-weight: 700;
+    }
+
+    .price-compare-table thead .price-compare-col--clawpod,
+    .price-compare-table tbody .price-compare-col--clawpod {
+      border-left: 2px solid rgba(86, 182, 198, 0.45);
+      border-right: 2px solid rgba(86, 182, 198, 0.45);
+    }
+
+    .price-compare-table thead .price-compare-col--clawpod {
+      background: #dff3f8;
+      font-weight: 700;
+      color: #3f909f;
+    }
+
+    .price-compare-editable {
+      color: #6b7280;
+      font-style: italic;
+    }
+
+    .price-compare-trigger-wrap {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+
+    .price-compare-cta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+
+    .price-compare-cta-text {
+      color: var(--price-text-muted);
+      font-size: 0.95rem;
+      margin: 0;
+    }
+
+    .price-compare-trigger {
+      border: 1px solid rgba(86, 182, 198, 0.45);
+      color: #3f909f;
+      background: rgba(86, 182, 198, 0.12);
+      font-weight: 600;
+      border-radius: 999px;
+      padding: 0.45rem 0.95rem;
+      line-height: 1;
+    }
+
+    .price-compare-trigger:hover {
+      background: rgba(86, 182, 198, 0.2);
+      color: #2d7a88;
+    }
+
+    .price-compare-modal .modal-dialog {
+      max-width: 760px;
+    }
+
+    .price-layout-row {
+      align-items: stretch;
+    }
+
+    .price-plan-col,
+    .price-compare-col {
+      display: flex;
+    }
+
+    .price-plan-col .pricing-card,
+    .price-compare-col .price-compare-card {
+      width: 100%;
+    }
+
+    .price-plan-col .pricing-card {
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    @media (min-width: 768px) {
+      .price-plan-col .pricing-card {
+        min-height: 535px;
+      }
+    }
+
+    @media (min-width: 1200px) {
+      .price-layout-row.align-items-start {
+        align-items: center !important;
+      }
+    }
+
+    @media (max-width: 1199px) {
+      .price-layout-row {
+        row-gap: 1rem;
+      }
+
+      .price-plan-col .pricing-card {
+        max-width: 420px;
+      }
+    }
+
+    @media (max-width: 767px) {
+      .price-plan-col,
+      .price-compare-col {
+        flex: 0 0 100%;
+        max-width: 100%;
+      }
+
+      .price-compare-col .price-compare-card {
+        margin-top: 0.25rem;
+      }
+    }
+
+    @media (max-width: 575px) {
+      .price-plan-col .pricing-card {
+        max-width: 100%;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .price-discount-banner-inner {
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .price-compare-card {
+        padding: 0.8rem 0.75rem 0.75rem;
+      }
+
+      .price-compare-title {
+        font-size: 1rem;
+      }
+
+      .price-compare-table {
+        font-size: 0.72rem;
+      }
+
+      .price-compare-table thead th,
+      .price-compare-table td {
+        padding: 0.34rem 0.28rem;
+      }
+    }
+
+    @media (max-width: 1024px) {
+      .price-compare-table {
+        font-size: 0.78rem;
+      }
+
+      .price-compare-table thead th,
+      .price-compare-table td {
+        padding: 0.42rem 0.35rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <aside class="sidebar sidebar--collapsed" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="EmailsConfirmed" style="width: 100%; height: 100%; object-fit: contain; padding: 4px;">
+      </div>
+      <a href="#" class="sidebar-brand">EmailsConfirmed</a>
+      <button type="button" class="sidebar-expand-btn" id="sidebarDesktopExpand" aria-label="Expand sidebar" aria-expanded="false">
+        <i class="bi bi-chevron-double-right" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <nav class="sidebar-menu">
+      <div class="menu-section">
+        <a href="/dashboard" class="menu-item">
+          <i class="bi bi-house-door"></i>
+          <span class="menu-item-text">Dashboard</span>
+        </a>
+        <a href="{{ url_for('email_list_validation') }}" class="menu-item">
+          <i class="bi bi-envelope"></i>
+          <span class="menu-item-text">Email</span>
+        </a>
+        <a href="/feedback" class="menu-item">
+          <i class="bi bi-chat-left-text"></i>
+          <span class="menu-item-text">Feedback</span>
+        </a>
+        <a href="/preferences" class="menu-item">
+          <i class="bi bi-gear"></i>
+          <span class="menu-item-text">Preferences</span>
+        </a>
+        <a href="#" class="menu-item" data-bs-toggle="modal" data-bs-target="#helpContactModal" role="button">
+          <i class="bi bi-question-circle"></i>
+          <span class="menu-item-text">Help</span>
+        </a>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="sidebar-toggle" id="sidebarToggle" type="button">
+          <i class="bi bi-list"></i>
+        </button>
+        <h1 class="page-title">Choose Your Plan</h1>
+      </div>
+      <div class="topbar-right">
+        <a href="#" class="topbar-icon" id="notificationsIcon" data-bs-toggle="modal" data-bs-target="#notificationsModal">
+          <i class="bi bi-bell"></i>
+        </a>
+        <a href="{{ url_for('logout') }}" class="topbar-icon" title="Logout">
+          <i class="bi bi-box-arrow-right"></i>
+        </a>
+      </div>
+    </div>
+
+    <div class="dashboard-content">
+      <div class="page-header">
+      </div>
+
+      {% if active_discount %}
+      <div class="price-discount-banner">
+        <div class="price-discount-banner-inner">
+          <div class="price-discount-text">
+            <span>Use code <span class="price-discount-code">{{ active_discount.discount_code }}</span> at checkout for {{ active_discount.discount_percentage | int }}% off</span>
+          </div>
+          <div class="price-countdown">
+            <span>Ends in:</span>
+            <div class="price-countdown-item">
+              <div class="price-countdown-value" id="price-countdown-days">00</div>
+              <div class="price-countdown-label">Days</div>
+            </div>
+            <div class="price-countdown-item">
+              <div class="price-countdown-value" id="price-countdown-hours">00</div>
+              <div class="price-countdown-label">Hours</div>
+            </div>
+            <div class="price-countdown-item">
+              <div class="price-countdown-value" id="price-countdown-minutes">00</div>
+              <div class="price-countdown-label">Mins</div>
+            </div>
+            <div class="price-countdown-item">
+              <div class="price-countdown-value" id="price-countdown-seconds">00</div>
+              <div class="price-countdown-label">Secs</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="price-compare-cta">
+        <button
+          type="button"
+          class="btn btn-sm price-compare-trigger"
+          data-bs-toggle="modal"
+          data-bs-target="#priceComparisonModal"
+        >
+          Other Services Comparison
+        </button>
+        <p class="price-compare-cta-text">See how pricing compares at different validation volumes.</p>
+      </div>
+
+      <div class="row g-4 justify-content-center align-items-start price-layout-row">
+        <div class="col-12 col-md-6 col-xl-4 price-plan-col">
+          <div class="pricing-card basic">
+            <div class="pricing-name">Free Plan</div>
+            <div class="pricing-price">$0</div>
+            <ul class="pricing-features">
+              <li><i class="bi bi-dash-circle-fill price-feature-limited"></i> 100 Single Email Validations</li>
+              <li><i class="bi bi-dash-circle-fill price-feature-limited"></i> Standard Customer Service</li>
+              <li><i class="bi bi-x-circle-fill text-danger"></i> No Bulk Email Validations</li>
+              <li><i class="bi bi-x-circle-fill text-danger"></i> No CSV/TXT List Uploads</li>
+            </ul>
+            {% if current_user.is_authenticated and current_user.premium_level == 0 %}
+              <div class="pricing-current-plan">Current Plan</div>
+            {% else %}
+              <a href="{{ url_for('dashboard') }}" class="pricing-button secondary">Continue With Free</a>
+            {% endif %}
+          </div>
+        </div>
+        <div class="col-12 col-md-6 col-xl-4 price-plan-col">
+          <div class="pricing-card featured">
+            <div class="pricing-name">Paid Plan</div>
+            {% if active_discount %}
+              {% set original_price = 149.99 %}
+              {% set discounted_price = (original_price * (1 - active_discount.discount_percentage / 100)) | round(2) %}
+              <div class="pricing-price-original">${{ "%.2f"|format(original_price) }}</div>
+              <div class="pricing-price-discounted">${{ "%.2f"|format(discounted_price) }}</div>
+              <div class="small text-muted mb-2">If using {{ active_discount.discount_code }} at checkout</div>
+            {% else %}
+              <div class="pricing-price">$149.99</div>
+            {% endif %}
+            <ul class="pricing-features">
+              <li><i class="bi bi-check-circle-fill"></i> Unlimited Email Validations</li>
+              <li><i class="bi bi-check-circle-fill"></i> Priority Customer Service</li>
+              <li><i class="bi bi-check-circle-fill"></i> Bulk Email Validations</li>
+              <li><i class="bi bi-check-circle-fill"></i> Multiple Formats Supported</li>
+            </ul>
+            <a href="{{ url_for('create_checkout_session', plan='paid') }}" class="pricing-button primary">Upgrade</a>
+            <p class="pricing-pay-once-note">Pay once. Validate unlimited emails!</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="modal fade price-compare-modal" id="priceComparisonModal" tabindex="-1" aria-labelledby="priceComparisonModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="priceComparisonModalLabel">Popular Service Comparison</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-muted mb-2">Estimated cost comparison by validation volume. Update the placeholder values as needed.</p>
+          <div class="price-compare-table-wrap">
+            <table class="price-compare-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th class="price-compare-col--clawpod">EmailsConfirmed</th>
+                  <th>ZeroBounce</th>
+                  <th>NeverBounce</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Model</td>
+                  <td class="price-compare-col--clawpod">One-time payment</td>
+                  <td>Usage-based credits</td>
+                  <td>Usage-based / subscription</td>
+                </tr>
+                <tr>
+                  <td>10,000 Emails</td>
+                  <td class="price-compare-col--clawpod">$149.99</td>
+                  <td class="price-compare-editable">$129</td>
+                  <td class="price-compare-editable">$50</td>
+                </tr>
+                <tr>
+                  <td>100,000 Emails</td>
+                  <td class="price-compare-col--clawpod">$149.99</td>
+                  <td class="price-compare-editable">$649</td>
+                  <td class="price-compare-editable">$400</td>
+                </tr>
+                <tr>
+                  <td>1,000,000 Emails</td>
+                  <td class="price-compare-col--clawpod">$149.99</td>
+                  <td class="price-compare-editable">$3,199</td>
+                  <td class="price-compare-editable">$2,500</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="notificationsModal" tabindex="-1" aria-labelledby="notificationsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="notificationsModalLabel">Notifications</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="notificationsList">
+          <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% include 'partials/help_contact_modal.html' %}
+
+  <script>
+    function loadNotifications() {
+      fetch('{{ url_for("get_notifications") }}')
+        .then(response => response.json())
+        .then(data => {
+          const notificationsIcon = document.getElementById('notificationsIcon');
+          let badge = document.getElementById('notificationBadge');
+          const notificationsList = document.getElementById('notificationsList');
+          if (data.count > 0) {
+            if (!badge) {
+              badge = document.createElement('span');
+              badge.className = 'notification-badge';
+              badge.id = 'notificationBadge';
+              notificationsIcon.appendChild(badge);
+            }
+            badge.textContent = data.count;
+            badge.style.display = 'inline-flex';
+          } else {
+            if (badge) badge.remove();
+          }
+          if (data.notifications.length === 0) {
+            notificationsList.innerHTML = '<p class="text-center text-muted py-4">No new notifications</p>';
+          } else {
+            let html = '';
+            data.notifications.forEach(notif => {
+              html += `<div class="d-flex justify-content-between align-items-start mb-3 pb-3 border-bottom" id="notification-${notif.id}"><div class="flex-grow-1"><p class="mb-1"><a href="{{ url_for('dashboard') }}" class="text-decoration-none" style="color: inherit;">${notif.message}</a></p><small class="text-muted">${new Date(notif.created_at).toLocaleString()}</small></div><button class="btn btn-sm btn-outline-primary ms-3" onclick="markAsRead(${notif.id})">Dismiss</button></div>`;
+            });
+            notificationsList.innerHTML = html;
+          }
+        })
+        .catch(() => {
+          document.getElementById('notificationsList').innerHTML = '<p class="text-center text-danger py-4">Error loading notifications</p>';
+        });
+    }
+    function markAsRead(notificationId) {
+      fetch(`/notifications/${notificationId}/mark-read`, { method: 'POST', headers: {'Content-Type': 'application/json'} })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            document.getElementById(`notification-${notificationId}`)?.remove();
+            loadNotifications();
+            const notificationsList = document.getElementById('notificationsList');
+            if (notificationsList.querySelectorAll('.border-bottom').length === 0) {
+              notificationsList.innerHTML = '<p class="text-center text-muted py-4">No new notifications</p>';
+            }
+          }
+        })
+        .catch(() => {});
+    }
+    loadNotifications();
+    document.getElementById('notificationsModal')?.addEventListener('show.bs.modal', function() { loadNotifications(); });
+
+    {% if active_discount %}
+    (function() {
+      const endDate = new Date('{{ active_discount.discount_end_date.strftime("%Y-%m-%d") }}T23:59:59').getTime();
+      function updateCountdown() {
+        const now = Date.now();
+        const distance = endDate - now;
+        if (distance < 0) {
+          const banner = document.querySelector('.price-discount-banner');
+          if (banner) banner.style.display = 'none';
+          return;
+        }
+        const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+        const dEl = document.getElementById('price-countdown-days');
+        const hEl = document.getElementById('price-countdown-hours');
+        const mEl = document.getElementById('price-countdown-minutes');
+        const sEl = document.getElementById('price-countdown-seconds');
+        if (dEl) dEl.textContent = String(days).padStart(2, '0');
+        if (hEl) hEl.textContent = String(hours).padStart(2, '0');
+        if (mEl) mEl.textContent = String(minutes).padStart(2, '0');
+        if (sEl) sEl.textContent = String(seconds).padStart(2, '0');
+      }
+      updateCountdown();
+      setInterval(updateCountdown, 1000);
+    })();
+    {% endif %}
+  </script>
+  <script src="{{ url_for('static', filename='js/app-sidebar.js') }}"></script>
+</body>
+</html>

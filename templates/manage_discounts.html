@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
+  <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/logo.png') }}">
+  <title>Manage Discounts | EmailsConfirmed</title>
+  <meta name="description" content="Manage discount codes and promotions for EmailsConfirmed.">
+  <meta name="keywords" content="discount management, promo codes, discount codes">
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K9BVXXLJD3"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-K9BVXXLJD3');
+  </script>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar sidebar--collapsed" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="EmailsConfirmed" style="width: 100%; height: 100%; object-fit: contain; padding: 4px;">
+      </div>
+      <a href="#" class="sidebar-brand">EmailsConfirmed</a>
+      <button type="button" class="sidebar-expand-btn" id="sidebarDesktopExpand" aria-label="Expand sidebar" aria-expanded="false">
+        <i class="bi bi-chevron-double-right" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <nav class="sidebar-menu">
+      <div class="menu-section">
+        <a href="/dashboard" class="menu-item">
+          <i class="bi bi-house-door"></i>
+          <span class="menu-item-text">Dashboard</span>
+        </a>
+        <a href="{{ url_for('email_list_validation') }}" class="menu-item">
+          <i class="bi bi-envelope"></i>
+          <span class="menu-item-text">Email</span>
+        </a>
+        <a href="/feedback" class="menu-item">
+          <i class="bi bi-chat-left-text"></i>
+          <span class="menu-item-text">Feedback</span>
+        </a>
+        <a href="/preferences" class="menu-item">
+          <i class="bi bi-gear"></i>
+          <span class="menu-item-text">Preferences</span>
+        </a>
+        <a href="#" class="menu-item" data-bs-toggle="modal" data-bs-target="#helpContactModal" role="button">
+          <i class="bi bi-question-circle"></i>
+          <span class="menu-item-text">Help</span>
+        </a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Bar -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="sidebar-toggle" id="sidebarToggle">
+          <i class="bi bi-list"></i>
+        </button>
+        <h1 class="page-title">Manage Discounts</h1>
+      </div>
+      <div class="topbar-right">
+        <a href="{{ url_for('logout') }}" class="topbar-icon" title="Logout">
+          <i class="bi bi-box-arrow-right"></i>
+        </a>
+      </div>
+    </div>
+
+    <!-- Dashboard Content -->
+    <div class="dashboard-content">
+      <div class="page-header">
+        <p class="page-subtitle">Create and manage discount codes for promotions.</p>
+      </div>
+
+      <!-- Flash Messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category if category else 'info' }} alert-dismissible fade show mb-4" role="alert">
+              <strong>{{ message }}</strong>
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <!-- Create New Discount -->
+      <div class="dashboard-section">
+        <div class="section-header">
+          <h2 class="section-title">Create New Discount</h2>
+        </div>
+        
+        <form method="POST" class="mt-3">
+          {{ form.hidden_tag() }}
+          
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="discount_code" class="form-label">Discount Code</label>
+              {{ form.discount_code(class="form-control", placeholder="e.g., SAVE20") }}
+              {% if form.discount_code.errors %}
+                <div class="text-danger small mt-1">
+                  {% for error in form.discount_code.errors %}
+                    <div>{{ error }}</div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6">
+              <label for="discount_percentage" class="form-label">Discount Percentage</label>
+              {{ form.discount_percentage(class="form-control", placeholder="e.g., 20", type="number", min="0", max="100", step="0.01") }}
+              {% if form.discount_percentage.errors %}
+                <div class="text-danger small mt-1">
+                  {% for error in form.discount_percentage.errors %}
+                    <div>{{ error }}</div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6">
+              <label for="discount_start_date" class="form-label">Start Date (Optional)</label>
+              {{ form.discount_start_date(class="form-control", type="date", placeholder="YYYY-MM-DD") }}
+              <small class="text-muted">Leave empty to start immediately</small>
+              {% if form.discount_start_date.errors %}
+                <div class="text-danger small mt-1">
+                  {% for error in form.discount_start_date.errors %}
+                    <div>{{ error }}</div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+            
+            <div class="col-md-6">
+              <label for="discount_end_date" class="form-label">End Date <span class="text-danger">*</span></label>
+              {{ form.discount_end_date(class="form-control", type="date", placeholder="YYYY-MM-DD", required=True) }}
+              {% if form.discount_end_date.errors %}
+                <div class="text-danger small mt-1">
+                  {% for error in form.discount_end_date.errors %}
+                    <div>{{ error }}</div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="mt-4">
+            {{ form.submit(class="btn btn-primary") }}
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+
+      <!-- Existing Discounts -->
+      <div class="dashboard-section">
+        <div class="section-header">
+          <h2 class="section-title">Existing Discounts</h2>
+        </div>
+        
+        {% if discounts %}
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Percentage</th>
+                  <th>Start Date</th>
+                  <th>End Date</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for discount in discounts %}
+                  <tr>
+                    <td><strong>{{ discount.discount_code }}</strong></td>
+                    <td>{{ discount.discount_percentage }}%</td>
+                    <td>{{ discount.discount_start_date.strftime('%Y-%m-%d') if discount.discount_start_date else 'Immediate' }}</td>
+                    <td>{{ discount.discount_end_date.strftime('%Y-%m-%d') if discount.discount_end_date else 'N/A' }}</td>
+                    <td>
+                      {% if discount.discount_end_date and discount.discount_end_date >= today %}
+                        {% if discount.discount_start_date and discount.discount_start_date > today %}
+                          <span class="badge bg-info">Scheduled</span>
+                        {% else %}
+                          <span class="badge bg-success">Active</span>
+                        {% endif %}
+                      {% else %}
+                        <span class="badge bg-secondary">Expired</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <button class="btn btn-sm btn-danger" onclick="deleteDiscount({{ discount.id }}, '{{ discount.discount_code }}')">
+                        <i class="bi bi-trash"></i> Delete
+                      </button>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="text-muted">No discounts created yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </main>
+
+  {% include 'partials/help_contact_modal.html' %}
+
+  <script>
+    // Delete discount function
+    function deleteDiscount(discountId, discountCode) {
+      if (!confirm(`Are you sure you want to delete discount code "${discountCode}"?`)) {
+        return;
+      }
+
+      fetch(`/delete-discount/${discountId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            location.reload();
+          } else {
+            alert('Error deleting discount: ' + (data.error || 'Unknown error'));
+          }
+        })
+        .catch(error => {
+          console.error('Error deleting discount:', error);
+          alert('Error deleting discount. Please try again.');
+        });
+    }
+  </script>
+  <script src="{{ url_for('static', filename='js/app-sidebar.js') }}"></script>
+</body>
+</html>
+

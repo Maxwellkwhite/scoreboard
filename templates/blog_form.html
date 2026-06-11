@@ -1,0 +1,57 @@
+{% set page_title = "Create Blog Post | EmailsConfirmed" %}
+{% set page_description = "Create and edit EmailsConfirmed blog posts." %}
+{% set page_keywords = "blog editor, create blog post, EmailsConfirmed blog" %}
+{% include "header.html" %}
+
+<div class="container my-5">
+    <div class="row">
+        <div class="col-lg-10 mx-auto">
+            <h1 class="mb-4">
+                {% if blog %}
+                    Edit Blog Post
+                {% else %}
+                    Add New Blog Post
+                {% endif %}
+            </h1>
+            
+            <form method="POST">
+                {{ form.hidden_tag() }}
+                
+                <div class="mb-3">
+                    {{ form.title.label(class="form-label") }}
+                    {{ form.title(class="form-control") }}
+                    {% if form.title.errors %}
+                        <div class="text-danger">
+                            {% for error in form.title.errors %}
+                                <small>{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="mb-3">
+                    {{ form.content.label(class="form-label") }}
+                    {{ form.content(class="form-control") }}
+                    {% if form.content.errors %}
+                        <div class="text-danger">
+                            {% for error in form.content.errors %}
+                                <small>{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="mb-3">
+                    {{ form.submit(class="btn btn-primary") }}
+                    <a href="{% if blog %}{{ url_for('blog_post', slug=blog.slug) }}{% else %}{{ url_for('blog_list') }}{% endif %}" class="btn btn-secondary">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{{ ckeditor.load() }}
+
+{% include "footer.html" %}

@@ -1,0 +1,4 @@
+ML ALGO Prompt: Build a confidence model instead of fixed scoring deltas. The current score is understandable but hand-tuned; a better model could combine syntax, DNS, provider, role, disposable, historical bounce data, catch-all behavior, and list-level patterns.
+How do we build this. Don't code, just explain
+
+update users for website user 1 - want to see current queue and users info

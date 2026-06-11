@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ game.name }} — Scoreboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/scoreboard.css') }}">
+</head>
+<body class="scoreboard-page">
+  <nav class="navbar scoreboard-nav">
+    <div class="container">
+      <a class="navbar-brand" href="{{ url_for('home_page') }}">Scoreboard</a>
+      <span class="navbar-text text-white-50 small">MLB Preview</span>
+    </div>
+  </nav>
+
+  <main class="scoreboard-main game-detail-main">
+    <a href="{{ url_for('home_page') }}" class="game-detail-back"><i class="bi bi-arrow-left"></i> Back to scores</a>
+
+    <header class="game-detail-header">
+      <p class="game-detail-kicker">Game Preview</p>
+      <h1>{{ game.away.abbr }} @ {{ game.home.abbr }}</h1>
+      <p class="game-detail-start">
+        <span class="status-pill status-pill--pre" data-start-time="{{ game.start_time }}">{{ game.status_detail }}</span>
+      </p>
+    </header>
+
+    <section class="game-detail-matchup">
+      <div class="matchup-team">
+        {% if game.away.logo %}
+        <img src="{{ game.away.logo }}" alt="" class="matchup-logo" width="72" height="72">
+        {% endif %}
+        <h2>{{ game.away.name }}</h2>
+        {% if game.away.record %}<p class="matchup-record">{{ game.away.record }}</p>{% endif %}
+        {% if game.preview.away_win_pct %}
+        <p class="matchup-win-pct">{{ game.preview.away_win_pct }}% win chance</p>
+        {% endif %}
+      </div>
+      <div class="matchup-vs">@</div>
+      <div class="matchup-team">
+        {% if game.home.logo %}
+        <img src="{{ game.home.logo }}" alt="" class="matchup-logo" width="72" height="72">
+        {% endif %}
+        <h2>{{ game.home.name }}</h2>
+        {% if game.home.record %}<p class="matchup-record">{{ game.home.record }}</p>{% endif %}
+        {% if game.preview.home_win_pct %}
+        <p class="matchup-win-pct">{{ game.preview.home_win_pct }}% win chance</p>
+        {% endif %}
+      </div>
+    </section>
+
+    {% if game.away.probable_pitcher or game.home.probable_pitcher %}
+    <section class="game-detail-section">
+      <h3>Probable Pitchers</h3>
+      <div class="pitcher-grid">
+        {% for side in [('away', game.away), ('home', game.home)] %}
+        {% set team = side[1] %}
+        {% set pitcher = team.probable_pitcher %}
+        <div class="pitcher-card">
+          <p class="pitcher-team">{{ team.abbr }}</p>
+          {% if pitcher %}
+          <div class="pitcher-body">
+            {% if pitcher.headshot %}
+            <img src="{{ pitcher.headshot }}" alt="" class="pitcher-headshot" width="64" height="64">
+            {% endif %}
+            <div>
+              <p class="pitcher-name">{{ pitcher.name }}{% if pitcher.jersey %} #{{ pitcher.jersey }}{% endif %}</p>
+              {% if pitcher.throws %}<p class="pitcher-meta">Throws {{ pitcher.throws }}</p>{% endif %}
+              {% if pitcher.stats %}
+              <p class="pitcher-stats">
+                {% if pitcher.stats.get('W') and pitcher.stats.get('L') %}{{ pitcher.stats.W }}-{{ pitcher.stats.L }}{% endif %}
+                {% if pitcher.stats.get('ERA') %} · {{ pitcher.stats.ERA }} ERA{% endif %}
+                {% if pitcher.stats.get('WHIP') %} · {{ pitcher.stats.WHIP }} WHIP{% endif %}
+              </p>
+              {% endif %}
+            </div>
+          </div>
+          {% else %}
+          <p class="pitcher-tbd">TBD</p>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="game-detail-section game-detail-facts">
+      {% if game.preview.venue %}
+      <div class="fact-item">
+        <span class="fact-label">Venue</span>
+        <span class="fact-value">{{ game.preview.venue }}{% if game.preview.venue_city %}, {{ game.preview.venue_city }}{% if game.preview.venue_state %}, {{ game.preview.venue_state }}{% endif %}{% endif %}</span>
+      </div>
+      {% endif %}
+      {% if game.preview.weather_temp is not none %}
+      <div class="fact-item">
+        <span class="fact-label">Weather</span>
+        <span class="fact-value">{{ game.preview.weather_temp }}°F{% if game.preview.weather_condition %} · {{ game.preview.weather_condition }}{% endif %}</span>
+      </div>
+      {% endif %}
+      {% if game.preview.broadcasts %}
+      <div class="fact-item">
+        <span class="fact-label">Watch</span>
+        <span class="fact-value">{{ game.preview.broadcasts | join(', ') }}</span>
+      </div>
+      {% endif %}
+      {% if game.preview.series_summary %}
+      <div class="fact-item">
+        <span class="fact-label">Series</span>
+        <span class="fact-value">{{ game.preview.series_summary }}</span>
+      </div>
+      {% endif %}
+      {% if game.preview.spread is not none or game.preview.over_under is not none %}
+      <div class="fact-item">
+        <span class="fact-label">Line</span>
+        <span class="fact-value">
+          {% if game.preview.spread is not none %}Spread {{ game.preview.spread }}{% endif %}
+          {% if game.preview.over_under is not none %}{% if game.preview.spread is not none %} · {% endif %}O/U {{ game.preview.over_under }}{% endif %}
+        </span>
+      </div>
+      {% endif %}
+    </section>
+
+    {% if game.preview.last_five %}
+    <section class="game-detail-section">
+      <h3>Last 5 Games</h3>
+      <div class="last-five-grid">
+        {% for block in game.preview.last_five %}
+        <div class="last-five-block">
+          <p class="last-five-team">{{ block.abbr }}</p>
+          <ul class="last-five-list">
+            {% for g in block.games %}
+            <li>
+              <span class="last-five-result last-five-result--{{ g.result|lower }}">{{ g.result }}</span>
+              {{ g.score }}{% if g.opponent_abbr %} vs {{ g.opponent_abbr }}{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if game.preview.venue_image %}
+    <section class="game-detail-section">
+      <img src="{{ game.preview.venue_image }}" alt="{{ game.preview.venue }}" class="venue-image">
+    </section>
+    {% endif %}
+
+    <p class="scoreboard-attribution">Preview data provided by ESPN. Not affiliated with MLB or ESPN.</p>
+  </main>
+
+  <script>
+    (function () {
+      document.querySelectorAll('[data-start-time]').forEach(function (el) {
+        var iso = el.getAttribute('data-start-time');
+        if (!iso) return;
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return;
+        el.textContent = d.toLocaleString(undefined, {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
+  <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/logo.png') }}">
+  <title>Dashboard | EmailsConfirmed</title>
+  <meta name="description" content="EmailsConfirmed dashboard: run email verification, review validation history, and manage your subscription.">
+  <meta name="keywords" content="email verification dashboard, email validation, list cleaning, deliverability">
+  <meta property="og:title" content="Dashboard | EmailsConfirmed">
+  <meta property="og:description" content="Run email verification and track validation usage from your dashboard.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Dashboard | EmailsConfirmed">
+  <meta name="twitter:description" content="Run email verification and track validation usage from your dashboard.">
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K9BVXXLJD3"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-K9BVXXLJD3');
+  </script>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar sidebar--collapsed" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="EmailsConfirmed" style="width: 100%; height: 100%; object-fit: contain; padding: 4px;">
+      </div>
+      <a href="#" class="sidebar-brand">EmailsConfirmed</a>
+      <button type="button" class="sidebar-expand-btn" id="sidebarDesktopExpand" aria-label="Expand sidebar" aria-expanded="false">
+        <i class="bi bi-chevron-double-right" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <nav class="sidebar-menu">
+      <div class="menu-section">
+        <a href="/dashboard" class="menu-item active">
+          <i class="bi bi-house-door"></i>
+          <span class="menu-item-text">Dashboard</span>
+        </a>
+        <a href="{{ url_for('email_list_validation') }}" class="menu-item">
+          <i class="bi bi-envelope"></i>
+          <span class="menu-item-text">Email</span>
+        </a>
+        <a href="/feedback" class="menu-item">
+          <i class="bi bi-chat-left-text"></i>
+          <span class="menu-item-text">Feedback</span>
+        </a>
+        <a href="/preferences" class="menu-item">
+          <i class="bi bi-gear"></i>
+          <span class="menu-item-text">Preferences</span>
+        </a>
+        <a href="#" class="menu-item" data-bs-toggle="modal" data-bs-target="#helpContactModal" role="button">
+          <i class="bi bi-question-circle"></i>
+          <span class="menu-item-text">Help</span>
+        </a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Bar -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="sidebar-toggle" id="sidebarToggle" type="button">
+          <i class="bi bi-list"></i>
+        </button>
+        <h1 class="page-title">Dashboard</h1>
+      </div>
+      <div class="topbar-right">
+        <a href="#" class="topbar-icon" id="notificationsIcon" data-bs-toggle="modal" data-bs-target="#notificationsModal">
+          <i class="bi bi-bell"></i>
+        </a>
+        <a href="{{ url_for('logout') }}" class="topbar-icon" title="Logout">
+          <i class="bi bi-box-arrow-right"></i>
+        </a>
+      </div>
+    </div>
+
+    <!-- Dashboard Content -->
+    <div class="dashboard-content">
+      <div class="page-header">
+        {% if current_user.premium_level == 0 %}
+          <div class="dash-current-plan" role="region" aria-label="Your subscription plan">
+            <span class="dash-current-plan-label">Your plan</span>
+            <span class="dash-current-plan-name">Free</span>
+            <span class="dash-current-plan-label">Remaining Validations:</span>
+            <span class="dash-current-plan-name" id="dashRemainingValidations" data-limit="{{ validation_limit }}" data-is-free="1">{{ plan_limit_counter }}/{{ validation_limit }}</span>
+            <a href="{{ url_for('price_page') }}" class="dash-current-plan-upgrade">Upgrade now</a>
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="row g-4 mb-4">
+        <div class="col-12 col-md-6 col-xl-4">
+          {% set validation_limit_reached = current_user.premium_level == 0 and total_validation_used >= validation_limit %}
+          <article id="dashSingleValidationCard" class="dashboard-section dash-action-card dash-action-card--static h-100{% if validation_limit_reached %} dash-action-card--locked{% endif %}">
+            <div class="dash-action-card__static">
+              <div class="dash-action-card__icon" aria-hidden="true">
+                <i class="bi bi-envelope"></i>
+              </div>
+              <h3 class="dash-action-card__title">Single Email Validation</h3>
+              {% if current_user.premium_level == 0 %}
+                <div id="dashSingleValidationLockedState"{% if not validation_limit_reached %} style="display:none;"{% endif %}>
+                  <p class="dash-action-card__subtitle">Free plan total email validation limit reached. Upgrade to keep validating.</p>
+                  <a href="{{ url_for('price_page') }}" class="btn btn-primary dash-action-card__cta">
+                    <i class="bi bi-lock-fill me-1" aria-hidden="true"></i>Upgrade to Unlock
+                  </a>
+                </div>
+                <div id="dashSingleValidationFormState"{% if validation_limit_reached %} style="display:none;"{% endif %}>
+                  <p class="dash-action-card__subtitle">Check that an address is well-formed before you send</p>
+                  <div class="dash-action-card__validate-row">
+                    <label for="dashValidateEmailVisual" class="visually-hidden">Email to validate</label>
+                    <input type="text" id="dashValidateEmailVisual" class="form-control form-control-sm dash-action-card__input dash-action-card__input--inline" placeholder="you@example.com" autocomplete="off">
+                    <button type="button" class="btn btn-primary btn-sm dash-action-card__validate-btn" id="dashValidateEmailBtn">Validate</button>
+                  </div>
+                </div>
+              {% else %}
+                <p class="dash-action-card__subtitle">Check that an address is well-formed before you send</p>
+                <div class="dash-action-card__validate-row">
+                  <label for="dashValidateEmailVisual" class="visually-hidden">Email to validate</label>
+                  <input type="text" id="dashValidateEmailVisual" class="form-control form-control-sm dash-action-card__input dash-action-card__input--inline" placeholder="you@example.com" autocomplete="off">
+                  <button type="button" class="btn btn-primary btn-sm dash-action-card__validate-btn" id="dashValidateEmailBtn">Validate</button>
+                </div>
+              {% endif %}
+            </div>
+          </article>
+        </div>
+        <div class="col-12 col-md-6 col-xl-4">
+          <article class="dashboard-section dash-action-card dash-action-card--static h-100{% if premium_level == 0 %} dash-action-card--locked{% endif %}">
+            <div class="dash-action-card__static">
+              <div class="dash-action-card__icon" aria-hidden="true">
+                <i class="bi bi-list-ul"></i>
+              </div>
+              <h3 class="dash-action-card__title">Bulk Email Validation</h3>
+              {% if premium_level == 0 %}
+                <p class="dash-action-card__subtitle">Available on paid plans. Upgrade to validate lists in bulk.</p>
+                <a href="{{ url_for('price_page') }}" class="btn btn-primary dash-action-card__cta">
+                  <i class="bi bi-lock-fill me-1" aria-hidden="true"></i>Upgrade to Unlock
+                </a>
+              {% else %}
+                <p class="dash-action-card__subtitle">Upload a list file to check many addresses at once</p>
+                <a href="{{ url_for('email_list_validation') }}" class="btn btn-primary dash-action-card__cta">Validate New List</a>
+              {% endif %}
+            </div>
+          </article>
+        </div>
+        <div class="col-12 col-md-6 col-xl-4">
+          <article class="dashboard-section dash-action-card dash-action-card--static h-100">
+            <div class="dash-action-card__static dash-action-card__stats">
+              <div class="dash-action-card__icon" aria-hidden="true">
+                <i class="bi bi-bar-chart-line"></i>
+              </div>
+              <h3 class="dash-action-card__title">Total Emails Validated</h3>
+              <p class="dash-action-card__stats-total mb-2" id="dashValidationStatsTotal">{{ validation_stats.total }}</p>
+              <div class="dash-action-card__stats-row">
+                <span class="dash-action-card__stats-pill dash-action-card__stats-pill--valid">Valid <span id="dashValidationStatsValid">{{ validation_stats.valid }}</span></span>
+                <span class="dash-action-card__stats-pill dash-action-card__stats-pill--invalid">Invalid <span id="dashValidationStatsInvalid">{{ validation_stats.invalid }}</span></span>
+                <span class="dash-action-card__stats-pill dash-action-card__stats-pill--other">Other <span id="dashValidationStatsOther">{{ validation_stats.other }}</span></span>
+              </div>
+            </div>
+          </article>
+        </div>
+        {% if current_user.is_authenticated and current_user.id == 1 %}
+        <div class="col-12 col-md-6 col-xl-4">
+          <article class="dashboard-section dash-action-card h-100">
+            <a href="{{ url_for('blog_list') }}" class="dash-action-card__link">
+              <div class="dash-action-card__icon" aria-hidden="true">
+                <i class="bi bi-journal-text"></i>
+              </div>
+              <h3 class="dash-action-card__title">Blogs</h3>
+              <p class="dash-action-card__subtitle">Create and manage blog posts</p>
+            </a>
+          </article>
+        </div>
+        <div class="col-12 col-md-6 col-xl-4">
+          <article class="dashboard-section dash-action-card h-100">
+            <a href="{{ url_for('manage_discounts') }}" class="dash-action-card__link">
+              <div class="dash-action-card__icon" aria-hidden="true">
+                <i class="bi bi-tag"></i>
+              </div>
+              <h3 class="dash-action-card__title">Discounts</h3>
+              <p class="dash-action-card__subtitle">Set and control active discount codes</p>
+            </a>
+          </article>
+        </div>
+        <div class="col-12 col-md-6 col-xl-4">
+          <article class="dashboard-section dash-action-card h-100">
+            <a href="#" class="dash-action-card__link" data-bs-toggle="modal" data-bs-target="#sendMessageModal" role="button">
+              <div class="dash-action-card__icon" aria-hidden="true">
+                <i class="bi bi-envelope"></i>
+              </div>
+              <h3 class="dash-action-card__title">Send message</h3>
+              <p class="dash-action-card__subtitle">Email users from the dashboard</p>
+            </a>
+          </article>
+        </div>
+        <div class="col-12 col-md-6 col-xl-4">
+          <article class="dashboard-section dash-action-card h-100">
+            <a href="{{ url_for('admin_users') }}" class="dash-action-card__link">
+              <div class="dash-action-card__icon" aria-hidden="true">
+                <i class="bi bi-people"></i>
+              </div>
+              <h3 class="dash-action-card__title">Users</h3>
+              <p class="dash-action-card__subtitle">View accounts and signup details</p>
+            </a>
+          </article>
+        </div>
+        {% endif %}
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Notifications Modal -->
+  <div class="modal fade" id="notificationsModal" tabindex="-1" aria-labelledby="notificationsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="notificationsModalLabel">Notifications</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="notificationsList">
+          <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% include 'partials/help_contact_modal.html' %}
+
+  <div class="modal fade" id="emailValidateReportModal" tabindex="-1" aria-labelledby="emailValidateReportModalLabel" aria-hidden="true">
+    <div class="modal-dialog email-report-modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content email-report-modal">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title visually-hidden" id="emailValidateReportModalLabel">Email validation report</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body pt-0 px-4 pb-4">
+          <div class="email-report-hero text-center mb-4">
+            <div class="email-report-hero-icon" aria-hidden="true"><i class="bi bi-envelope"></i></div>
+            <div class="email-report-hero-email" id="emailReportDisplayEmail">—</div>
+          </div>
+          <div class="email-report-status-row mb-3">
+            <div class="email-report-cell email-report-cell--status-banner" id="emailReportStatus">—</div>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <div class="email-report-label">Sub-status</div>
+              <div class="email-report-cell" id="emailReportSubStatus">—</div>
+            </div>
+            <div class="col-md-4">
+              <div class="email-report-label">Account</div>
+              <div class="email-report-cell email-report-cell--neutral" id="emailReportAccount">—</div>
+            </div>
+            <div class="col-md-4">
+              <div class="email-report-label">Domain</div>
+              <div class="email-report-cell email-report-cell--neutral" id="emailReportDomain">—</div>
+            </div>
+            <div class="col-md-4">
+              <div class="email-report-label">SMTP provider</div>
+              <div class="email-report-cell email-report-cell--neutral" id="emailReportSmtpProvider">Unknown</div>
+            </div>
+            <div class="col-md-4">
+              <div class="email-report-label">MX found</div>
+              <div class="email-report-cell email-report-cell--neutral" id="emailReportMxFound">—</div>
+            </div>
+            <div class="col-md-4">
+              <div class="email-report-label">MX record</div>
+              <div class="email-report-cell email-report-cell--neutral" id="emailReportMxRecord"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Send Message Modal -->
+  <div class="modal fade" id="sendMessageModal" tabindex="-1" aria-labelledby="sendMessageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="sendMessageModalLabel">Send Message to Users</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form id="sendMessageForm">
+            <div class="mb-3">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <label for="selectedUsers" class="form-label mb-0">Select Users</label>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="selectAllUsersBtn">Select All</button>
+              </div>
+              <select class="form-select" id="selectedUsers" name="user_ids" multiple size="10" required>
+                <option value="" disabled>Loading users...</option>
+              </select>
+              <small class="form-text text-muted">Hold Ctrl (or Cmd on Mac) to select multiple users, or use "Select All" button</small>
+            </div>
+            <div class="mb-3">
+              <label for="messageText" class="form-label">Message</label>
+              <textarea class="form-control" id="messageText" name="message" rows="5" required placeholder="Enter your message here..."></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="sendMessageBtn">Send Message</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Load notifications
+    function loadNotifications() {
+      fetch('{{ url_for("get_notifications") }}')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const contentType = response.headers.get("content-type");
+          if (!contentType || !contentType.includes("application/json")) {
+            throw new Error("Response is not JSON");
+          }
+          return response.json();
+        })
+        .then(data => {
+          const notificationsIcon = document.getElementById('notificationsIcon');
+          let badge = document.getElementById('notificationBadge');
+          const notificationsList = document.getElementById('notificationsList');
+          
+          // Update badge
+          if (data.count > 0) {
+            // Create badge if it doesn't exist
+            if (!badge) {
+              badge = document.createElement('span');
+              badge.className = 'notification-badge';
+              badge.id = 'notificationBadge';
+              notificationsIcon.appendChild(badge);
+            }
+            badge.textContent = data.count;
+            badge.style.display = 'inline-flex';
+          } else {
+            // Remove badge if it exists
+            if (badge) {
+              badge.remove();
+            }
+          }
+          
+          // Update notifications list
+          if (data.notifications.length === 0) {
+            notificationsList.innerHTML = '<p class="text-center text-muted py-4">No new notifications</p>';
+          } else {
+            let html = '';
+            data.notifications.forEach(notif => {
+              html += `
+                <div class="d-flex justify-content-between align-items-start mb-3 pb-3 border-bottom" id="notification-${notif.id}">
+                  <div class="flex-grow-1">
+                    <p class="mb-1"><a href="{{ url_for('dashboard') }}" class="text-decoration-none" style="color: inherit;">${notif.message}</a></p>
+                    <small class="text-muted">${new Date(notif.created_at).toLocaleString()}</small>
+                  </div>
+                  <button class="btn btn-sm btn-outline-primary ms-3" onclick="markAsRead(${notif.id})">Dismiss</button>
+                </div>
+              `;
+            });
+            notificationsList.innerHTML = html;
+          }
+        })
+        .catch(error => {
+          console.error('Error loading notifications:', error);
+          const notificationsList = document.getElementById('notificationsList');
+          if (notificationsList) {
+            notificationsList.innerHTML = '<p class="text-center text-danger py-4">Error loading notifications. Please refresh the page.</p>';
+          }
+        });
+    }
+    
+    // Mark notification as read
+    function markAsRead(notificationId) {
+      fetch(`/notifications/${notificationId}/mark-read`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            // Remove notification from list
+            const notificationElement = document.getElementById(`notification-${notificationId}`);
+            if (notificationElement) {
+              notificationElement.remove();
+            }
+            
+            // Reload notifications to update count
+            loadNotifications();
+            
+            // If no notifications left, show message
+            const notificationsList = document.getElementById('notificationsList');
+            if (notificationsList.children.length === 0 || notificationsList.querySelectorAll('.border-bottom').length === 0) {
+              notificationsList.innerHTML = '<p class="text-center text-muted py-4">No new notifications</p>';
+            }
+          }
+        })
+        .catch(error => {
+          console.error('Error marking notification as read:', error);
+        });
+    }
+    
+    // Load notifications on page load
+    loadNotifications();
+    
+    // Reload notifications when modal is opened
+    document.getElementById('notificationsModal')?.addEventListener('show.bs.modal', function() {
+      loadNotifications();
+    });
+    
+    // Load users for message modal
+    function loadUsersForMessage() {
+      fetch('{{ url_for("get_all_users") }}')
+        .then(response => response.json())
+        .then(data => {
+          const select = document.getElementById('selectedUsers');
+          select.innerHTML = '';
+          if (data.users && data.users.length > 0) {
+            data.users.forEach(user => {
+              const option = document.createElement('option');
+              option.value = user.id;
+              option.textContent = `${user.name} (${user.email})`;
+              select.appendChild(option);
+            });
+            updateSelectAllButton();
+          } else {
+            select.innerHTML = '<option value="" disabled>No users found</option>';
+          }
+        })
+        .catch(error => {
+          console.error('Error loading users:', error);
+          document.getElementById('selectedUsers').innerHTML = '<option value="" disabled>Error loading users</option>';
+        });
+    }
+
+    // Update Select All button text based on current selection
+    function updateSelectAllButton() {
+      const select = document.getElementById('selectedUsers');
+      const btn = document.getElementById('selectAllUsersBtn');
+      if (!select || !btn) return;
+      
+      const allOptions = Array.from(select.options).filter(opt => opt.value && !opt.disabled);
+      const selectedOptions = Array.from(select.selectedOptions);
+      
+      if (allOptions.length === 0) {
+        btn.style.display = 'none';
+      } else {
+        btn.style.display = 'inline-block';
+        if (selectedOptions.length === allOptions.length && allOptions.length > 0) {
+          btn.textContent = 'Deselect All';
+        } else {
+          btn.textContent = 'Select All';
+        }
+      }
+    }
+
+    // Handle Select All button click
+    document.getElementById('selectAllUsersBtn')?.addEventListener('click', function() {
+      const select = document.getElementById('selectedUsers');
+      const allOptions = Array.from(select.options).filter(opt => opt.value && !opt.disabled);
+      const selectedOptions = Array.from(select.selectedOptions);
+      
+      // If all are selected, deselect all; otherwise select all
+      if (selectedOptions.length === allOptions.length && allOptions.length > 0) {
+        // Deselect all
+        allOptions.forEach(option => {
+          option.selected = false;
+        });
+      } else {
+        // Select all
+        allOptions.forEach(option => {
+          option.selected = true;
+        });
+      }
+      
+      updateSelectAllButton();
+    });
+
+    // Update button text when selection changes manually
+    document.getElementById('selectedUsers')?.addEventListener('change', function() {
+      updateSelectAllButton();
+    });
+
+    // Load users when modal is opened
+    document.getElementById('sendMessageModal')?.addEventListener('show.bs.modal', function() {
+      loadUsersForMessage();
+    });
+
+    // Handle send message form submission
+    document.getElementById('sendMessageBtn')?.addEventListener('click', function() {
+      const form = document.getElementById('sendMessageForm');
+      const selectedUsers = Array.from(document.getElementById('selectedUsers').selectedOptions).map(option => parseInt(option.value));
+      const message = document.getElementById('messageText').value;
+
+      if (selectedUsers.length === 0) {
+        alert('Please select at least one user.');
+        return;
+      }
+
+      if (!message.trim()) {
+        alert('Please enter a message.');
+        return;
+      }
+
+      // Disable button during submission
+      const btn = document.getElementById('sendMessageBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+
+      fetch('{{ url_for("send_message_to_users") }}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_ids: selectedUsers,
+          message: message
+        })
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            alert(`Message sent successfully to ${data.count} user(s)!`);
+            // Reset form
+            form.reset();
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('sendMessageModal'));
+            modal.hide();
+          } else {
+            alert('Error sending message: ' + (data.error || 'Unknown error'));
+          }
+        })
+        .catch(error => {
+          console.error('Error sending message:', error);
+          alert('Error sending message. Please try again.');
+        })
+        .finally(() => {
+          btn.disabled = false;
+          btn.textContent = 'Send Message';
+        });
+    });
+
+    (function () {
+      const cardEl = document.getElementById('dashSingleValidationCard');
+      const formStateEl = document.getElementById('dashSingleValidationFormState');
+      const lockedStateEl = document.getElementById('dashSingleValidationLockedState');
+      const input = document.getElementById('dashValidateEmailVisual');
+      const btn = document.getElementById('dashValidateEmailBtn');
+      const modalEl = document.getElementById('emailValidateReportModal');
+      const remainingEl = document.getElementById('dashRemainingValidations');
+      if (!input || !btn || !modalEl) return;
+
+      function fmtUnknown(v) {
+        if (v === null || v === undefined || v === '') return 'Unknown';
+        return String(v);
+      }
+
+      function fallbackReport(subStatus) {
+        return {
+          display_email: input.value.trim() || '—',
+          status: 'invalid',
+          risky: false,
+          sub_status: subStatus,
+          account: 'Unknown',
+          domain: 'Unknown',
+          smtp_provider: 'Unknown',
+          mx_found: false,
+          mx_record: '',
+        };
+      }
+
+      function hasInputValue() {
+        return input.value.trim().length > 0;
+      }
+
+      function getRemainingCount() {
+        if (!remainingEl) return null;
+        const currentText = remainingEl.textContent || '0/100';
+        const parsed = parseInt(currentText.split('/')[0] || '0', 10);
+        return Number.isNaN(parsed) ? 0 : parsed;
+      }
+
+      function isFreePlanCounter() {
+        return !!remainingEl && remainingEl.getAttribute('data-is-free') === '1';
+      }
+
+      function switchSingleCardToLocked() {
+        if (cardEl) cardEl.classList.add('dash-action-card--locked');
+        if (formStateEl) formStateEl.style.display = 'none';
+        if (lockedStateEl) lockedStateEl.style.display = '';
+      }
+
+      function syncValidateButtonState() {
+        btn.disabled = !hasInputValue();
+      }
+
+      function applyUsageIncrement() {
+        if (!remainingEl) return;
+        const isFree = isFreePlanCounter();
+        if (!isFree) return;
+        const limit = parseInt(remainingEl.getAttribute('data-limit') || '100', 10);
+        const currentRemaining = getRemainingCount();
+        const nextRemaining = Math.max(0, (Number.isNaN(currentRemaining) ? 0 : currentRemaining) - 1);
+        remainingEl.textContent = nextRemaining + '/' + limit;
+      }
+
+      function readStatEl(id) {
+        const el = document.getElementById(id);
+        if (!el) return null;
+        const n = parseInt(String(el.textContent || '0').trim(), 10);
+        return Number.isNaN(n) ? 0 : n;
+      }
+
+      /** Keep stats card in sync with server after each successful single validation (same rules as validate_email_api). */
+      function bumpDashboardValidationStats(data) {
+        const report = data && data.report ? data.report : {};
+        const status = String(report.status != null ? report.status : 'invalid').toLowerCase();
+        const totalEl = document.getElementById('dashValidationStatsTotal');
+        const validEl = document.getElementById('dashValidationStatsValid');
+        const invalidEl = document.getElementById('dashValidationStatsInvalid');
+        const otherEl = document.getElementById('dashValidationStatsOther');
+        if (!totalEl || !validEl || !invalidEl || !otherEl) return;
+        totalEl.textContent = String(readStatEl('dashValidationStatsTotal') + 1);
+        if (status === 'valid') {
+          validEl.textContent = String(readStatEl('dashValidationStatsValid') + 1);
+        } else if (status === 'invalid') {
+          invalidEl.textContent = String(readStatEl('dashValidationStatsInvalid') + 1);
+        } else {
+          otherEl.textContent = String(readStatEl('dashValidationStatsOther') + 1);
+        }
+      }
+
+      function showEmailReportModal(payload) {
+        const display = input.value.trim() || '—';
+        const r = payload.report || fallbackReport('error');
+
+        const hero = document.getElementById('emailReportDisplayEmail');
+        hero.textContent = r.display_email || display;
+        hero.classList.remove('email-report-hero-email--risky');
+        const isRisky = !!payload.risky;
+        const isInvalid = !payload.valid;
+        const isOk = !!payload.valid && !isRisky;
+        if (isRisky) hero.classList.add('email-report-hero-email--risky');
+
+        const st = document.getElementById('emailReportStatus');
+        const statusBase = isInvalid ? 'INVALID EMAIL' : isRisky ? 'RISKY — GENERIC ROLE' : 'VALID EMAIL';
+        if (payload.scoring_enabled && typeof payload.score === 'number') {
+          const tier = String(payload.score_tier || '').toLowerCase();
+          let tierClass = ' email-report-cell--bad';
+          let tierLabel = 'Red';
+          if (tier === 'green') {
+            tierClass = ' email-report-cell--ok';
+            tierLabel = 'Green';
+          } else if (tier === 'yellow') {
+            tierClass = ' email-report-cell--risky';
+            tierLabel = 'Yellow';
+          }
+          st.textContent = statusBase + ' · ' + Number(payload.score) + '/10 — ' + tierLabel;
+          st.className = 'email-report-cell email-report-cell--status-banner' + tierClass;
+        } else {
+          st.textContent = statusBase;
+          st.className =
+            'email-report-cell email-report-cell--status-banner' +
+            (isOk ? ' email-report-cell--ok' : isRisky ? ' email-report-cell--risky' : ' email-report-cell--bad');
+        }
+        const sub = document.getElementById('emailReportSubStatus');
+        sub.textContent = r.sub_status || '—';
+        sub.className =
+          'email-report-cell' +
+          (isOk ? ' email-report-cell--ok' : isRisky ? ' email-report-cell--risky' : ' email-report-cell--bad');
+        document.getElementById('emailReportAccount').textContent = fmtUnknown(r.account);
+        document.getElementById('emailReportDomain').textContent = fmtUnknown(r.domain);
+
+        const smtpRaw = r.smtp_provider;
+        const smtpStr = smtpRaw === null || smtpRaw === undefined || smtpRaw === '' ? '' : String(smtpRaw).trim();
+        const smtpPositive = smtpStr.length > 0 && smtpStr.toLowerCase() !== 'unknown';
+        const smtpEl = document.getElementById('emailReportSmtpProvider');
+        smtpEl.textContent = smtpPositive ? smtpStr : fmtUnknown(r.smtp_provider);
+        smtpEl.className =
+          'email-report-cell' +
+          (smtpPositive ? ' email-report-cell--ok' : ' email-report-cell--bad');
+
+        const mxFound = !!r.mx_found;
+        const mxFoundEl = document.getElementById('emailReportMxFound');
+        mxFoundEl.textContent = mxFound ? 'Yes' : 'No';
+        mxFoundEl.className =
+          'email-report-cell' + (mxFound ? ' email-report-cell--ok' : ' email-report-cell--bad');
+
+        const mxHost = r.mx_record && String(r.mx_record).trim();
+        const mxRecordEl = document.getElementById('emailReportMxRecord');
+        mxRecordEl.textContent = mxHost || '';
+        mxRecordEl.className =
+          'email-report-cell' + (mxHost ? ' email-report-cell--ok' : ' email-report-cell--bad');
+
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      }
+
+      function runValidate() {
+        if (!hasInputValue()) {
+          syncValidateButtonState();
+          input.focus();
+          return;
+        }
+        if (isFreePlanCounter() && getRemainingCount() <= 0) {
+          switchSingleCardToLocked();
+          const rep = fallbackReport('limit_reached');
+          rep.sub_status = 'Free plan total email validation limit reached (100). Please upgrade to continue.';
+          showEmailReportModal({ valid: false, report: rep });
+          return;
+        }
+        btn.disabled = true;
+        fetch('{{ url_for("validate_email_api") }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: input.value })
+        })
+          .then(function (r) {
+            if (r.status === 401) {
+              showEmailReportModal({
+                valid: false,
+                report: fallbackReport('unauthorized'),
+              });
+              return null;
+            }
+            return r.json();
+          })
+          .then(function (data) {
+            if (!data) return;
+            if (data.error) {
+              if (data.limit_reached && isFreePlanCounter() && remainingEl) {
+                const limit = parseInt(remainingEl.getAttribute('data-limit') || '100', 10);
+                remainingEl.textContent = '0/' + limit;
+                switchSingleCardToLocked();
+              }
+              const rep = fallbackReport('api_error');
+              rep.sub_status = String(data.error);
+              showEmailReportModal({ valid: false, report: rep });
+              return;
+            }
+            applyUsageIncrement();
+            bumpDashboardValidationStats(data);
+            if (isFreePlanCounter() && getRemainingCount() <= 0) {
+              switchSingleCardToLocked();
+            }
+            showEmailReportModal(data);
+          })
+          .catch(function () {
+            showEmailReportModal({
+              valid: false,
+              report: fallbackReport('network_error'),
+            });
+          })
+          .finally(function () {
+            syncValidateButtonState();
+          });
+      }
+
+      syncValidateButtonState();
+      input.addEventListener('input', syncValidateButtonState);
+      btn.addEventListener('click', runValidate);
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          runValidate();
+        }
+      });
+    })();
+
+  </script>
+  <script src="{{ url_for('static', filename='js/app-sidebar.js') }}"></script>
+</body>
+</html>

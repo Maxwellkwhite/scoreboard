@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en" data-bs-theme="auto">
+  <head>
+    <meta name="ahrefs-site-verification" content="fe69a510125d4eee8cf261dd590e03d467a3043a12b15fc03ed07b9e0531f38c">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% set page_title = page_title|default("Scoreboard - MLB Scores") %}
+    {% set page_description = page_description|default("Live MLB scores, today's games, and recent results.") %}
+    {% set page_keywords = page_keywords|default("MLB scores, baseball scoreboard, live baseball scores") %}
+    {% set og_type = og_type|default("website") %}
+    <title>{{ page_title }}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/logo.png') }}">
+    <meta name="description" content="{{ page_description }}">
+    <meta name="keywords" content="{{ page_keywords }}">
+    <meta property="og:title" content="{{ page_title }}">
+    <meta property="og:description" content="{{ page_description }}">
+    <meta property="og:image" content="{{ url_for('static', filename='images/logo.png', _external=True) }}">
+    <meta property="og:url" content="{% if canonical_url is defined and canonical_url %}{{ canonical_url }}{% else %}{{ request.url_root.rstrip('/') }}{{ request.path }}{% endif %}">
+    {% if canonical_url is defined and canonical_url %}
+    <link rel="canonical" href="{{ canonical_url }}">
+    {% endif %}
+    <meta property="og:type" content="{{ og_type }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ page_title }}">
+    <meta name="twitter:description" content="{{ page_description }}">
+    <meta name="twitter:image" content="{{ url_for('static', filename='images/logo.png', _external=True) }}">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@docsearch/css@3">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="static/css/style.css"/>
+    <!-- TikTok Pixel Code Start -->
+  <script>
+    !function (w, d, t) {
+      w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(
+    var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js",o=n&&n.partner;ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};n=document.createElement("script")
+    ;n.type="text/javascript",n.async=!0,n.src=r+"?sdkid="+e+"&lib="+t;e=document.getElementsByTagName("script")[0];e.parentNode.insertBefore(n,e)};
+    
+    
+      ttq.load('D6GB70BC77U3BV5J8QC0');
+      ttq.page();
+    }(window, document, 'ttq');
+    </script>
+  <!-- TikTok Pixel Code End -->
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-K9BVXXLJD3"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-K9BVXXLJD3');
+    </script>
+
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg bg-body-tertiary">
+      <div class="container-fluid">
+        <a class="navbar-brand d-flex align-items-center" href="{{ url_for('home_page') }}">Scoreboard</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          {% if not current_user.is_authenticated %}
+          <ul class="navbar-nav">
+            <li class="nav-item">
+              <a class="nav-link active" aria-current="page" href="{{url_for('home_page') }}">Home</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{url_for('blog_list')}}">Blog</a>
+            </li>
+          </ul>
+          {% endif %}
+          {% if current_user.is_authenticated %}
+          <ul class="navbar-nav">
+          <li class="nav-item">
+            <a class="nav-link{% if request.endpoint == 'home_page' %} active{% endif %}" {% if request.endpoint == 'home_page' %}aria-current="page"{% endif %} href="{{url_for('home_page') }}">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link{% if request.endpoint == 'dashboard' %} active{% endif %}" {% if request.endpoint == 'dashboard' %}aria-current="page"{% endif %} href="{{url_for('dashboard') }}">Dashboard</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{url_for('blog_list')}}">Blog</a>
+          </li>
+        </ul>
+          {% endif %}
+          <!-- New separate nav group for auth items -->
+          <ul class="navbar-nav ms-auto">
+            {% if not current_user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{url_for('login') }}">Login</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{url_for('register') }}">Register</a>
+            </li>
+            {% endif %}
+          </ul>
+        </div>
+      </div>
+    </nav>
+  </body>
+</html>

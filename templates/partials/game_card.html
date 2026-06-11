@@ -1,0 +1,35 @@
+<a href="/game/{{ game.id }}" class="game-card game-card--{{ game.status_state }} game-card--link" data-game-id="{{ game.id }}">
+  <div class="game-card-status">
+    <span class="status-pill status-pill--{{ game.status_state }}"
+      {% if game.status_state == 'pre' and game.start_time %}data-start-time="{{ game.start_time }}"{% endif %}>{{ game.status_detail }}</span>
+    {% if game.status_state == 'in' and game.balls is not none %}
+    <span class="game-card-count">{{ game.balls }}-{{ game.strikes }}, {{ game.outs }} out{% if game.outs != 1 %}s{% endif %}</span>
+    {% endif %}
+  </div>
+
+  <div class="game-card-teams">
+    {% for side in [('away', game.away), ('home', game.home)] %}
+    {% set team = side[1] %}
+    <div class="game-card-team game-card-team--{{ side[0] }}{% if team.winner %} game-card-team--winner{% endif %}">
+      {% if team.logo %}
+      <img class="game-card-logo" src="{{ team.logo }}" alt="" width="40" height="40" loading="lazy">
+      {% else %}
+      <div class="game-card-logo game-card-logo--placeholder">{{ team.abbr }}</div>
+      {% endif %}
+      <div class="game-card-team-meta">
+        <span class="game-card-abbr">{{ team.abbr }}</span>
+        <span class="game-card-name">{{ team.short_name or team.name }}</span>
+      </div>
+      <span class="game-card-score">
+        {% if game.status_state in ('in', 'post') and team.score is not none %}
+          {{ team.score }}
+        {% elif game.status_state == 'pre' %}
+          —
+        {% else %}
+          {{ team.score if team.score is not none else '—' }}
+        {% endif %}
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+</a>
