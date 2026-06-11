@@ -1,0 +1,50 @@
+<div class="standings-board" aria-label="MLB standings">
+  {% if standings %}
+  {% for league in standings %}
+  <section class="standings-league standings-league--{{ league.abbr|lower }}">
+    <header class="standings-league__header">
+      <span class="standings-league__badge">{{ league.abbr }}</span>
+      <h3 class="standings-league__title">{{ league.name }}</h3>
+    </header>
+    <div class="standings-league__divisions">
+      {% for division in league.divisions %}
+      <div class="standings-division standings-card">
+        <h4 class="standings-division__title">{{ division.short_name }}</h4>
+        <ol class="standings-teams">
+          {% for team in division.teams %}
+          <li class="standings-team-row{% if loop.first %} standings-team-row--leader{% endif %}" style="--team-color: {{ team.color }};">
+            <span class="standings-team-row__rank" aria-hidden="true">{{ loop.index }}</span>
+            <span class="standings-team-row__logo-wrap">
+              {% if team.logo %}
+              <img class="standings-team-row__logo" src="{{ team.logo }}" alt="" width="32" height="32" loading="lazy">
+              {% else %}
+              <span class="standings-team-row__logo-fallback">{{ team.abbr }}</span>
+              {% endif %}
+            </span>
+            <div class="standings-team-row__main">
+              <span class="standings-team-row__name" title="{{ team.name }}">{{ team.abbr }}</span>
+              <span class="standings-team-row__record">{{ team.wins or '0' }}–{{ team.losses or '0' }}</span>
+            </div>
+            <div class="standings-team-row__stats">
+              <span class="standings-team-row__pct">{{ team.pct or '—' }}</span>
+              <span class="standings-team-row__gb">{% if team.gb and team.gb != '-' %}{{ team.gb }}{% else %}—{% endif %}</span>
+              {% if team.streak and team.streak[0] == 'W' %}
+              <span class="standings-team-row__streak standings-team-row__streak--win">{{ team.streak }}</span>
+              {% elif team.streak and team.streak[0] == 'L' %}
+              <span class="standings-team-row__streak standings-team-row__streak--loss">{{ team.streak }}</span>
+              {% else %}
+              <span class="standings-team-row__streak">{{ team.streak or '—' }}</span>
+              {% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ol>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+  {% else %}
+  <p class="standings-panel__empty">Standings unavailable right now.</p>
+  {% endif %}
+</div>

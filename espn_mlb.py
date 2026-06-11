@@ -15,9 +15,18 @@ ESPN_SCOREBOARD_URL = (
 ESPN_SUMMARY_URL = (
     "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary"
 )
+ESPN_STANDINGS_URL = (
+    "https://site.api.espn.com/apis/v2/sports/baseball/mlb/standings"
+)
+ESPN_TEAMS_URL = (
+    "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams"
+)
 CACHE_TTL_SECONDS = 30
+TEAMS_CACHE_TTL_SECONDS = 3600
 _cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _summary_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_standings_cache: tuple[float, list[dict[str, Any]]] | None = None
+_teams_cache: tuple[float, dict[str, dict[str, Any]]] | None = None
 
 
 def _parse_score(value: Any) -> int | None:
@@ -715,6 +724,130 @@ def parse_game_detail(payload: dict[str, Any]) -> dict[str, Any]:
         "win_probability": live_win_pct,
     }
     return game
+
+
+def _standing_stat(entry: dict[str, Any], name: str) -> str | None:
+    for stat in entry.get("stats") or []:
+        if stat.get("name") == name:
+            value = stat.get("displayValue")
+            return str(value) if value not in (None, "") else None
+    return None
+
+
+def _fetch_mlb_teams_lookup(*, force_refresh: bool = False) -> dict[str, dict[str, Any]]:
+    global _teams_cache
+    now = time.time()
+    if (
+        not force_refresh
+        and _teams_cache
+        and now - _teams_cache[0] < TEAMS_CACHE_TTL_SECONDS
+    ):
+        return _teams_cache[1]
+
+    response = requests.get(ESPN_TEAMS_URL, timeout=15)
+    response.raise_for_status()
+    payload = response.json()
+    lookup: dict[str, dict[str, Any]] = {}
+    for item in (
+        (payload.get("sports") or [{}])[0]
+        .get("leagues", [{}])[0]
+        .get("teams", [])
+    ):
+        team = item.get("team") or {}
+        meta = {
+            "logo": _team_logo(team),
+            "color": _team_color(team),
+            "alternate_color": _team_alternate_color(team),
+        }
+        team_id = team.get("id")
+        if team_id is not None:
+            lookup[str(team_id)] = meta
+        abbr = team.get("abbreviation")
+        if abbr:
+            lookup[str(abbr)] = meta
+
+    _teams_cache = (now, lookup)
+    return lookup
+
+
+def _parse_standing_team(
+    entry: dict[str, Any],
+    teams_lookup: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    team = entry.get("team") or {}
+    team_id = team.get("id")
+    abbr = team.get("abbreviation", "")
+    meta = (
+        teams_lookup.get(str(team_id))
+        or teams_lookup.get(str(abbr))
+        or {}
+    )
+    color = meta.get("color") or _team_color(team) or "#1a2332"
+    return {
+        "abbr": abbr,
+        "name": team.get("displayName", ""),
+        "logo": meta.get("logo") or _team_logo(team),
+        "color": color,
+        "alternate_color": meta.get("alternate_color") or _team_alternate_color(team),
+        "wins": _standing_stat(entry, "wins"),
+        "losses": _standing_stat(entry, "losses"),
+        "pct": _standing_stat(entry, "winPercent"),
+        "gb": _standing_stat(entry, "divisionGamesBehind"),
+        "streak": _standing_stat(entry, "streak"),
+    }
+
+
+def parse_standings(
+    payload: dict[str, Any],
+    teams_lookup: dict[str, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    teams_lookup = teams_lookup or {}
+    leagues: list[dict[str, Any]] = []
+    for league in payload.get("children") or []:
+        divisions: list[dict[str, Any]] = []
+        for division in league.get("children") or []:
+            entries = (division.get("standings") or {}).get("entries") or []
+            teams = [
+                _parse_standing_team(entry, teams_lookup)
+                for entry in entries
+            ]
+            divisions.append({
+                "abbr": division.get("abbreviation", ""),
+                "name": division.get("name", ""),
+                "short_name": division.get("shortName") or division.get("name", ""),
+                "teams": teams,
+            })
+        leagues.append({
+            "abbr": league.get("abbreviation", ""),
+            "name": league.get("name", ""),
+            "divisions": divisions,
+        })
+
+    league_order = {"AL": 0, "NL": 1}
+    leagues.sort(key=lambda league: league_order.get(league["abbr"], 99))
+    return leagues
+
+
+def fetch_standings(*, force_refresh: bool = False) -> list[dict[str, Any]]:
+    global _standings_cache
+    now = time.time()
+    if (
+        not force_refresh
+        and _standings_cache
+        and now - _standings_cache[0] < CACHE_TTL_SECONDS
+    ):
+        return _standings_cache[1]
+
+    teams_lookup = _fetch_mlb_teams_lookup(force_refresh=force_refresh)
+    response = requests.get(
+        ESPN_STANDINGS_URL,
+        params={"level": 3},
+        timeout=15,
+    )
+    response.raise_for_status()
+    leagues = parse_standings(response.json(), teams_lookup)
+    _standings_cache = (now, leagues)
+    return leagues
 
 
 def scoreboard_snapshot(

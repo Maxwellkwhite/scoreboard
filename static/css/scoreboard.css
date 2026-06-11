@@ -121,6 +121,232 @@
   gap: 1rem;
 }
 
+.standings-board {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.standings-panel__empty {
+  color: #6b7789;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.standings-league {
+  background: #fff;
+  border: 1px solid #dde3eb;
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(26, 35, 50, 0.07);
+  overflow: hidden;
+}
+
+.standings-league--al {
+  --league-accent: #ba0c2f;
+}
+
+.standings-league--nl {
+  --league-accent: #041e42;
+}
+
+.standings-league__header {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
+  background: linear-gradient(135deg, var(--league-accent) 0%, color-mix(in srgb, var(--league-accent) 72%, #000) 100%);
+  color: #fff;
+}
+
+.standings-league__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.4rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.standings-league__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.standings-league + .standings-league {
+  margin-top: 0;
+}
+
+.standings-league__divisions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+  padding: 0.85rem;
+}
+
+@media (min-width: 720px) {
+  .standings-league__divisions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.standings-card {
+  background: #f7f9fc;
+  border: 1px solid #e4e9f0;
+  border-radius: 10px;
+  padding: 0.7rem 0.65rem 0.55rem;
+}
+
+.standings-division__title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #5c6778;
+  margin: 0 0 0.55rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid #dde3eb;
+}
+
+.standings-teams {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.standings-team-row {
+  --team-color: #1a2332;
+  display: grid;
+  grid-template-columns: 1.1rem 2rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.42rem 0.5rem 0.42rem 0.55rem;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e8edf3;
+  border-left: 3px solid var(--team-color);
+  box-shadow: 0 1px 2px rgba(26, 35, 50, 0.04);
+}
+
+.standings-team-row--leader {
+  background: color-mix(in srgb, var(--team-color) 10%, #fff);
+  border-color: color-mix(in srgb, var(--team-color) 28%, #e8edf3);
+}
+
+.standings-team-row__rank {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #8a95a5;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.standings-team-row--leader .standings-team-row__rank {
+  color: var(--team-color);
+}
+
+.standings-team-row__logo-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+}
+
+.standings-team-row__logo {
+  width: 2rem;
+  height: 2rem;
+  object-fit: contain;
+}
+
+.standings-team-row__logo-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--team-color);
+  color: #fff;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.standings-team-row__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.standings-team-row__name {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #1a2332;
+  letter-spacing: 0.02em;
+}
+
+.standings-team-row__record {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #6b7789;
+  font-variant-numeric: tabular-nums;
+}
+
+.standings-team-row__stats {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.standings-team-row__pct {
+  min-width: 2.35rem;
+  text-align: right;
+  font-weight: 700;
+  color: #1a2332;
+}
+
+.standings-team-row__gb {
+  min-width: 1.6rem;
+  text-align: right;
+  color: #6b7789;
+  font-weight: 600;
+}
+
+.standings-team-row__streak {
+  min-width: 1.65rem;
+  text-align: center;
+  padding: 0.12rem 0.3rem;
+  border-radius: 999px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  background: #eef1f5;
+  color: #5c6778;
+}
+
+.standings-team-row__streak--win {
+  background: #e6f4ea;
+  color: #1e7e34;
+}
+
+.standings-team-row__streak--loss {
+  background: #fce8e8;
+  color: #c0392b;
+}
+
 .game-card {
   background: #fff;
   border: 1px solid #dde3eb;
@@ -270,6 +496,49 @@
   color: #1a2332;
   min-width: 1.5rem;
   text-align: right;
+  display: inline-block;
+  transform-origin: center right;
+}
+
+@keyframes game-card-score-pulse {
+  0% {
+    transform: scale(1);
+    color: #1a2332;
+  }
+  35% {
+    transform: scale(1.28);
+    color: var(--score-pulse-color, #22a06b);
+  }
+  100% {
+    transform: scale(1);
+    color: #1a2332;
+  }
+}
+
+.game-card-score--pulse {
+  animation: game-card-score-pulse 0.65s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+@keyframes game-card-score-changed {
+  0% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--batting-team-color, #22a06b) 22%, transparent),
+      0 4px 14px color-mix(in srgb, var(--batting-team-color, #22a06b) 14%, transparent);
+  }
+  40% {
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--batting-team-color, #22a06b) 45%, transparent),
+      0 8px 24px color-mix(in srgb, var(--batting-team-color, #22a06b) 30%, transparent);
+  }
+  100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--batting-team-color, #22a06b) 22%, transparent),
+      0 4px 14px color-mix(in srgb, var(--batting-team-color, #22a06b) 14%, transparent);
+  }
+}
+
+.game-card--link.game-card--score-changed {
+  animation: game-card-score-changed 0.7s ease;
 }
 
 .game-card-record {
@@ -589,13 +858,6 @@
   display: block;
   color: #1a2332;
   margin-bottom: 0.35rem;
-}
-
-.scoreboard-attribution {
-  margin-top: 2rem;
-  font-size: 0.78rem;
-  color: #8a95a5;
-  text-align: center;
 }
 
 .scoreboard-live-hint {

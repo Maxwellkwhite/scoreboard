@@ -964,7 +964,7 @@ with app.app_context():
 
 @app.route('/', methods=["GET"])
 def home_page():
-    from espn_mlb import scoreboard_snapshot
+    from espn_mlb import fetch_standings, scoreboard_snapshot
 
     snapshot = scoreboard_snapshot()
     return render_template(
@@ -976,6 +976,7 @@ def home_page():
         upcoming_date=snapshot["upcoming_date"],
         upcoming_games=snapshot["upcoming_games"],
         has_live=snapshot["has_live"],
+        standings=fetch_standings(),
     )
 
 

@@ -7,6 +7,7 @@
   var pollTimer = null;
   var POLL_MS_LIVE = 15000;
   var POLL_MS_IDLE = 30000;
+  var lastScores = {};
 
   if (!pollUrl || !todayGamesGrid) {
     return;
@@ -42,6 +43,22 @@
     if (!side || !game[side]) return null;
     var team = game[side];
     return team.win_color || team.color || null;
+  }
+
+  function pulseScoreElement(scoreEl, team) {
+    var color = team && (team.win_color || team.color);
+    if (color) {
+      scoreEl.style.setProperty('--score-pulse-color', color);
+    }
+    scoreEl.classList.remove('game-card-score--pulse');
+    void scoreEl.offsetWidth;
+    scoreEl.classList.add('game-card-score--pulse');
+  }
+
+  function pulseGameCard(card) {
+    card.classList.remove('game-card--score-changed');
+    void card.offsetWidth;
+    card.classList.add('game-card--score-changed');
   }
 
   function applyBattingTheme(card, game) {
@@ -93,15 +110,35 @@
       { el: teamEls[1], team: game.home, side: 'home' }
     ];
 
+    var awayScore = scoreForTeam(game, game.away);
+    var homeScore = scoreForTeam(game, game.home);
+    var prevScores = lastScores[String(game.id)];
+    var scoreChanged = false;
+
     sides.forEach(function (entry) {
       if (!entry.el || !entry.team) return;
       entry.el.className = 'game-card-team game-card-team--' + entry.side +
         (entry.team.winner ? ' game-card-team--winner' : '');
       var scoreEl = entry.el.querySelector('.game-card-score');
-      if (scoreEl) {
-        scoreEl.textContent = scoreForTeam(game, entry.team);
+      if (!scoreEl) return;
+
+      var newScore = entry.side === 'away' ? awayScore : homeScore;
+      if (prevScores) {
+        var oldScore = entry.side === 'away' ? prevScores.away : prevScores.home;
+        if (oldScore !== newScore && newScore !== '—') {
+          scoreChanged = true;
+          pulseScoreElement(scoreEl, entry.team);
+        }
       }
+
+      scoreEl.textContent = newScore;
     });
+
+    lastScores[String(game.id)] = { away: awayScore, home: homeScore };
+
+    if (scoreChanged) {
+      pulseGameCard(card);
+    }
 
     applyBattingTheme(card, game);
   }

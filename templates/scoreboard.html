@@ -26,9 +26,10 @@
 
     <section class="scoreboard-section" id="scores-section">
       <div class="scoreboard-section-title">
-        <div class="day-tabs" role="tablist" aria-label="Choose day">
+        <div class="day-tabs" role="tablist" aria-label="Choose view">
           <button type="button" class="day-tab day-tab--active" id="tab-today" role="tab" aria-selected="true" aria-controls="today-panel" data-day="today">Today</button>
           <button type="button" class="day-tab" id="tab-yesterday" role="tab" aria-selected="false" aria-controls="yesterday-panel" data-day="yesterday">Yesterday</button>
+          <button type="button" class="day-tab" id="tab-standings" role="tab" aria-selected="false" aria-controls="standings-panel" data-day="standings">Standings</button>
         </div>
         <span class="section-date" id="active-section-date" data-local-date="{{ today.isoformat() }}">{{ today.isoformat() }}</span>
       </div>
@@ -73,9 +74,12 @@
         </div>
         {% endif %}
       </div>
+
+      <div class="day-panel" id="standings-panel" role="tabpanel" aria-labelledby="tab-standings" hidden>
+        {% include "partials/standings_panel.html" %}
+      </div>
     </section>
 
-    <p class="scoreboard-attribution">Scores provided by ESPN. Not affiliated with MLB or ESPN.</p>
   </main>
 
   <script>
@@ -116,6 +120,12 @@
       var panels = document.querySelectorAll('.day-panel');
       var activeDateEl = document.getElementById('active-section-date');
 
+      var panelIds = {
+        today: 'today-panel',
+        yesterday: 'yesterday-panel',
+        standings: 'standings-panel'
+      };
+
       function setActiveDay(day) {
         tabs.forEach(function (tab) {
           var isActive = tab.getAttribute('data-day') === day;
@@ -124,25 +134,34 @@
         });
 
         panels.forEach(function (panel) {
-          var isToday = panel.id === 'today-panel';
-          var show = (day === 'today' && isToday) || (day === 'yesterday' && !isToday);
+          var show = panel.id === panelIds[day];
           panel.classList.toggle('day-panel--active', show);
           panel.hidden = !show;
         });
 
-        var activePanel = document.getElementById(day === 'today' ? 'today-panel' : 'yesterday-panel');
-        if (activePanel && activeDateEl) {
-          var iso = activePanel.getAttribute('data-panel-date');
-          activeDateEl.setAttribute('data-local-date', iso);
-          var parts = iso.split('-');
-          var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-          activeDateEl.textContent = d.toLocaleDateString(undefined, {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric'
-          });
+        if (!activeDateEl) return;
+
+        if (day === 'standings') {
+          activeDateEl.hidden = true;
+          return;
         }
+
+        activeDateEl.hidden = false;
+        var activePanel = document.getElementById(panelIds[day]);
+        if (!activePanel) return;
+
+        var iso = activePanel.getAttribute('data-panel-date');
+        if (!iso) return;
+
+        activeDateEl.setAttribute('data-local-date', iso);
+        var parts = iso.split('-');
+        var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        activeDateEl.textContent = d.toLocaleDateString(undefined, {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric'
+        });
       }
 
       tabs.forEach(function (tab) {
