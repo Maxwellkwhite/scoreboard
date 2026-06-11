@@ -1,9 +1,16 @@
 (function () {
   var todayPanel = document.getElementById('today-panel');
   var todayGamesGrid = document.getElementById('today-games');
-  var liveHint = document.getElementById('live-hint');
   var pollUrl = document.body.getAttribute('data-today-api');
-  var activeDay = 'today';
+  function getInitialDay() {
+    var hash = (location.hash || '').replace(/^#/, '').toLowerCase();
+    if (hash === 'yesterday' || hash === 'standings') {
+      return hash;
+    }
+    return 'today';
+  }
+
+  var activeDay = getInitialDay();
   var pollTimer = null;
   var POLL_MS_LIVE = 15000;
   var POLL_MS_IDLE = 30000;
@@ -115,10 +122,17 @@
     var prevScores = lastScores[String(game.id)];
     var scoreChanged = false;
 
+    var hasWinner = Boolean(game.away && game.away.winner) || Boolean(game.home && game.home.winner);
+
     sides.forEach(function (entry) {
       if (!entry.el || !entry.team) return;
-      entry.el.className = 'game-card-team game-card-team--' + entry.side +
-        (entry.team.winner ? ' game-card-team--winner' : '');
+      var teamClass = 'game-card-team game-card-team--' + entry.side;
+      if (entry.team.winner) {
+        teamClass += ' game-card-team--winner';
+      } else if (game.status_state === 'post' && hasWinner) {
+        teamClass += ' game-card-team--loser';
+      }
+      entry.el.className = teamClass;
       var scoreEl = entry.el.querySelector('.game-card-score');
       if (!scoreEl) return;
 
@@ -143,6 +157,28 @@
     applyBattingTheme(card, game);
   }
 
+  var statusSortOrder = { in: 0, pre: 1, post: 2 };
+
+  function compareGames(a, b) {
+    var aPriority = statusSortOrder[a.status_state];
+    var bPriority = statusSortOrder[b.status_state];
+    if (aPriority === undefined) aPriority = 1;
+    if (bPriority === undefined) bPriority = 1;
+    if (aPriority !== bPriority) {
+      return aPriority - bPriority;
+    }
+    return String(a.start_time || '').localeCompare(String(b.start_time || ''));
+  }
+
+  function reorderGameCards(games) {
+    games.slice().sort(compareGames).forEach(function (game) {
+      var card = todayGamesGrid.querySelector('[data-game-id="' + game.id + '"]');
+      if (card) {
+        todayGamesGrid.appendChild(card);
+      }
+    });
+  }
+
   function updateGameCards(games) {
     var gamesById = {};
     games.forEach(function (game) {
@@ -155,6 +191,8 @@
         applyGameToCard(card, gamesById[id]);
       }
     });
+
+    reorderGameCards(games);
   }
 
   function schedulePoll(ms) {
@@ -178,10 +216,6 @@
       .then(function (data) {
         if (!data.games) return;
 
-        if (liveHint) {
-          liveHint.hidden = !data.has_live;
-        }
-
         updateGameCards(data.games);
         schedulePoll(data.has_live ? POLL_MS_LIVE : POLL_MS_IDLE);
       })
@@ -200,5 +234,7 @@
     }
   };
 
-  refreshTodayScores();
+  if (activeDay === 'today') {
+    refreshTodayScores();
+  }
 })();

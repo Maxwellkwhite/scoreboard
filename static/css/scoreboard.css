@@ -48,10 +48,15 @@
 
 .scoreboard-section-title {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: center;
   margin-bottom: 1rem;
+}
+
+.scoreboard-view-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .day-tabs {
@@ -90,6 +95,38 @@
   display: none !important;
 }
 
+html[data-scoreboard-view="yesterday"] #today-panel,
+html[data-scoreboard-view="standings"] #today-panel {
+  display: none !important;
+}
+
+html[data-scoreboard-view="yesterday"] #yesterday-panel {
+  display: block !important;
+}
+
+html[data-scoreboard-view="standings"] #standings-panel {
+  display: block !important;
+}
+
+html[data-scoreboard-view="yesterday"] #tab-today,
+html[data-scoreboard-view="standings"] #tab-today {
+  background: transparent;
+  color: #5c6778;
+  box-shadow: none;
+}
+
+html[data-scoreboard-view="yesterday"] #tab-yesterday {
+  background: #fff;
+  color: #1a2332;
+  box-shadow: 0 1px 4px rgba(26, 35, 50, 0.12);
+}
+
+html[data-scoreboard-view="standings"] #tab-standings {
+  background: #fff;
+  color: #1a2332;
+  box-shadow: 0 1px 4px rgba(26, 35, 50, 0.12);
+}
+
 .upcoming-block {
   margin-top: 1.5rem;
   padding-top: 1.25rem;
@@ -110,9 +147,10 @@
   margin-bottom: 1rem;
 }
 
-.scoreboard-section-title .section-date {
+.scoreboard-view-nav .section-date {
   font-size: 0.9rem;
   color: #6b7789;
+  text-align: center;
 }
 
 .scoreboard-grid {
@@ -446,10 +484,20 @@
   grid-template-columns: 40px 1fr auto;
   align-items: center;
   gap: 0.65rem;
+  transition: opacity 0.25s ease, filter 0.25s ease;
 }
 
 .game-card-team--winner .game-card-abbr {
   font-weight: 800;
+}
+
+.game-card--post .game-card-team--loser {
+  opacity: 0.38;
+  filter: grayscale(0.45);
+}
+
+.game-card--post .game-card-team--loser .game-card-score {
+  color: #8a95a5;
 }
 
 .game-card-logo {
@@ -858,29 +906,6 @@
   display: block;
   color: #1a2332;
   margin-bottom: 0.35rem;
-}
-
-.scoreboard-live-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.82rem;
-  color: #137a4d;
-  font-weight: 600;
-}
-
-.scoreboard-live-hint::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #22a06b;
-  animation: live-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes live-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
 }
 
 /* Game detail / preview */

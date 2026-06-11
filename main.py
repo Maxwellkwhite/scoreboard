@@ -975,7 +975,6 @@ def home_page():
         yesterday_games=snapshot["yesterday_games"],
         upcoming_date=snapshot["upcoming_date"],
         upcoming_games=snapshot["upcoming_games"],
-        has_live=snapshot["has_live"],
         standings=fetch_standings(),
     )
 

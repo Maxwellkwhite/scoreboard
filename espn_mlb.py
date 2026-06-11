@@ -251,6 +251,15 @@ def parse_game(event: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_STATUS_SORT_ORDER = {"in": 0, "pre": 1, "post": 2}
+
+
+def _scoreboard_sort_key(game: dict[str, Any]) -> tuple[int, str]:
+    state = game.get("status_state", "pre")
+    priority = _STATUS_SORT_ORDER.get(state, 1)
+    return priority, game.get("start_time") or ""
+
+
 def fetch_scoreboard(
     game_date: date,
     *,
@@ -271,7 +280,7 @@ def fetch_scoreboard(
     response.raise_for_status()
     payload = response.json()
     games = [parse_game(event) for event in payload.get("events", [])]
-    games.sort(key=lambda game: game.get("start_time") or "")
+    games.sort(key=_scoreboard_sort_key)
 
     _cache[date_key] = (now, games)
     return games

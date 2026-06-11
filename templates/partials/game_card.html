@@ -1,4 +1,5 @@
 {% set batting_team = game.away if game.batting_side == 'away' else (game.home if game.batting_side == 'home' else none) %}
+{% set has_winner = game.away.winner or game.home.winner %}
 <a href="/game/{{ game.id }}" class="game-card game-card--{{ game.status_state }} game-card--link" data-game-id="{{ game.id }}"{% if game.status_state == 'in' and batting_team %} style="--batting-team-color: {{ batting_team.win_color or batting_team.color }};"{% endif %}>
   <div class="game-card-status">
     <span class="status-pill status-pill--{{ game.status_state }}{% if game.status_state == 'in' and batting_team %} status-pill--batting-team{% endif %}"
@@ -11,7 +12,7 @@
   <div class="game-card-teams">
     {% for side in [('away', game.away), ('home', game.home)] %}
     {% set team = side[1] %}
-    <div class="game-card-team game-card-team--{{ side[0] }}{% if team.winner %} game-card-team--winner{% endif %}">
+    <div class="game-card-team game-card-team--{{ side[0] }}{% if team.winner %} game-card-team--winner{% elif game.status_state == 'post' and has_winner %} game-card-team--loser{% endif %}">
       {% if team.logo %}
       <img class="game-card-logo" src="{{ team.logo }}" alt="" width="40" height="40" loading="lazy">
       {% else %}
