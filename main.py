@@ -69,6 +69,13 @@ DO_SPACES_BUCKET = DO_SPACES_NAME
 app = Flask(__name__)
 ckeditor = CKEditor(app)
 Bootstrap5(app)
+
+
+@app.template_filter('linkify_players')
+def linkify_players_filter(text, player_map=None):
+    from espn_mlb import linkify_player_names
+
+    return linkify_player_names(text, player_map)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 
 # Bulk list validation + DigitalOcean Spaces (worker + web)
@@ -1044,6 +1051,30 @@ def api_mlb_game(game_id):
 
     strip_games = fetch_scoreboard(date.today(), force_refresh=True)
     return jsonify({'game': game, 'strip_games': strip_games})
+
+
+@app.route('/player/<player_id>', methods=['GET'], endpoint='mlb_player_page')
+def mlb_player_page(player_id):
+    from espn_mlb import fetch_player
+
+    try:
+        player = fetch_player(str(player_id))
+    except (requests.RequestException, ValueError):
+        abort(404)
+
+    return render_template('player.html', player=player)
+
+
+@app.route('/api/mlb/player/<player_id>', methods=['GET'], endpoint='api_mlb_player')
+def api_mlb_player(player_id):
+    from espn_mlb import fetch_player
+
+    try:
+        player = fetch_player(str(player_id), force_refresh=True)
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Player not found'}), 404
+
+    return jsonify({'player': player})
 
 
 @app.route('/api/mlb/scoreboard/yesterday', methods=['GET'])

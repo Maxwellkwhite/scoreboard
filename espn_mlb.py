@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from typing import Any
 
 import requests
+from markupsafe import Markup, escape
 
 ESPN_SCOREBOARD_URL = (
     "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard"
@@ -21,12 +22,16 @@ ESPN_STANDINGS_URL = (
 ESPN_TEAMS_URL = (
     "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams"
 )
+ESPN_ATHLETE_URL = (
+    "https://site.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{player_id}"
+)
 CACHE_TTL_SECONDS = 30
 TEAMS_CACHE_TTL_SECONDS = 3600
 _cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _summary_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _standings_cache: tuple[float, list[dict[str, Any]]] | None = None
 _teams_cache: tuple[float, dict[str, dict[str, Any]]] | None = None
+_athlete_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
 def _parse_score(value: Any) -> int | None:
@@ -46,6 +51,13 @@ def _team_logo(team: dict[str, Any]) -> str | None:
     if logos:
         return logos[0].get("href")
     return None
+
+
+def _athlete_id(athlete: dict[str, Any] | None) -> str | None:
+    if not athlete:
+        return None
+    player_id = athlete.get("id")
+    return str(player_id) if player_id else None
 
 
 _WIN_COLOR_MIN_DISTANCE = 45.0
@@ -355,6 +367,7 @@ def _parse_probable(competitor: dict[str, Any]) -> dict[str, Any] | None:
                 stats[str(key)] = category.get("displayValue", "")
         headshot = athlete.get("headshot") or {}
         return {
+            "id": _athlete_id(athlete),
             "name": athlete.get("displayName", ""),
             "headshot": headshot.get("href"),
             "jersey": athlete.get("jersey"),
@@ -536,6 +549,7 @@ def _parse_pitching_decisions(
             if not role or role in decisions:
                 continue
             decisions[role] = {
+                "id": pitcher.get("id"),
                 "name": pitcher.get("name"),
                 "team_abbr": abbr,
                 "side": side,
@@ -572,6 +586,7 @@ def _parse_team_lineup(team_block: dict[str, Any]) -> dict[str, Any]:
             )
             if stat_type == "batting":
                 lineup["batters"].append({
+                    "id": _athlete_id(athlete),
                     "name": name,
                     "bat_order": entry.get("batOrder"),
                     "position": position,
@@ -590,6 +605,7 @@ def _parse_team_lineup(team_block: dict[str, Any]) -> dict[str, Any]:
                 })
             elif stat_type == "pitching":
                 lineup["pitchers"].append({
+                    "id": _athlete_id(athlete),
                     "name": name,
                     "starter": bool(entry.get("starter")),
                     "ip": stats.get("fullInnings.partInnings") or "—",
@@ -900,6 +916,7 @@ def _parse_due_up(
 
         stats = batting_stats_map.get(str(player_id), {}) if player_id else {}
         due_up.append({
+            "id": str(player_id) if player_id else None,
             "name": name,
             "bat_order": entry.get("batOrder"),
             "line": stats.get("hits-atBats") or "0-0",
@@ -963,10 +980,15 @@ def _parse_live_situation(
         "first_runner": _runner_name(situation.get("onFirst"), players),
         "second_runner": _runner_name(situation.get("onSecond"), players),
         "third_runner": _runner_name(situation.get("onThird"), players),
+        "first_runner_id": _runner_player_id(situation.get("onFirst")),
+        "second_runner_id": _runner_player_id(situation.get("onSecond")),
+        "third_runner_id": _runner_player_id(situation.get("onThird")),
         "notes": notes,
         "matchup_text": matchup_text,
         "pitcher_name": pitcher_name,
+        "pitcher_id": str(pitcher_id) if pitcher_id else None,
         "batter_name": batter_name,
+        "batter_id": str(batter_id) if batter_id else None,
         "due_up": due_up,
         "show_due_up": show_due_up,
     }
@@ -1117,6 +1139,7 @@ def parse_game_detail(payload: dict[str, Any]) -> dict[str, Any]:
         "recent_plays": _parse_play_feed(plays),
         "scoring_plays": _parse_scoring_plays(plays, away_id=away_id, home_id=home_id),
         "win_probability": live_win_pct,
+        "player_map": player_map,
     }
     if game.get("status_state") == "post":
         live_data["plays_by_inning"] = _parse_plays_by_inning(
@@ -1289,3 +1312,98 @@ def scoreboard_snapshot(
         "upcoming_games": upcoming_games,
         "has_live": has_live,
     }
+
+
+def linkify_player_names(
+    text: str | None,
+    player_map: dict[str, str] | None,
+) -> Markup:
+    if not text:
+        return Markup("")
+    if not player_map:
+        return Markup(escape(text))
+
+    entries = sorted(
+        ((pid, name) for pid, name in player_map.items() if name),
+        key=lambda item: len(item[1]),
+        reverse=True,
+    )
+    placeholders: dict[str, Markup] = {}
+    temp = str(text)
+    for index, (player_id, name) in enumerate(entries):
+        if name not in temp:
+            continue
+        key = f"@@PLAYER_LINK_{index}@@"
+        placeholders[key] = Markup(
+            f'<a href="/player/{escape(player_id)}" class="player-link">{escape(name)}</a>'
+        )
+        temp = temp.replace(name, key)
+
+    result = escape(temp)
+    for key, link in placeholders.items():
+        result = Markup(str(result).replace(key, str(link)))
+    return result
+
+
+def parse_player_detail(payload: dict[str, Any]) -> dict[str, Any]:
+    athlete = payload.get("athlete") or {}
+    team = athlete.get("team") or {}
+    position = athlete.get("position") or {}
+    stats_summary = athlete.get("statsSummary") or {}
+    season_stats: list[dict[str, Any]] = []
+    for stat in stats_summary.get("statistics") or []:
+        season_stats.append({
+            "label": stat.get("shortDisplayName") or stat.get("displayName") or "",
+            "value": stat.get("displayValue") or "—",
+            "rank": stat.get("rankDisplayValue"),
+        })
+
+    return {
+        "id": str(athlete.get("id") or ""),
+        "name": athlete.get("displayName") or "",
+        "short_name": athlete.get("shortName") or "",
+        "headshot": (athlete.get("headshot") or {}).get("href"),
+        "jersey": athlete.get("jersey") or athlete.get("displayJersey"),
+        "position": position.get("abbreviation") or position.get("displayName"),
+        "team": {
+            "id": str(team.get("id") or ""),
+            "abbr": team.get("abbreviation") or "",
+            "name": team.get("displayName") or "",
+            "logo": _team_logo(team),
+        },
+        "bats_throws": athlete.get("displayBatsThrows"),
+        "height": athlete.get("displayHeight"),
+        "weight": athlete.get("displayWeight"),
+        "birth_place": athlete.get("displayBirthPlace"),
+        "birth_date": athlete.get("displayDOB"),
+        "age": athlete.get("age"),
+        "experience": athlete.get("displayExperience"),
+        "debut_year": athlete.get("debutYear"),
+        "status": (athlete.get("status") or {}).get("name"),
+        "season_label": stats_summary.get("displayName"),
+        "season_stats": season_stats,
+    }
+
+
+def fetch_player(
+    player_id: str,
+    *,
+    force_refresh: bool = False,
+) -> dict[str, Any]:
+    now = time.time()
+    cached = _athlete_cache.get(player_id)
+    if not force_refresh and cached and now - cached[0] < CACHE_TTL_SECONDS:
+        return cached[1]
+
+    response = requests.get(
+        ESPN_ATHLETE_URL.format(player_id=player_id),
+        timeout=15,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not payload.get("athlete"):
+        raise ValueError(f"No athlete for player {player_id}")
+
+    detail = parse_player_detail(payload)
+    _athlete_cache[player_id] = (now, detail)
+    return detail

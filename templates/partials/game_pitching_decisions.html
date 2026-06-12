@@ -1,3 +1,4 @@
+{% from 'macros/players.html' import player_link %}
 {% macro pitching_decision_card(role, label, pitcher, away, home) %}
 {% if pitcher %}
 {% set team_color = (away.win_color or away.color or '#1a2332') if pitcher.side == 'away' else (home.win_color or home.color or '#1a2332') %}
@@ -6,7 +7,7 @@
     <span class="pitching-decision__label">{{ label }}</span>
   </p>
   <p class="pitching-decision__player-line">
-    <span class="pitching-decision__name">{{ pitcher.name }}</span>
+    <span class="pitching-decision__name">{{ player_link(pitcher.id, pitcher.name) }}</span>
     {%- if pitcher.team_abbr %}<span class="pitching-decision__team">{{ pitcher.team_abbr }}</span>{% endif -%}
     {%- if pitcher.record %}<span class="pitching-decision__record"> · {{ pitcher.record }}</span>{% endif -%}
   </p>

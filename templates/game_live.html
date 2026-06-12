@@ -1,3 +1,4 @@
+{% from 'macros/players.html' import player_link %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -117,7 +118,7 @@
             <ul class="due-up-list" id="game-due-up">
               {% for batter in game.live.situation.due_up or [] %}
               <li class="due-up-row">
-                <span class="due-up-name">{{ batter.name }}</span>
+                <span class="due-up-name">{{ player_link(batter.id, batter.name) }}</span>
                 <span class="due-up-stats">{{ batter.line }}, {{ batter.runs }} R, {{ batter.rbi }} RBI</span>
               </li>
               {% endfor %}
@@ -127,16 +128,16 @@
             <div class="base base--2nd{% if game.live.situation.on_second %} base--occupied{% endif %}" aria-label="2nd base"></div>
             <div class="base base--3rd{% if game.live.situation.on_third %} base--occupied{% endif %}" aria-label="3rd base"></div>
             <div class="base base--1st{% if game.live.situation.on_first %} base--occupied{% endif %}" aria-label="1st base"></div>
-            <span class="base-runner-name base-runner-name--2nd" id="game-runner-second"{% if not game.live.situation.second_runner %} hidden{% endif %}>{{ game.live.situation.second_runner or '' }}</span>
-            <span class="base-runner-name base-runner-name--3rd" id="game-runner-third"{% if not game.live.situation.third_runner %} hidden{% endif %}>{{ game.live.situation.third_runner or '' }}</span>
-            <span class="base-runner-name base-runner-name--1st" id="game-runner-first"{% if not game.live.situation.first_runner %} hidden{% endif %}>{{ game.live.situation.first_runner or '' }}</span>
+            <span class="base-runner-name base-runner-name--2nd" id="game-runner-second"{% if not game.live.situation.second_runner %} hidden{% endif %}>{{ player_link(game.live.situation.second_runner_id, game.live.situation.second_runner) }}</span>
+            <span class="base-runner-name base-runner-name--3rd" id="game-runner-third"{% if not game.live.situation.third_runner %} hidden{% endif %}>{{ player_link(game.live.situation.third_runner_id, game.live.situation.third_runner) }}</span>
+            <span class="base-runner-name base-runner-name--1st" id="game-runner-first"{% if not game.live.situation.first_runner %} hidden{% endif %}>{{ player_link(game.live.situation.first_runner_id, game.live.situation.first_runner) }}</span>
             <div class="bases-pitcher" id="game-pitcher-name"{% if not game.live.situation.pitcher_name %} hidden{% endif %}>
               <span class="bases-player-label">Pitcher</span>
-              <span class="bases-player-name">{{ game.live.situation.pitcher_name or '' }}</span>
+              <span class="bases-player-name">{{ player_link(game.live.situation.pitcher_id, game.live.situation.pitcher_name) }}</span>
             </div>
             <div class="bases-batter" id="game-batter-name"{% if not game.live.situation.batter_name %} hidden{% endif %}>
               <span class="bases-player-label">At Bat</span>
-              <span class="bases-player-name">{{ game.live.situation.batter_name or '' }}</span>
+              <span class="bases-player-name">{{ player_link(game.live.situation.batter_id, game.live.situation.batter_name) }}</span>
             </div>
           </div>
         </section>
@@ -326,7 +327,7 @@
             <span class="play-feed-team play-feed-team--empty" aria-hidden="true"></span>
             {% endif %}
             {% if play.period %}<span class="play-feed-period">{{ play.period }}</span>{% else %}<span class="play-feed-period"></span>{% endif %}
-            <span class="play-feed-text">{{ play.text }}</span>
+            <span class="play-feed-text">{{ play.text | linkify_players(game.live.player_map) }}</span>
             <span class="play-feed-score">{{ play.away_score }}-{{ play.home_score }}</span>
           </li>
           {% endfor %}
@@ -350,7 +351,7 @@
               <ul class="play-feed">
                 {% for play in inning.plays %}
                 <li class="play-feed-item play-feed-item--compact{% if play.scoring %} play-feed-item--scoring{% endif %}"{% if play.scoring and play.scoring_side == 'away' %} style="--scoring-team-color: {{ game.away.win_color or game.away.color or '#1a2332' }};"{% elif play.scoring and play.scoring_side == 'home' %} style="--scoring-team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};"{% endif %}>
-                  <span class="play-feed-text">{{ play.text }}</span>
+                  <span class="play-feed-text">{{ play.text | linkify_players(game.live.player_map) }}</span>
                   {% if play.away_score is not none and play.home_score is not none %}
                   <span class="play-feed-score">{{ play.away_score }}-{{ play.home_score }}</span>
                   {% endif %}
@@ -365,7 +366,7 @@
             {% for play in game.live.recent_plays %}
             <li class="play-feed-item{% if play.scoring %} play-feed-item--scoring{% endif %}"{% if play.scoring and play.scoring_side == 'away' %} style="--scoring-team-color: {{ game.away.win_color or game.away.color or '#1a2332' }};"{% elif play.scoring and play.scoring_side == 'home' %} style="--scoring-team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};"{% endif %}>
               {% if play.period %}<span class="play-feed-period">{{ play.period }}</span>{% endif %}
-              <span class="play-feed-text">{{ play.text }}</span>
+              <span class="play-feed-text">{{ play.text | linkify_players(game.live.player_map) }}</span>
               {% if play.away_score is not none and play.home_score is not none %}
               <span class="play-feed-score">{{ play.away_score }}-{{ play.home_score }}</span>
               {% endif %}

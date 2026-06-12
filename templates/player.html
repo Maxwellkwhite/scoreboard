@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ player.name }} — Scoreboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/scoreboard.css') }}">
+</head>
+<body class="scoreboard-page player-page">
+  <nav class="navbar scoreboard-nav">
+    <div class="container">
+      <a class="navbar-brand" href="{{ url_for('home_page') }}">Scoreboard</a>
+      <span class="navbar-text text-white-50 small">MLB Player</span>
+    </div>
+  </nav>
+
+  <main class="scoreboard-main game-detail-main">
+    <header class="game-detail-header">
+      <p class="game-detail-kicker">Player Profile</p>
+      <h1>{{ player.name }}</h1>
+    </header>
+
+    <section class="game-detail-section player-profile">
+      <div class="player-profile__card">
+        <div class="player-profile__body">
+          <div class="player-profile__lead">
+            {% if player.headshot %}
+            <img class="player-profile__headshot" src="{{ player.headshot }}" alt="" width="80" height="80" loading="lazy">
+            {% else %}
+            <div class="player-profile__headshot player-profile__headshot--placeholder" aria-hidden="true">
+              <span>{{ player.name[:1] }}</span>
+            </div>
+            {% endif %}
+            <div class="player-profile__details">
+              {% if player.team.abbr or player.position or player.jersey %}
+              <p class="player-profile__tags">
+                {%- if player.team.abbr -%}<span>{{ player.team.abbr }}</span>{%- endif -%}
+                {%- if player.position -%}<span>{{ player.position }}</span>{%- endif -%}
+                {%- if player.jersey -%}<span>#{{ player.jersey }}</span>{%- endif -%}
+              </p>
+              {% endif %}
+              {% if player.team.name %}
+              <p class="player-profile__team">
+                {% if player.team.logo %}
+                <img class="player-profile__team-logo" src="{{ player.team.logo }}" alt="" width="24" height="24" loading="lazy">
+                {% endif %}
+                <span>{{ player.team.name }}</span>
+              </p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        {% set vitals = [
+          {'label': 'B/T', 'value': player.bats_throws},
+          {'label': 'Height', 'value': player.height},
+          {'label': 'Weight', 'value': player.weight},
+          {'label': 'Age', 'value': player.age},
+          {'label': 'DOB', 'value': player.birth_date},
+          {'label': 'Born', 'value': player.birth_place},
+          {'label': 'Debut', 'value': player.debut_year},
+          {'label': 'Exp', 'value': player.experience},
+          {'label': 'Status', 'value': player.status},
+        ] %}
+        {% set visible_vitals = vitals | selectattr('value') | list %}
+        {% if visible_vitals %}
+        <dl class="player-vitals">
+          {% for vital in visible_vitals %}
+          <div class="player-vital{% if vital.label == 'Status' %} player-vital--full{% endif %}">
+            <dt>{{ vital.label }}</dt>
+            <dd>{{ vital.value }}</dd>
+          </div>
+          {% endfor %}
+        </dl>
+        {% endif %}
+      </div>
+    </section>
+
+    {% if player.season_stats %}
+    <section class="game-detail-section">
+      <h3>{{ player.season_label or 'Season Stats' }}</h3>
+      <div class="player-stats-grid">
+        {% for stat in player.season_stats %}
+        <article class="player-stat-card">
+          <p class="player-stat-card__label">{{ stat.label }}</p>
+          <p class="player-stat-card__value">{{ stat.value }}</p>
+          {% if stat.rank %}<p class="player-stat-card__rank">{{ stat.rank }}</p>{% endif %}
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+  </main>
+</body>
+</html>

@@ -1,3 +1,4 @@
+{% from 'macros/players.html' import player_link %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -66,7 +67,7 @@
             <img src="{{ pitcher.headshot }}" alt="" class="pitcher-headshot" width="64" height="64">
             {% endif %}
             <div>
-              <p class="pitcher-name">{{ pitcher.name }}{% if pitcher.jersey %} #{{ pitcher.jersey }}{% endif %}</p>
+              <p class="pitcher-name">{{ player_link(pitcher.id, pitcher.name) }}{% if pitcher.jersey %} #{{ pitcher.jersey }}{% endif %}</p>
               {% if pitcher.throws %}<p class="pitcher-meta">Throws {{ pitcher.throws }}</p>{% endif %}
               {% if pitcher.stats %}
               <p class="pitcher-stats">

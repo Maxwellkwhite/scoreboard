@@ -1,0 +1,7 @@
+{% macro player_link(id, name, class='player-link') -%}
+{% if id and name -%}
+<a href="{{ url_for('mlb_player_page', player_id=id) }}" class="{{ class }}">{{ name }}</a>
+{%- elif name -%}
+{{ name }}
+{%- endif %}
+{%- endmacro %}
