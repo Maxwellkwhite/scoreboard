@@ -78,20 +78,20 @@
       </div>
     </section>
 
-    {% if player.season_stats %}
-    <section class="game-detail-section">
-      <h3>{{ player.season_label or 'Season Stats' }}</h3>
-      <div class="player-stats-grid">
-        {% for stat in player.season_stats %}
-        <article class="player-stat-card">
-          <p class="player-stat-card__label">{{ stat.label }}</p>
-          <p class="player-stat-card__value">{{ stat.value }}</p>
-          {% if stat.rank %}<p class="player-stat-card__rank">{{ stat.rank }}</p>{% endif %}
-        </article>
-        {% endfor %}
+    <section
+      class="game-detail-section player-stats-table-section"
+      id="player-stats-section"
+      data-player-id="{{ player.id }}"
+      aria-busy="true"
+    >
+      <div class="player-stats-loading" id="player-stats-loading">
+        <div class="player-stats-loading__ball" aria-hidden="true"></div>
+        <p class="player-stats-loading__text">Loading stats…</p>
       </div>
+      <p class="player-stats-error" id="player-stats-error" hidden>Stats unavailable right now.</p>
+      <div class="player-stats-table-wrap" id="player-stats-table-wrap" hidden></div>
     </section>
-    {% endif %}
   </main>
+  <script src="{{ url_for('static', filename='js/player.js') }}" defer></script>
 </body>
 </html>

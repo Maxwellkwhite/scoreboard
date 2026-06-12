@@ -3070,40 +3070,159 @@ a.player-link:hover {
   min-width: 0;
 }
 
-.player-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
-  gap: 0.65rem;
+.player-stats-table-section {
+  padding-top: 0.25rem;
 }
 
-.player-stat-card {
-  background: #f7f9fc;
-  border: 1px solid #e8edf3;
-  border-radius: 10px;
-  padding: 0.75rem;
-  text-align: center;
+.player-stats-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 7rem;
+  padding: 1.25rem 0 1.5rem;
 }
 
-.player-stat-card__label {
+.player-stats-loading__ball {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, #fff 0%, #f7f6f0 42%, #e6e1d4 100%);
+  box-shadow:
+    inset -5px -5px 10px rgba(0, 0, 0, 0.07),
+    0 3px 8px rgba(26, 35, 50, 0.12);
+  position: relative;
+  animation: player-stats-ball-spin 0.85s linear infinite;
+}
+
+.player-stats-loading__ball::before,
+.player-stats-loading__ball::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  border: 2px dashed rgba(196, 48, 48, 0.82);
+}
+
+.player-stats-loading__ball::after {
+  transform: rotate(72deg);
+}
+
+.player-stats-loading__text {
   margin: 0;
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #6b7789;
+  color: #8a95a5;
 }
 
-.player-stat-card__value {
-  margin: 0.2rem 0 0;
-  font-size: 1.35rem;
-  font-weight: 800;
+.player-stats-error {
+  margin: 0;
+  padding: 1.5rem 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: #8a95a5;
+}
+
+@keyframes player-stats-ball-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-stats-loading__ball {
+    animation: player-stats-ball-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes player-stats-ball-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0.55;
+    }
+  }
+}
+
+.player-stats-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.player-stats-table {
+  width: 100%;
+  min-width: 36rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.player-stats-table th,
+.player-stats-table td {
+  padding: 0.35rem 0.5rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.player-stats-table th:not(:first-child),
+.player-stats-table td {
+  border-left: 1px solid #e8edf3;
+}
+
+.player-stats-table thead th {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6b7789;
+  border-bottom: 1px solid #e8edf3;
+}
+
+.player-stats-table tbody th {
+  text-align: left;
+  padding-left: 0;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.player-stats-table__season th {
+  font-size: 0.95rem;
+  font-weight: 700;
   color: #1a2332;
+  padding-top: 0.55rem;
 }
 
-.player-stat-card__rank {
-  margin: 0.15rem 0 0;
-  font-size: 0.72rem;
-  color: #6b7789;
+.player-stats-table__career th {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #5c6778;
+  padding-bottom: 0.15rem;
+}
+
+.player-stats-table__corner {
+  width: 3.5rem;
+}
+
+.player-stats-table td {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1a2332;
+  line-height: 1.2;
+}
+
+.player-stats-table__season td {
+  padding-top: 0.55rem;
+}
+
+.player-stats-table__career td {
+  padding-bottom: 0.15rem;
+  color: #5c6778;
+  font-weight: 600;
 }
 
 @media (max-width: 479px) {

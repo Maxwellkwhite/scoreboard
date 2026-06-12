@@ -1345,6 +1345,13 @@ def linkify_player_names(
     return result
 
 
+def _parse_season_year(season_label: str | None) -> str | None:
+    if not season_label:
+        return None
+    match = re.search(r"(20\d{2})", season_label)
+    return match.group(1) if match else None
+
+
 def parse_player_detail(payload: dict[str, Any]) -> dict[str, Any]:
     athlete = payload.get("athlete") or {}
     team = athlete.get("team") or {}
@@ -1354,10 +1361,13 @@ def parse_player_detail(payload: dict[str, Any]) -> dict[str, Any]:
     for stat in stats_summary.get("statistics") or []:
         season_stats.append({
             "label": stat.get("shortDisplayName") or stat.get("displayName") or "",
-            "value": stat.get("displayValue") or "—",
+            "name": stat.get("name") or "",
+            "display": stat.get("displayValue") or "—",
+            "value": stat.get("value"),
             "rank": stat.get("rankDisplayValue"),
         })
 
+    season_label = stats_summary.get("displayName")
     return {
         "id": str(athlete.get("id") or ""),
         "name": athlete.get("displayName") or "",
@@ -1380,20 +1390,49 @@ def parse_player_detail(payload: dict[str, Any]) -> dict[str, Any]:
         "experience": athlete.get("displayExperience"),
         "debut_year": athlete.get("debutYear"),
         "status": (athlete.get("status") or {}).get("name"),
-        "season_label": stats_summary.get("displayName"),
+        "season_label": season_label,
+        "season_year": _parse_season_year(season_label),
         "season_stats": season_stats,
+        "stats_table": None,
     }
+
+
+def fetch_player_stats(
+    player_name: str,
+    season_year: str | None = None,
+    *,
+    position: str | None = None,
+) -> dict[str, Any] | None:
+    try:
+        from player_stats import fetch_player_stats_table
+
+        return fetch_player_stats_table(player_name, season_year, position=position)
+    except Exception:
+        return None
 
 
 def fetch_player(
     player_id: str,
     *,
     force_refresh: bool = False,
+    include_stats: bool = True,
 ) -> dict[str, Any]:
     now = time.time()
     cached = _athlete_cache.get(player_id)
     if not force_refresh and cached and now - cached[0] < CACHE_TTL_SECONDS:
-        return cached[1]
+        detail = cached[1]
+        if include_stats and not detail.get("stats_table"):
+            stats_table = fetch_player_stats(
+                detail.get("name") or "",
+                detail.get("season_year"),
+                position=detail.get("position"),
+            )
+            if stats_table:
+                detail = {**detail, "stats_table": stats_table}
+                if stats_table.get("season_year"):
+                    detail["season_year"] = stats_table["season_year"]
+                _athlete_cache[player_id] = (now, detail)
+        return detail
 
     response = requests.get(
         ESPN_ATHLETE_URL.format(player_id=player_id),
@@ -1405,5 +1444,16 @@ def fetch_player(
         raise ValueError(f"No athlete for player {player_id}")
 
     detail = parse_player_detail(payload)
+    if include_stats:
+        stats_table = fetch_player_stats(
+            detail.get("name") or "",
+            detail.get("season_year"),
+            position=detail.get("position"),
+        )
+        if stats_table:
+            detail["stats_table"] = stats_table
+            if stats_table.get("season_year"):
+                detail["season_year"] = stats_table["season_year"]
+
     _athlete_cache[player_id] = (now, detail)
     return detail
