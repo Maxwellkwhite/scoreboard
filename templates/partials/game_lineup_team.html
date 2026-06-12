@@ -1,0 +1,112 @@
+<div class="lineup-team lineup-team--{{ side }}">
+  <header class="lineup-team__head">
+    {% if team.logo %}
+    <img class="lineup-team__logo" src="{{ team.logo }}" alt="" width="28" height="28" loading="lazy">
+    {% else %}
+    <span class="lineup-team__logo-fallback">{{ team.abbr }}</span>
+    {% endif %}
+    <span class="lineup-team__abbr">{{ lineup_team.abbr or team.abbr }}</span>
+  </header>
+
+  {% if lineup_team.batters %}
+  <h4 class="lineup-section-title">Batting</h4>
+  <div class="lineup-table-wrap">
+    <table class="lineup-table lineup-table--batting">
+      <colgroup>
+        <col class="lineup-col lineup-col--player">
+        <col class="lineup-col lineup-stat--game">
+        <col class="lineup-col lineup-stat--game">
+        <col class="lineup-col lineup-stat--game">
+        <col class="lineup-col lineup-stat--game">
+        <col class="lineup-col lineup-stat--game">
+        <col class="lineup-col lineup-stat--season">
+        <col class="lineup-col lineup-stat--season">
+        <col class="lineup-col lineup-stat--season">
+      </colgroup>
+      <thead>
+        <tr>
+          <th scope="col" class="lineup-table__player-col">Player</th>
+          <th scope="col" colspan="5" class="lineup-table__group lineup-stat--game">Game</th>
+          <th scope="col" colspan="3" class="lineup-table__group lineup-table__group--season lineup-stat--season">Season</th>
+        </tr>
+        <tr class="lineup-table__subhead">
+          <th scope="col"></th>
+          <th scope="col" class="lineup-stat--game">AB</th>
+          <th scope="col" class="lineup-stat--game">H</th>
+          <th scope="col" class="lineup-stat--game">R</th>
+          <th scope="col" class="lineup-stat--game">RBI</th>
+          <th scope="col" class="lineup-stat--game">HR</th>
+          <th scope="col" class="lineup-table__group--season lineup-stat--season">AVG</th>
+          <th scope="col" class="lineup-stat--season">OBP</th>
+          <th scope="col" class="lineup-stat--season">SLG</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for batter in lineup_team.batters %}
+        <tr class="lineup-table__row{% if not batter.starter %} lineup-table__row--sub{% endif %}">
+          <th scope="row" class="lineup-table__player">{{ batter.name }}{% if batter.position %} <span class="lineup-table__pos">{{ batter.position }}</span>{% endif %}</th>
+          <td class="lineup-stat--game">{{ batter.ab }}</td>
+          <td class="lineup-stat--game">{{ batter.hits }}</td>
+          <td class="lineup-stat--game">{{ batter.runs }}</td>
+          <td class="lineup-stat--game">{{ batter.rbi }}</td>
+          <td class="lineup-stat--game">{{ batter.hr }}</td>
+          <td class="lineup-table__group--season lineup-stat--season">{{ batter.season_avg }}</td>
+          <td class="lineup-stat--season">{{ batter.season_obp }}</td>
+          <td class="lineup-stat--season">{{ batter.season_slg }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if lineup_team.pitchers %}
+  <h4 class="lineup-section-title">Pitching</h4>
+  <div class="lineup-table-wrap">
+    <table class="lineup-table lineup-table--pitching">
+      <colgroup>
+        <col class="lineup-col lineup-col--player">
+        <col class="lineup-col lineup-stat--game">
+        <col class="lineup-col lineup-stat--game">
+        <col class="lineup-col lineup-stat--game">
+        <col class="lineup-col lineup-stat--game">
+        <col class="lineup-col lineup-stat--game">
+        <col class="lineup-col lineup-stat--season">
+        <col class="lineup-col lineup-stat--game">
+      </colgroup>
+      <thead>
+        <tr>
+          <th scope="col" class="lineup-table__player-col">Player</th>
+          <th scope="col" colspan="5" class="lineup-table__group lineup-stat--game">Game</th>
+          <th scope="col" class="lineup-table__group lineup-table__group--season lineup-stat--season">Season</th>
+          <th scope="col" class="lineup-stat--game"></th>
+        </tr>
+        <tr class="lineup-table__subhead">
+          <th scope="col"></th>
+          <th scope="col" class="lineup-stat--game">IP</th>
+          <th scope="col" class="lineup-stat--game">H</th>
+          <th scope="col" class="lineup-stat--game">ER</th>
+          <th scope="col" class="lineup-stat--game">BB</th>
+          <th scope="col" class="lineup-stat--game">K</th>
+          <th scope="col" class="lineup-table__group--season lineup-stat--season">ERA</th>
+          <th scope="col" class="lineup-stat--game">Dec</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pitcher in lineup_team.pitchers %}
+        <tr class="lineup-table__row">
+          <th scope="row" class="lineup-table__player">{{ pitcher.name }}</th>
+          <td class="lineup-stat--game">{{ pitcher.ip }}</td>
+          <td class="lineup-stat--game">{{ pitcher.hits }}</td>
+          <td class="lineup-stat--game">{{ pitcher.er }}</td>
+          <td class="lineup-stat--game">{{ pitcher.bb }}</td>
+          <td class="lineup-stat--game">{{ pitcher.k }}</td>
+          <td class="lineup-table__group--season lineup-stat--season">{{ pitcher.season_era }}</td>
+          <td class="lineup-stat--game">{% if pitcher.decision %}{{ pitcher.decision }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>

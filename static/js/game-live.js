@@ -23,6 +23,30 @@
     if (el) el.hidden = hidden;
   }
 
+  function playFeedItemHtml(play, compact) {
+    var score = '';
+    if (play.away_score !== null && play.away_score !== undefined &&
+        play.home_score !== null && play.home_score !== undefined) {
+      score = '<span class="play-feed-score">' + play.away_score + '-' + play.home_score + '</span>';
+    }
+    var scoringClass = play.scoring ? ' play-feed-item--scoring' : '';
+    var itemClass = 'play-feed-item' + (compact ? ' play-feed-item--compact' : '') + scoringClass;
+    if (compact) {
+      return '<li class="' + itemClass + '">' +
+        '<span class="play-feed-text">' + play.text + '</span>' +
+        score +
+        '</li>';
+    }
+    var period = play.period
+      ? '<span class="play-feed-period">' + play.period + '</span>'
+      : '<span></span>';
+    return '<li class="' + itemClass + '">' +
+      period +
+      '<span class="play-feed-text">' + play.text + '</span>' +
+      score +
+      '</li>';
+  }
+
   function renderPlayList(containerId, plays, scoringOnly) {
     var container = document.getElementById(containerId);
     if (!container) return;
@@ -37,21 +61,47 @@
     }
 
     container.innerHTML = items.map(function (play) {
-      var score = '';
-      if (play.away_score !== null && play.away_score !== undefined &&
-          play.home_score !== null && play.home_score !== undefined) {
-        score = '<span class="play-feed-score">' + play.away_score + '-' + play.home_score + '</span>';
-      }
-      var period = play.period
-        ? '<span class="play-feed-period">' + play.period + '</span>'
-        : '<span></span>';
-      var scoringClass = play.scoring ? ' play-feed-item--scoring' : '';
-      return '<li class="play-feed-item' + scoringClass + '">' +
-        period +
-        '<span class="play-feed-text">' + play.text + '</span>' +
-        score +
-        '</li>';
+      return playFeedItemHtml(play, false);
     }).join('');
+  }
+
+  function renderPlaysByInning(playsByInning) {
+    var mount = document.getElementById('game-recent-plays-mount');
+    if (!mount) return;
+
+    if (!playsByInning || !playsByInning.length) {
+      mount.innerHTML = '<p class="play-feed-empty">No plays yet.</p>';
+      return;
+    }
+
+    mount.innerHTML = playsByInning.map(function (group) {
+      var playsHtml = (group.plays || []).map(function (play) {
+        return playFeedItemHtml(play, true);
+      }).join('');
+      return '<section class="play-inning-group">' +
+        '<h4 class="play-inning-heading">' + group.inning + '</h4>' +
+        '<ul class="play-feed">' + playsHtml + '</ul>' +
+        '</section>';
+    }).join('');
+  }
+
+  function renderRecentPlaysPanel(live, statusState) {
+    var tab = document.getElementById('game-recent-plays-tab');
+    var heading = document.getElementById('game-recent-plays-heading');
+    var isFinal = statusState === 'post';
+
+    if (tab) tab.textContent = isFinal ? 'Plays' : 'Recent Plays';
+    if (heading) heading.textContent = isFinal ? 'Plays' : 'Recent Plays';
+
+    if (isFinal && live.plays_by_inning) {
+      renderPlaysByInning(live.plays_by_inning);
+      return;
+    }
+
+    var mount = document.getElementById('game-recent-plays-mount');
+    if (!mount) return;
+    mount.innerHTML = '<ul class="play-feed" id="game-recent-plays"></ul>';
+    renderPlayList('game-recent-plays', live.recent_plays, false);
   }
 
   function linescoreTeamColor(team) {
@@ -186,6 +236,138 @@
       teamStatsLogo(homeTeam) + '<span class="team-stats__abbr">' + homeAbbr + '</span></div>' +
       '</div>' +
       '<div class="team-stats__rows">' + rows + '</div>';
+  }
+
+  function lineupTeamLogo(team) {
+    if (!team) return '';
+    if (team.logo) {
+      return '<img class="lineup-team__logo" src="' + team.logo + '" alt="" width="28" height="28" loading="lazy">';
+    }
+    return '<span class="lineup-team__logo-fallback">' + (team.abbr || '') + '</span>';
+  }
+
+  function lineupStat(value) {
+    return value != null && value !== '' ? value : '—';
+  }
+
+  function renderLineupBattingTable(batters) {
+    if (!batters || !batters.length) return '';
+
+    var rows = batters.map(function (batter) {
+      var subClass = batter.starter ? '' : ' lineup-table__row--sub';
+      var posHtml = batter.position
+        ? ' <span class="lineup-table__pos">' + batter.position + '</span>'
+        : '';
+      return '<tr class="lineup-table__row' + subClass + '">' +
+        '<th scope="row" class="lineup-table__player">' + batter.name + posHtml + '</th>' +
+        '<td class="lineup-stat--game">' + lineupStat(batter.ab) + '</td>' +
+        '<td class="lineup-stat--game">' + lineupStat(batter.hits) + '</td>' +
+        '<td class="lineup-stat--game">' + lineupStat(batter.runs) + '</td>' +
+        '<td class="lineup-stat--game">' + lineupStat(batter.rbi) + '</td>' +
+        '<td class="lineup-stat--game">' + lineupStat(batter.hr) + '</td>' +
+        '<td class="lineup-table__group--season lineup-stat--season">' + lineupStat(batter.season_avg) + '</td>' +
+        '<td class="lineup-stat--season">' + lineupStat(batter.season_obp) + '</td>' +
+        '<td class="lineup-stat--season">' + lineupStat(batter.season_slg) + '</td>' +
+        '</tr>';
+    }).join('');
+
+    return '<h4 class="lineup-section-title">Batting</h4>' +
+      '<div class="lineup-table-wrap"><table class="lineup-table lineup-table--batting">' +
+      '<colgroup>' +
+      '<col class="lineup-col lineup-col--player">' +
+      '<col class="lineup-col lineup-stat--game">' +
+      '<col class="lineup-col lineup-stat--game">' +
+      '<col class="lineup-col lineup-stat--game">' +
+      '<col class="lineup-col lineup-stat--game">' +
+      '<col class="lineup-col lineup-stat--game">' +
+      '<col class="lineup-col lineup-stat--season">' +
+      '<col class="lineup-col lineup-stat--season">' +
+      '<col class="lineup-col lineup-stat--season">' +
+      '</colgroup>' +
+      '<thead><tr>' +
+      '<th scope="col" class="lineup-table__player-col">Player</th>' +
+      '<th scope="col" colspan="5" class="lineup-table__group lineup-stat--game">Game</th>' +
+      '<th scope="col" colspan="3" class="lineup-table__group lineup-table__group--season lineup-stat--season">Season</th>' +
+      '</tr><tr class="lineup-table__subhead">' +
+      '<th scope="col"></th>' +
+      '<th scope="col" class="lineup-stat--game">AB</th><th scope="col" class="lineup-stat--game">H</th>' +
+      '<th scope="col" class="lineup-stat--game">R</th>' +
+      '<th scope="col" class="lineup-stat--game">RBI</th><th scope="col" class="lineup-stat--game">HR</th>' +
+      '<th scope="col" class="lineup-table__group--season lineup-stat--season">AVG</th>' +
+      '<th scope="col" class="lineup-stat--season">OBP</th><th scope="col" class="lineup-stat--season">SLG</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+
+  function renderLineupPitchingTable(pitchers) {
+    if (!pitchers || !pitchers.length) return '';
+
+    var rows = pitchers.map(function (pitcher) {
+      return '<tr class="lineup-table__row">' +
+        '<th scope="row" class="lineup-table__player">' + pitcher.name + '</th>' +
+        '<td class="lineup-stat--game">' + lineupStat(pitcher.ip) + '</td>' +
+        '<td class="lineup-stat--game">' + lineupStat(pitcher.hits) + '</td>' +
+        '<td class="lineup-stat--game">' + lineupStat(pitcher.er) + '</td>' +
+        '<td class="lineup-stat--game">' + lineupStat(pitcher.bb) + '</td>' +
+        '<td class="lineup-stat--game">' + lineupStat(pitcher.k) + '</td>' +
+        '<td class="lineup-table__group--season lineup-stat--season">' + lineupStat(pitcher.season_era) + '</td>' +
+        '<td class="lineup-stat--game">' + lineupStat(pitcher.decision) + '</td>' +
+        '</tr>';
+    }).join('');
+
+    return '<h4 class="lineup-section-title">Pitching</h4>' +
+      '<div class="lineup-table-wrap"><table class="lineup-table lineup-table--pitching">' +
+      '<colgroup>' +
+      '<col class="lineup-col lineup-col--player">' +
+      '<col class="lineup-col lineup-stat--game">' +
+      '<col class="lineup-col lineup-stat--game">' +
+      '<col class="lineup-col lineup-stat--game">' +
+      '<col class="lineup-col lineup-stat--game">' +
+      '<col class="lineup-col lineup-stat--game">' +
+      '<col class="lineup-col lineup-stat--season">' +
+      '<col class="lineup-col lineup-stat--game">' +
+      '</colgroup>' +
+      '<thead><tr>' +
+      '<th scope="col" class="lineup-table__player-col">Player</th>' +
+      '<th scope="col" colspan="5" class="lineup-table__group lineup-stat--game">Game</th>' +
+      '<th scope="col" class="lineup-table__group lineup-table__group--season lineup-stat--season">Season</th>' +
+      '<th scope="col" class="lineup-stat--game"></th>' +
+      '</tr><tr class="lineup-table__subhead">' +
+      '<th scope="col"></th>' +
+      '<th scope="col" class="lineup-stat--game">IP</th><th scope="col" class="lineup-stat--game">H</th>' +
+      '<th scope="col" class="lineup-stat--game">ER</th>' +
+      '<th scope="col" class="lineup-stat--game">BB</th><th scope="col" class="lineup-stat--game">K</th>' +
+      '<th scope="col" class="lineup-table__group--season lineup-stat--season">ERA</th>' +
+      '<th scope="col" class="lineup-stat--game">Dec</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+
+  function renderLineupTeamHtml(side, team, lineupTeam) {
+    if (!lineupTeam) return '';
+
+    return '<div class="lineup-team lineup-team--' + side + '">' +
+      '<header class="lineup-team__head">' + lineupTeamLogo(team) +
+      '<span class="lineup-team__abbr">' + (lineupTeam.abbr || (team && team.abbr) || '') + '</span></header>' +
+      renderLineupBattingTable(lineupTeam.batters) +
+      renderLineupPitchingTable(lineupTeam.pitchers) +
+      '</div>';
+  }
+
+  function renderLineups(lineups, awayTeam, homeTeam) {
+    var board = document.getElementById('game-lineup-board');
+    if (!board) return;
+
+    if (!lineups || (!lineups.away && !lineups.home)) {
+      board.innerHTML = '<p class="play-feed-empty">No lineup yet.</p>';
+      return;
+    }
+
+    var awayColor = linescoreTeamColor(awayTeam) || '#1a2332';
+    var homeColor = linescoreTeamColor(homeTeam) || '#1a2332';
+    board.style.setProperty('--away-team-color', awayColor);
+    board.style.setProperty('--home-team-color', homeColor);
+    board.innerHTML =
+      renderLineupTeamHtml('away', awayTeam, lineups.away) +
+      renderLineupTeamHtml('home', homeTeam, lineups.home);
   }
 
   function formatDueUpStats(batter) {
@@ -512,9 +694,10 @@
     var live = game.live || {};
     if (live.linescore) renderLinescore(live.linescore, game.away, game.home);
     renderTeamBox(live.team_box, game.away, game.home);
+    renderLineups(live.lineups, game.away, game.home);
     renderSituation(live, game.status_state);
     renderPlayList('game-scoring-plays', live.scoring_plays, false);
-    renderPlayList('game-recent-plays', live.recent_plays, false);
+    renderRecentPlaysPanel(live, game.status_state);
 
     document.title = game.away.abbr + ' @ ' + game.home.abbr + ' — Scoreboard';
   }
@@ -614,6 +797,33 @@
       .catch(function () {});
   }
 
+  function applyLineupStatMode(mode) {
+    var section = document.getElementById('game-lineup-section');
+    var toggle = document.getElementById('lineup-stat-toggle');
+    if (!section) return;
+
+    section.classList.toggle('lineup-show-season', mode === 'season');
+    if (!toggle) return;
+
+    toggle.querySelectorAll('.lineup-stat-toggle__btn').forEach(function (btn) {
+      var isActive = btn.getAttribute('data-lineup-stat') === mode;
+      btn.classList.toggle('is-active', isActive);
+      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+  }
+
+  function initLineupStatToggle() {
+    var toggle = document.getElementById('lineup-stat-toggle');
+    if (!toggle) return;
+
+    toggle.addEventListener('click', function (event) {
+      var btn = event.target.closest('.lineup-stat-toggle__btn');
+      if (!btn) return;
+      applyLineupStatMode(btn.getAttribute('data-lineup-stat'));
+    });
+  }
+
   initDetailTabs();
+  initLineupStatToggle();
   refreshGame();
 })();

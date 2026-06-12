@@ -122,7 +122,7 @@
     </div>
 
     {% set tab_ns = namespace(first=true) %}
-  {% if game.live.linescore or game.live.team_box or game.live.scoring_plays or game.live.recent_plays or game.preview.venue or game.preview.weather_temp is not none or game.preview.broadcasts or game.preview.series_summary %}
+  {% if game.live.linescore or game.live.team_box or game.live.lineups or game.live.scoring_plays or game.live.recent_plays or game.preview.venue or game.preview.weather_temp is not none or game.preview.broadcasts or game.preview.series_summary %}
     <nav class="game-detail-tabs" id="game-detail-tabs" aria-label="Game details">
       {% if game.live.linescore %}
       <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="linescore" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Line Score</button>
@@ -132,12 +132,16 @@
       <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="team-stats" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Team Stats</button>
       {% set tab_ns.first = false %}
       {% endif %}
+      {% if game.live.lineups %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="lineup" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Lineup</button>
+      {% set tab_ns.first = false %}
+      {% endif %}
       {% if game.live.scoring_plays %}
       <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="scoring-plays" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Scoring Plays</button>
       {% set tab_ns.first = false %}
       {% endif %}
-      {% if game.live.recent_plays %}
-      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="recent-plays" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Recent Plays</button>
+      {% if game.live.recent_plays or (game.status_state == 'post' and game.live.plays_by_inning) %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="recent-plays" aria-selected="{{ 'true' if tab_ns.first else 'false' }}" id="game-recent-plays-tab">{% if game.status_state == 'post' %}Plays{% else %}Recent Plays{% endif %}</button>
       {% set tab_ns.first = false %}
       {% endif %}
       {% if game.preview.venue or game.preview.weather_temp is not none or game.preview.broadcasts or game.preview.series_summary %}
@@ -257,6 +261,27 @@
     </section>
     {% endif %}
 
+    {% if game.live.lineups %}
+    <section class="game-detail-section game-detail-panel" id="game-lineup-section" data-panel="lineup"{% if not panel_ns.first %} hidden{% endif %}>
+    {% set panel_ns.first = false %}
+      <div class="lineup-section-header">
+        <h3>Lineup</h3>
+        <div class="lineup-stat-toggle" id="lineup-stat-toggle" role="group" aria-label="Lineup stat type">
+          <button type="button" class="lineup-stat-toggle__btn is-active" data-lineup-stat="game" aria-pressed="true">Game</button>
+          <button type="button" class="lineup-stat-toggle__btn" data-lineup-stat="season" aria-pressed="false">Season</button>
+        </div>
+      </div>
+      <div class="lineup-board" id="game-lineup-board" style="--away-team-color: {{ game.away.win_color or game.away.color or '#1a2332' }}; --home-team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};">
+        {% with side='away', team=game.away, lineup_team=game.live.lineups.away %}
+          {% include "partials/game_lineup_team.html" %}
+        {% endwith %}
+        {% with side='home', team=game.home, lineup_team=game.live.lineups.home %}
+          {% include "partials/game_lineup_team.html" %}
+        {% endwith %}
+      </div>
+    </section>
+    {% endif %}
+
     {% if game.live.scoring_plays %}
     <section class="game-detail-section game-detail-panel" id="game-scoring-section" data-panel="scoring-plays"{% if not panel_ns.first %} hidden{% endif %}>
     {% set panel_ns.first = false %}
@@ -273,21 +298,43 @@
     </section>
     {% endif %}
 
-    {% if game.live.recent_plays %}
+    {% if game.live.recent_plays or (game.status_state == 'post' and game.live.plays_by_inning) %}
     <section class="game-detail-section game-detail-panel" id="game-plays-section" data-panel="recent-plays"{% if not panel_ns.first %} hidden{% endif %}>
     {% set panel_ns.first = false %}
-      <h3>Recent Plays</h3>
-      <ul class="play-feed" id="game-recent-plays">
-        {% for play in game.live.recent_plays %}
-        <li class="play-feed-item{% if play.scoring %} play-feed-item--scoring{% endif %}">
-          {% if play.period %}<span class="play-feed-period">{{ play.period }}</span>{% endif %}
-          <span class="play-feed-text">{{ play.text }}</span>
-          {% if play.away_score is not none and play.home_score is not none %}
-          <span class="play-feed-score">{{ play.away_score }}-{{ play.home_score }}</span>
+      <h3 id="game-recent-plays-heading">{% if game.status_state == 'post' %}Plays{% else %}Recent Plays{% endif %}</h3>
+      <div class="play-feed-scroll" id="game-recent-plays-scroll">
+        <div id="game-recent-plays-mount">
+          {% if game.status_state == 'post' and game.live.plays_by_inning %}
+            {% for inning in game.live.plays_by_inning %}
+            <section class="play-inning-group">
+              <h4 class="play-inning-heading">{{ inning.inning }}</h4>
+              <ul class="play-feed">
+                {% for play in inning.plays %}
+                <li class="play-feed-item play-feed-item--compact{% if play.scoring %} play-feed-item--scoring{% endif %}">
+                  <span class="play-feed-text">{{ play.text }}</span>
+                  {% if play.away_score is not none and play.home_score is not none %}
+                  <span class="play-feed-score">{{ play.away_score }}-{{ play.home_score }}</span>
+                  {% endif %}
+                </li>
+                {% endfor %}
+              </ul>
+            </section>
+            {% endfor %}
+          {% else %}
+            <ul class="play-feed" id="game-recent-plays">
+              {% for play in game.live.recent_plays %}
+              <li class="play-feed-item{% if play.scoring %} play-feed-item--scoring{% endif %}">
+                {% if play.period %}<span class="play-feed-period">{{ play.period }}</span>{% endif %}
+                <span class="play-feed-text">{{ play.text }}</span>
+                {% if play.away_score is not none and play.home_score is not none %}
+                <span class="play-feed-score">{{ play.away_score }}-{{ play.home_score }}</span>
+                {% endif %}
+              </li>
+              {% endfor %}
+            </ul>
           {% endif %}
-        </li>
-        {% endfor %}
-      </ul>
+        </div>
+      </div>
     </section>
     {% endif %}
 

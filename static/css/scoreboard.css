@@ -1018,9 +1018,6 @@ html[data-scoreboard-view="standings"] #tab-standings {
 .game-strip-scoreboard-card {
   flex: 0 0 var(--strip-card-width);
   width: var(--strip-card-width);
-  padding: 0.55rem 0.6rem 0.5rem;
-  gap: 0.45rem;
-  box-shadow: 0 1px 6px rgba(26, 35, 50, 0.06);
 }
 
 .game-strip-scoreboard-card__body {
@@ -1043,12 +1040,6 @@ html[data-scoreboard-view="standings"] #tab-standings {
   font-weight: 600;
   color: #6b7789;
   line-height: 1.25;
-}
-
-.game-strip-scoreboard-card .status-pill {
-  font-size: 0.58rem;
-  padding: 0.14rem 0.4rem;
-  align-self: flex-start;
 }
 
 .game-detail-live-strip__track {
@@ -1968,10 +1959,49 @@ html[data-scoreboard-view="standings"] #tab-standings {
   background: var(--home-team-color);
 }
 
+.play-feed-scroll {
+  max-height: 22rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 -0.15rem;
+  padding: 0 0.15rem;
+}
+
+.play-inning-group {
+  margin-bottom: 0.65rem;
+}
+
+.play-inning-group:last-child {
+  margin-bottom: 0;
+}
+
+.play-inning-heading {
+  margin: 0 0 0.35rem;
+  padding: 0.45rem 0 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1a2332;
+  border-bottom: 1px solid #dde3eb;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 1;
+}
+
+.play-inning-group:first-child .play-inning-heading {
+  padding-top: 0;
+}
+
 .play-feed {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.play-feed-item--compact {
+  grid-template-columns: 1fr auto;
 }
 
 .play-feed-empty {
@@ -2018,4 +2048,322 @@ html[data-scoreboard-view="standings"] #tab-standings {
   font-weight: 800;
   color: #1a2332;
   white-space: nowrap;
+}
+
+.lineup-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.lineup-section-header h3 {
+  margin: 0;
+}
+
+.lineup-stat-toggle {
+  display: none;
+  flex-shrink: 0;
+  padding: 0.15rem;
+  border-radius: 999px;
+  background: #eef1f5;
+  gap: 0.1rem;
+}
+
+.lineup-stat-toggle__btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #5c6778;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.lineup-stat-toggle__btn.is-active {
+  background: #fff;
+  color: #1a2332;
+  box-shadow: 0 1px 4px rgba(26, 35, 50, 0.1);
+}
+
+.lineup-stat-toggle__btn:focus-visible {
+  outline: 2px solid #3d6ea8;
+  outline-offset: 1px;
+}
+
+.lineup-board {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+.lineup-team {
+  min-width: 0;
+  border-left: 3px solid var(--team-accent-color, #1a2332);
+  padding-left: 0.65rem;
+}
+
+.lineup-team--away {
+  --team-accent-color: var(--away-team-color, #1a2332);
+}
+
+.lineup-team--home {
+  --team-accent-color: var(--home-team-color, #1a2332);
+}
+
+.lineup-team + .lineup-team {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #dde3eb;
+}
+
+.lineup-team__head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+}
+
+.lineup-team__logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.lineup-team__logo-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #eef1f5;
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: #5c6778;
+}
+
+.lineup-team__abbr {
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.lineup-team--away .lineup-team__abbr {
+  color: var(--away-team-color, #1a2332);
+}
+
+.lineup-team--home .lineup-team__abbr {
+  color: var(--home-team-color, #1a2332);
+}
+
+.lineup-section-title {
+  margin: 0 0 0.45rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8a95a5;
+}
+
+.lineup-section-title:not(:first-of-type) {
+  margin-top: 0.85rem;
+}
+
+.lineup-table-wrap {
+  margin-bottom: 0.75rem;
+}
+
+.lineup-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.64rem;
+  line-height: 1.25;
+}
+
+.lineup-table--batting .lineup-col--player {
+  width: 30%;
+}
+
+.lineup-table--pitching .lineup-col--player {
+  width: 32%;
+}
+
+.lineup-table thead th {
+  padding: 0.28rem 0.22rem;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8a95a5;
+  text-align: center;
+  border-bottom: 1px solid #dde3eb;
+  white-space: nowrap;
+}
+
+.lineup-table__subhead th {
+  font-size: 0.56rem;
+  padding-top: 0;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.lineup-table__group {
+  border-left: 1px solid #eef1f5;
+}
+
+.lineup-table__group--season {
+  border-left: 2px solid #dde3eb;
+}
+
+.lineup-table thead th.lineup-table__player-col,
+.lineup-table tbody th.lineup-table__player {
+  text-align: left;
+}
+
+.lineup-table tbody td,
+.lineup-table tbody th {
+  padding: 0.38rem 0.22rem;
+  text-align: center;
+  border-bottom: 1px solid #eef1f5;
+  vertical-align: middle;
+}
+
+.lineup-table--batting .lineup-table__subhead th:not(:first-child),
+.lineup-table--batting tbody td,
+.lineup-table--pitching .lineup-table__subhead th:not(:first-child),
+.lineup-table--pitching tbody td {
+  padding-left: 0.42rem;
+  padding-right: 0.42rem;
+}
+
+.lineup-table tbody th.lineup-table__player {
+  padding-right: 0.35rem;
+}
+
+.lineup-table tbody tr:last-child td,
+.lineup-table tbody tr:last-child th {
+  border-bottom: none;
+}
+
+.lineup-table__player {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #1a2332;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.lineup-table__pos {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #8a95a5;
+  white-space: nowrap;
+}
+
+.lineup-table__row--sub .lineup-table__player {
+  color: #5c6778;
+}
+
+.lineup-table tbody td:first-child,
+.lineup-table tbody th.lineup-table__player {
+  font-weight: 700;
+}
+
+@media (min-width: 1024px) {
+  .lineup-board {
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .lineup-team + .lineup-team {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+
+  .lineup-team--home {
+    border-left: none;
+    border-right: 3px solid var(--home-team-color, #1a2332);
+    padding-left: 0;
+    padding-right: 0.65rem;
+  }
+}
+
+@media (max-width: 1023px) {
+  .lineup-table--batting .lineup-col--player {
+    width: 34%;
+  }
+
+  .lineup-table--pitching .lineup-col--player {
+    width: 36%;
+  }
+
+  .lineup-table__player {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 767px) {
+  .lineup-stat-toggle {
+    display: inline-flex;
+  }
+
+  #game-lineup-section .lineup-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #game-lineup-section .lineup-table {
+    table-layout: auto;
+    width: auto;
+  }
+
+  #game-lineup-section .lineup-table thead tr:first-child {
+    display: none;
+  }
+
+  #game-lineup-section .lineup-col--player {
+    width: auto;
+  }
+
+  #game-lineup-section .lineup-table__player {
+    max-width: 8.5rem;
+    white-space: normal;
+  }
+
+  #game-lineup-section .lineup-table--batting .lineup-table__subhead th:not(:first-child),
+  #game-lineup-section .lineup-table--batting tbody td,
+  #game-lineup-section .lineup-table--pitching .lineup-table__subhead th:not(:first-child),
+  #game-lineup-section .lineup-table--pitching tbody td {
+    padding-left: 0.28rem;
+    padding-right: 0.28rem;
+  }
+
+  #game-lineup-section .lineup-stat--game,
+  #game-lineup-section .lineup-stat--season {
+    white-space: nowrap;
+  }
+
+  #game-lineup-section:not(.lineup-show-season) col.lineup-stat--season,
+  #game-lineup-section:not(.lineup-show-season) .lineup-stat--season {
+    display: none;
+  }
+
+  #game-lineup-section.lineup-show-season col.lineup-stat--game,
+  #game-lineup-section.lineup-show-season .lineup-stat--game {
+    display: none;
+  }
+
+  #game-lineup-section.lineup-show-season .lineup-table__group--season {
+    border-left: none;
+  }
 }

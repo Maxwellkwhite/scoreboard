@@ -464,6 +464,118 @@ def _parse_team_box(boxscore_teams: list[dict[str, Any]] | None) -> list[dict[st
     return teams
 
 
+def _athlete_stat_map(
+    keys: list[Any] | None,
+    values: list[Any] | None,
+) -> dict[str, str]:
+    return {
+        str(key): str(value)
+        for key, value in zip(keys or [], values or [])
+        if value is not None
+    }
+
+
+def _pitching_decision(entry: dict[str, Any]) -> str | None:
+    for note in entry.get("notes") or []:
+        if note.get("type") == "pitchingDecision":
+            text = (note.get("text") or "").strip()
+            if text:
+                return text
+    return None
+
+
+def _parse_team_lineup(team_block: dict[str, Any]) -> dict[str, Any]:
+    team = team_block.get("team") or {}
+    lineup: dict[str, Any] = {
+        "abbr": team.get("abbreviation", ""),
+        "batters": [],
+        "pitchers": [],
+    }
+    for stat_group in team_block.get("statistics") or []:
+        stat_type = stat_group.get("type")
+        keys = stat_group.get("keys") or []
+        for entry in stat_group.get("athletes") or []:
+            athlete = entry.get("athlete") or {}
+            name = athlete.get("shortName") or athlete.get("displayName") or ""
+            if not name:
+                continue
+            stats = _athlete_stat_map(keys, entry.get("stats"))
+            position = (entry.get("position") or athlete.get("position") or {}).get(
+                "abbreviation", ""
+            )
+            if stat_type == "batting":
+                lineup["batters"].append({
+                    "name": name,
+                    "bat_order": entry.get("batOrder"),
+                    "position": position,
+                    "starter": bool(entry.get("starter")),
+                    "line": stats.get("hits-atBats") or "0-0",
+                    "ab": stats.get("atBats") or "0",
+                    "runs": stats.get("runs") or "0",
+                    "hits": stats.get("hits") or "0",
+                    "rbi": stats.get("RBIs") or "0",
+                    "hr": stats.get("homeRuns") or "0",
+                    "bb": stats.get("walks") or "0",
+                    "k": stats.get("strikeouts") or "0",
+                    "season_avg": stats.get("avg") or "—",
+                    "season_obp": stats.get("onBasePct") or "—",
+                    "season_slg": stats.get("slugAvg") or "—",
+                })
+            elif stat_type == "pitching":
+                lineup["pitchers"].append({
+                    "name": name,
+                    "starter": bool(entry.get("starter")),
+                    "ip": stats.get("fullInnings.partInnings") or "—",
+                    "hits": stats.get("hits") or "0",
+                    "runs": stats.get("runs") or "0",
+                    "er": stats.get("earnedRuns") or "0",
+                    "bb": stats.get("walks") or "0",
+                    "k": stats.get("strikeouts") or "0",
+                    "hr": stats.get("homeRuns") or "0",
+                    "season_era": stats.get("ERA") or "—",
+                    "decision": _pitching_decision(entry),
+                })
+
+    lineup["batters"].sort(
+        key=lambda batter: (batter.get("bat_order") if batter.get("bat_order") is not None else 99, batter["name"])
+    )
+    lineup["pitchers"].sort(
+        key=lambda pitcher: (0 if pitcher.get("starter") else 1, pitcher["name"])
+    )
+    return lineup
+
+
+def _parse_lineups(
+    payload: dict[str, Any],
+    away: dict[str, Any] | None,
+    home: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    player_blocks = (payload.get("boxscore") or {}).get("players") or []
+    if not player_blocks:
+        return None
+
+    away_id = str((away or {}).get("id") or "")
+    home_id = str((home or {}).get("id") or "")
+    parsed_away = parsed_home = None
+
+    for team_block in player_blocks:
+        team_id = str((team_block.get("team") or {}).get("id") or "")
+        parsed = _parse_team_lineup(team_block)
+        if not parsed["batters"] and not parsed["pitchers"]:
+            continue
+        if team_id and team_id == away_id:
+            parsed_away = parsed
+        elif team_id and team_id == home_id:
+            parsed_home = parsed
+
+    if not parsed_away and not parsed_home:
+        return None
+    return {
+        "away": parsed_away or {"abbr": (away or {}).get("abbr", ""), "batters": [], "pitchers": []},
+        "home": parsed_home or {"abbr": (home or {}).get("abbr", ""), "batters": [], "pitchers": []},
+    }
+
+
 def _parse_win_probability(
     entries: list[dict[str, Any]] | None,
 ) -> dict[str, float] | None:
@@ -480,28 +592,50 @@ def _parse_win_probability(
     }
 
 
+def _parse_play_item(play: dict[str, Any]) -> dict[str, Any] | None:
+    text = (play.get("text") or "").strip()
+    play_type = (play.get("type") or {}).get("type")
+    if not text:
+        return None
+    if play_type == "start-batterpitcher":
+        return None
+    if text.startswith("Pitch ") and play_type != "end-inning":
+        return None
+    return {
+        "text": text,
+        "away_score": _parse_score(play.get("awayScore")),
+        "home_score": _parse_score(play.get("homeScore")),
+        "scoring": bool(play.get("scoringPlay")),
+        "period": (play.get("period") or {}).get("displayValue"),
+    }
+
+
 def _parse_play_feed(plays: list[dict[str, Any]] | None, *, limit: int = 10) -> list[dict[str, Any]]:
     feed = []
     for play in reversed(plays or []):
-        text = (play.get("text") or "").strip()
-        play_type = (play.get("type") or {}).get("type")
-        if not text:
+        item = _parse_play_item(play)
+        if not item:
             continue
-        if play_type == "start-batterpitcher":
-            continue
-        if text.startswith("Pitch ") and play_type != "end-inning":
-            continue
-        feed.append({
-            "text": text,
-            "away_score": _parse_score(play.get("awayScore")),
-            "home_score": _parse_score(play.get("homeScore")),
-            "scoring": bool(play.get("scoringPlay")),
-            "period": (play.get("period") or {}).get("displayValue"),
-        })
+        feed.append(item)
         if len(feed) >= limit:
             break
     feed.reverse()
     return feed
+
+
+def _parse_plays_by_inning(plays: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    groups: dict[str, list[dict[str, Any]]] = {}
+    order: list[str] = []
+    for play in plays or []:
+        item = _parse_play_item(play)
+        if not item:
+            continue
+        inning = item.pop("period") or "Game"
+        if inning not in groups:
+            groups[inning] = []
+            order.append(inning)
+        groups[inning].append(item)
+    return [{"inning": inning, "plays": groups[inning]} for inning in order]
 
 
 def _parse_scoring_plays(plays: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -818,7 +952,7 @@ def parse_game_detail(payload: dict[str, Any]) -> dict[str, Any]:
         "last_five": _parse_last_five(payload.get("lastFiveGames")),
         "broadcasts": broadcasts,
     }
-    game["live"] = {
+    live_data: dict[str, Any] = {
         "linescore": _parse_linescore(comp.get("competitors") or []),
         "situation": live_situation,
         "team_box": _parse_team_box((payload.get("boxscore") or {}).get("teams")),
@@ -826,6 +960,12 @@ def parse_game_detail(payload: dict[str, Any]) -> dict[str, Any]:
         "scoring_plays": _parse_scoring_plays(plays),
         "win_probability": live_win_pct,
     }
+    if game.get("status_state") == "post":
+        live_data["plays_by_inning"] = _parse_plays_by_inning(plays)
+    lineups = _parse_lineups(payload, game.get("away"), game.get("home"))
+    if lineups:
+        live_data["lineups"] = lineups
+    game["live"] = live_data
     return game
 
 
