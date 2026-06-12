@@ -484,6 +484,73 @@ def _pitching_decision(entry: dict[str, Any]) -> str | None:
     return None
 
 
+def _pitching_decision_role(decision: str | None) -> str | None:
+    if not decision:
+        return None
+    lead = decision.strip()[0].upper()
+    return {"W": "win", "L": "loss", "S": "save"}.get(lead)
+
+
+def _pitching_decision_record(decision: str | None) -> str | None:
+    if not decision or "," not in decision:
+        return None
+    record = decision.split(",", 1)[1].strip()
+    return record or None
+
+
+def _ordinal(n: int) -> str:
+    if 11 <= (n % 100) <= 13:
+        return f"{n}th"
+    suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+def _pitching_decision_record_display(
+    decision: str | None,
+    role: str,
+) -> str | None:
+    record = _pitching_decision_record(decision)
+    if not record:
+        return None
+    if role == "save":
+        try:
+            return f"{_ordinal(int(record))} Save"
+        except ValueError:
+            return f"{record} Save"
+    return record
+
+
+def _parse_pitching_decisions(
+    lineups: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not lineups:
+        return None
+
+    decisions: dict[str, Any] = {}
+    for side in ("away", "home"):
+        team_lineup = lineups.get(side) or {}
+        abbr = team_lineup.get("abbr", "")
+        for pitcher in team_lineup.get("pitchers") or []:
+            decision_text = pitcher.get("decision")
+            role = _pitching_decision_role(decision_text)
+            if not role or role in decisions:
+                continue
+            decisions[role] = {
+                "name": pitcher.get("name"),
+                "team_abbr": abbr,
+                "side": side,
+                "record": _pitching_decision_record_display(decision_text, role),
+                "ip": pitcher.get("ip"),
+                "hits": pitcher.get("hits"),
+                "er": pitcher.get("er"),
+                "bb": pitcher.get("bb"),
+                "k": pitcher.get("k"),
+                "season_era": pitcher.get("season_era"),
+            }
+
+    return decisions or None
+
+
 def _parse_team_lineup(team_block: dict[str, Any]) -> dict[str, Any]:
     team = team_block.get("team") or {}
     lineup: dict[str, Any] = {
@@ -576,6 +643,14 @@ def _parse_lineups(
     }
 
 
+def _preview_win_pct(live_pct: Any, projected_pct: Any) -> float | None:
+    if live_pct is not None:
+        return float(live_pct)
+    if projected_pct is not None:
+        return float(projected_pct)
+    return None
+
+
 def _parse_win_probability(
     entries: list[dict[str, Any]] | None,
 ) -> dict[str, float] | None:
@@ -590,6 +665,28 @@ def _parse_win_probability(
         "away_pct": round(100 - home_pct, 1),
         "home_pct": home_pct,
     }
+
+
+def _scoring_side_from_play(
+    play: dict[str, Any],
+    *,
+    away_id: str,
+    home_id: str,
+    prev_away: int | None,
+    prev_home: int | None,
+    away_score: int | None,
+    home_score: int | None,
+) -> str | None:
+    team_id = str((play.get("team") or {}).get("id") or "")
+    if team_id and away_id and team_id == away_id:
+        return "away"
+    if team_id and home_id and team_id == home_id:
+        return "home"
+    if away_score is not None and prev_away is not None and away_score > prev_away:
+        return "away"
+    if home_score is not None and prev_home is not None and home_score > prev_home:
+        return "home"
+    return None
 
 
 def _parse_play_item(play: dict[str, Any]) -> dict[str, Any] | None:
@@ -623,13 +720,37 @@ def _parse_play_feed(plays: list[dict[str, Any]] | None, *, limit: int = 10) -> 
     return feed
 
 
-def _parse_plays_by_inning(plays: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+def _parse_plays_by_inning(
+    plays: list[dict[str, Any]] | None,
+    *,
+    away_id: str = "",
+    home_id: str = "",
+) -> list[dict[str, Any]]:
     groups: dict[str, list[dict[str, Any]]] = {}
     order: list[str] = []
+    prev_away = prev_home = None
     for play in plays or []:
         item = _parse_play_item(play)
         if not item:
             continue
+        if item.get("scoring"):
+            scoring_side = _scoring_side_from_play(
+                play,
+                away_id=away_id,
+                home_id=home_id,
+                prev_away=prev_away,
+                prev_home=prev_home,
+                away_score=item.get("away_score"),
+                home_score=item.get("home_score"),
+            )
+            if scoring_side:
+                item["scoring_side"] = scoring_side
+        away_score = item.get("away_score")
+        home_score = item.get("home_score")
+        if away_score is not None:
+            prev_away = away_score
+        if home_score is not None:
+            prev_home = home_score
         inning = item.pop("period") or "Game"
         if inning not in groups:
             groups[inning] = []
@@ -638,20 +759,49 @@ def _parse_plays_by_inning(plays: list[dict[str, Any]] | None) -> list[dict[str,
     return [{"inning": inning, "plays": groups[inning]} for inning in order]
 
 
-def _parse_scoring_plays(plays: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+def _parse_scoring_plays(
+    plays: list[dict[str, Any]] | None,
+    *,
+    away_id: str = "",
+    home_id: str = "",
+) -> list[dict[str, Any]]:
     scoring = []
+    prev_away = prev_home = None
     for play in plays or []:
+        away_score = _parse_score(play.get("awayScore"))
+        home_score = _parse_score(play.get("homeScore"))
         if not play.get("scoringPlay"):
+            if away_score is not None:
+                prev_away = away_score
+            if home_score is not None:
+                prev_home = home_score
             continue
         text = (play.get("text") or "").strip()
         if not text:
             continue
-        scoring.append({
+        entry = {
             "text": text,
-            "away_score": _parse_score(play.get("awayScore")),
-            "home_score": _parse_score(play.get("homeScore")),
+            "away_score": away_score,
+            "home_score": home_score,
             "period": (play.get("period") or {}).get("displayValue"),
-        })
+            "scoring": True,
+        }
+        scoring_side = _scoring_side_from_play(
+            play,
+            away_id=away_id,
+            home_id=home_id,
+            prev_away=prev_away,
+            prev_home=prev_home,
+            away_score=away_score,
+            home_score=home_score,
+        )
+        if scoring_side:
+            entry["scoring_side"] = scoring_side
+        scoring.append(entry)
+        if away_score is not None:
+            prev_away = away_score
+        if home_score is not None:
+            prev_home = home_score
     return scoring[-10:]
 
 
@@ -943,8 +1093,14 @@ def parse_game_detail(payload: dict[str, Any]) -> dict[str, Any]:
         "venue_image": venue_image,
         "weather_temp": weather.get("temperature"),
         "weather_condition": weather.get("displayValue"),
-        "away_win_pct": (live_win_pct or {}).get("away_pct") or away_pred.get("gameProjection"),
-        "home_win_pct": (live_win_pct or {}).get("home_pct") or home_pred.get("gameProjection"),
+        "away_win_pct": _preview_win_pct(
+            (live_win_pct or {}).get("away_pct"),
+            away_pred.get("gameProjection"),
+        ),
+        "home_win_pct": _preview_win_pct(
+            (live_win_pct or {}).get("home_pct"),
+            home_pred.get("gameProjection"),
+        ),
         "spread": pick.get("spread"),
         "over_under": pick.get("overUnder"),
         "series_summary": season_series.get("summary"),
@@ -952,19 +1108,28 @@ def parse_game_detail(payload: dict[str, Any]) -> dict[str, Any]:
         "last_five": _parse_last_five(payload.get("lastFiveGames")),
         "broadcasts": broadcasts,
     }
+    away_id = str((game.get("away") or {}).get("id") or "")
+    home_id = str((game.get("home") or {}).get("id") or "")
     live_data: dict[str, Any] = {
         "linescore": _parse_linescore(comp.get("competitors") or []),
         "situation": live_situation,
         "team_box": _parse_team_box((payload.get("boxscore") or {}).get("teams")),
         "recent_plays": _parse_play_feed(plays),
-        "scoring_plays": _parse_scoring_plays(plays),
+        "scoring_plays": _parse_scoring_plays(plays, away_id=away_id, home_id=home_id),
         "win_probability": live_win_pct,
     }
     if game.get("status_state") == "post":
-        live_data["plays_by_inning"] = _parse_plays_by_inning(plays)
+        live_data["plays_by_inning"] = _parse_plays_by_inning(
+            plays,
+            away_id=away_id,
+            home_id=home_id,
+        )
     lineups = _parse_lineups(payload, game.get("away"), game.get("home"))
     if lineups:
         live_data["lineups"] = lineups
+        pitching_decisions = _parse_pitching_decisions(lineups)
+        if pitching_decisions:
+            live_data["pitching_decisions"] = pitching_decisions
     game["live"] = live_data
     return game
 

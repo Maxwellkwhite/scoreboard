@@ -36,52 +36,75 @@
           </span>
         </div>
 
-        <div class="game-card-teams">
-          {% for side in [('away', game.away), ('home', game.home)] %}
-          {% set team = side[1] %}
-          {% set team_role = 'batting' if game.status_state == 'in' and game.batting_side == side[0] else ('pitching' if game.status_state == 'in' and game.batting_side and game.batting_side != side[0] else none) %}
-          <div id="game-team-{{ side[0] }}" class="game-card-team game-card-team--{{ side[0] }}{% if team.winner %} game-card-team--winner{% endif %}" style="--team-color: {{ team.win_color or team.color or '#1a2332' }};">
-            {% if team.logo %}
-            <img class="game-card-logo" src="{{ team.logo }}" alt="" width="48" height="48" loading="lazy">
-            {% else %}
-            <div class="game-card-logo game-card-logo--placeholder">{{ team.abbr }}</div>
-            {% endif %}
-            <div class="game-card-team-meta">
-              <span class="game-card-abbr">{{ team.abbr }}</span>
-              <span class="game-card-name">{{ team.short_name or team.name }}</span>
-              {% if team.record %}<span class="game-card-record">{{ team.record }}</span>{% endif %}
-            </div>
-            <div class="game-card-score-wrap">
-              <span class="game-card-role{% if team_role %} game-card-role--{{ team_role }}{% endif %}" id="game-{{ side[0] }}-role"{% if not team_role %} hidden{% endif %}{% if team_role %} style="color: {{ team.win_color or team.color }}; border-color: {{ team.win_color or team.color }};"{% endif %}>{% if team_role == 'batting' %}Batting{% elif team_role == 'pitching' %}Pitching{% endif %}</span>
-              <span class="game-card-score" id="game-{{ side[0] }}-score">{{ team.score if team.score is not none else '0' }}</span>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-
-        <div class="game-detail-win" id="game-win-bar" style="--away-win-color: {{ game.away.win_color or game.away.color or '#56b6c6' }}; --home-win-color: {{ game.home.win_color or game.home.color or '#22a06b' }};"{% if not game.preview.away_win_pct and not game.preview.home_win_pct %} hidden{% endif %}>
-          <div class="game-detail-win-labels">
-            <span class="game-detail-win-pct game-detail-win-pct--away">
+        {% set has_winner = game.away.winner or game.home.winner %}
+        {% set away_role = 'batting' if game.status_state == 'in' and game.batting_side == 'away' else ('pitching' if game.status_state == 'in' and game.batting_side == 'home' else none) %}
+        {% set home_role = 'batting' if game.status_state == 'in' and game.batting_side == 'home' else ('pitching' if game.status_state == 'in' and game.batting_side == 'away' else none) %}
+        <div class="game-detail-hero-main">
+          <div class="game-detail-matchup-row">
+            <div id="game-team-away" class="game-card-team game-card-team--away game-detail-matchup-team game-detail-matchup-team--away{% if game.away.winner %} game-card-team--winner{% elif game.status_state == 'post' and has_winner %} game-card-team--loser{% endif %}" style="--team-color: {{ game.away.win_color or game.away.color or '#1a2332' }};">
               {% if game.away.logo %}
-              <img class="game-detail-win-logo" src="{{ game.away.logo }}" alt="" width="16" height="16" loading="lazy">
+              <img class="game-card-logo" src="{{ game.away.logo }}" alt="" width="48" height="48" loading="lazy">
               {% else %}
-              <span class="game-detail-win-logo game-detail-win-logo--placeholder">{{ game.away.abbr }}</span>
+              <div class="game-card-logo game-card-logo--placeholder">{{ game.away.abbr }}</div>
               {% endif %}
-              <span class="game-detail-win-pct-value"><span id="game-away-win-pct-value">{{ game.preview.away_win_pct or 0 }}</span>%</span>
-            </span>
-            <span class="game-detail-win-pct-center">Win Probability</span>
-            <span class="game-detail-win-pct game-detail-win-pct--home">
-              <span class="game-detail-win-pct-value"><span id="game-home-win-pct-value">{{ game.preview.home_win_pct or 0 }}</span>%</span>
+              <div class="game-card-team-meta">
+                <span class="game-card-abbr">{{ game.away.abbr }}</span>
+                <span class="game-card-name">{{ game.away.short_name or game.away.name }}</span>
+                {% if game.away.record %}<span class="game-card-record">{{ game.away.record }}</span>{% endif %}
+              </div>
+            </div>
+
+            <div class="game-detail-matchup-scores">
+              <div class="game-detail-matchup-score game-detail-matchup-score--away" style="--team-color: {{ game.away.win_color or game.away.color or '#1a2332' }};">
+                <span class="game-card-role{% if away_role %} game-card-role--{{ away_role }}{% endif %}" id="game-away-role"{% if not away_role %} hidden{% endif %}{% if away_role %} style="color: {{ game.away.win_color or game.away.color }}; border-color: {{ game.away.win_color or game.away.color }};"{% endif %}>{% if away_role == 'batting' %}Batting{% elif away_role == 'pitching' %}Pitching{% endif %}</span>
+                <span class="game-card-score" id="game-away-score">{{ game.away.score if game.away.score is not none else '0' }}</span>
+              </div>
+              <span class="game-detail-matchup-score-sep" aria-hidden="true">–</span>
+              <div class="game-detail-matchup-score game-detail-matchup-score--home" style="--team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};">
+                <span class="game-card-role{% if home_role %} game-card-role--{{ home_role }}{% endif %}" id="game-home-role"{% if not home_role %} hidden{% endif %}{% if home_role %} style="color: {{ game.home.win_color or game.home.color }}; border-color: {{ game.home.win_color or game.home.color }};"{% endif %}>{% if home_role == 'batting' %}Batting{% elif home_role == 'pitching' %}Pitching{% endif %}</span>
+                <span class="game-card-score" id="game-home-score">{{ game.home.score if game.home.score is not none else '0' }}</span>
+              </div>
+            </div>
+
+            <div id="game-team-home" class="game-card-team game-card-team--home game-detail-matchup-team game-detail-matchup-team--home{% if game.home.winner %} game-card-team--winner{% elif game.status_state == 'post' and has_winner %} game-card-team--loser{% endif %}" style="--team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};">
+              <div class="game-card-team-meta">
+                <span class="game-card-abbr">{{ game.home.abbr }}</span>
+                <span class="game-card-name">{{ game.home.short_name or game.home.name }}</span>
+                {% if game.home.record %}<span class="game-card-record">{{ game.home.record }}</span>{% endif %}
+              </div>
               {% if game.home.logo %}
-              <img class="game-detail-win-logo" src="{{ game.home.logo }}" alt="" width="16" height="16" loading="lazy">
+              <img class="game-card-logo" src="{{ game.home.logo }}" alt="" width="48" height="48" loading="lazy">
               {% else %}
-              <span class="game-detail-win-logo game-detail-win-logo--placeholder">{{ game.home.abbr }}</span>
+              <div class="game-card-logo game-card-logo--placeholder">{{ game.home.abbr }}</div>
               {% endif %}
-            </span>
+            </div>
           </div>
-          <div class="game-detail-win-track" role="presentation">
-            <div class="game-detail-win-fill game-detail-win-fill--away" id="game-away-win-fill" style="width: {{ game.preview.away_win_pct or 50 }}%"></div>
-            <div class="game-detail-win-fill game-detail-win-fill--home" id="game-home-win-fill" style="width: {{ game.preview.home_win_pct or 50 }}%"></div>
+
+          {% set away_win_pct = game.preview.away_win_pct if game.preview.away_win_pct is not none else (100 - game.preview.home_win_pct if game.preview.home_win_pct is not none else none) %}
+          <div class="game-detail-win" id="game-win-bar" style="--away-win-color: {{ game.away.win_color or game.away.color or '#56b6c6' }}; --home-win-color: {{ game.home.win_color or game.home.color or '#22a06b' }};"{% if away_win_pct is none and game.preview.home_win_pct is none %} hidden{% endif %}>
+            <div class="game-detail-win-labels">
+              <span class="game-detail-win-pct game-detail-win-pct--away">
+                {% if game.away.logo %}
+                <img class="game-detail-win-logo" src="{{ game.away.logo }}" alt="" width="16" height="16" loading="lazy">
+                {% else %}
+                <span class="game-detail-win-logo game-detail-win-logo--placeholder">{{ game.away.abbr }}</span>
+                {% endif %}
+                <span class="game-detail-win-pct-value"><span id="game-away-win-pct-value">{{ away_win_pct if away_win_pct is not none else 0 }}</span>%</span>
+              </span>
+              <span class="game-detail-win-pct-center">Win Probability</span>
+              <span class="game-detail-win-pct game-detail-win-pct--home">
+                <span class="game-detail-win-pct-value"><span id="game-home-win-pct-value">{{ game.preview.home_win_pct if game.preview.home_win_pct is not none else (100 - away_win_pct if away_win_pct is not none else 0) }}</span>%</span>
+                {% if game.home.logo %}
+                <img class="game-detail-win-logo" src="{{ game.home.logo }}" alt="" width="16" height="16" loading="lazy">
+                {% else %}
+                <span class="game-detail-win-logo game-detail-win-logo--placeholder">{{ game.home.abbr }}</span>
+                {% endif %}
+              </span>
+            </div>
+            <div class="game-detail-win-track" role="presentation">
+              <div class="game-detail-win-fill game-detail-win-fill--away" id="game-away-win-fill" style="width: {{ away_win_pct if away_win_pct is not none else 50 }}%"></div>
+              <div class="game-detail-win-fill game-detail-win-fill--home" id="game-home-win-fill"></div>
+            </div>
           </div>
         </div>
       </section>
@@ -136,11 +159,7 @@
       <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="lineup" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Lineup</button>
       {% set tab_ns.first = false %}
       {% endif %}
-      {% if game.live.scoring_plays %}
-      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="scoring-plays" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Scoring Plays</button>
-      {% set tab_ns.first = false %}
-      {% endif %}
-      {% if game.live.recent_plays or (game.status_state == 'post' and game.live.plays_by_inning) %}
+      {% if game.live.scoring_plays or game.live.recent_plays or (game.status_state == 'post' and game.live.plays_by_inning) %}
       <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="recent-plays" aria-selected="{{ 'true' if tab_ns.first else 'false' }}" id="game-recent-plays-tab">{% if game.status_state == 'post' %}Plays{% else %}Recent Plays{% endif %}</button>
       {% set tab_ns.first = false %}
       {% endif %}
@@ -190,6 +209,7 @@
           </tbody>
         </table>
       </div>
+      {% include 'partials/game_pitching_decisions.html' %}
     </section>
     {% endif %}
 
@@ -282,35 +302,54 @@
     </section>
     {% endif %}
 
-    {% if game.live.scoring_plays %}
-    <section class="game-detail-section game-detail-panel" id="game-scoring-section" data-panel="scoring-plays"{% if not panel_ns.first %} hidden{% endif %}>
-    {% set panel_ns.first = false %}
-      <h3>Scoring Plays</h3>
-      <ul class="play-feed" id="game-scoring-plays">
-        {% for play in game.live.scoring_plays %}
-        <li class="play-feed-item play-feed-item--scoring">
-          {% if play.period %}<span class="play-feed-period">{{ play.period }}</span>{% endif %}
-          <span class="play-feed-text">{{ play.text }}</span>
-          <span class="play-feed-score">{{ play.away_score }}-{{ play.home_score }}</span>
-        </li>
-        {% endfor %}
-      </ul>
-    </section>
-    {% endif %}
-
-    {% if game.live.recent_plays or (game.status_state == 'post' and game.live.plays_by_inning) %}
+    {% if game.live.scoring_plays or game.live.recent_plays or (game.status_state == 'post' and game.live.plays_by_inning) %}
     <section class="game-detail-section game-detail-panel" id="game-plays-section" data-panel="recent-plays"{% if not panel_ns.first %} hidden{% endif %}>
     {% set panel_ns.first = false %}
       <h3 id="game-recent-plays-heading">{% if game.status_state == 'post' %}Plays{% else %}Recent Plays{% endif %}</h3>
-      <div class="play-feed-scroll" id="game-recent-plays-scroll">
-        <div id="game-recent-plays-mount">
-          {% if game.status_state == 'post' and game.live.plays_by_inning %}
-            {% for inning in game.live.plays_by_inning %}
-            <section class="play-inning-group">
-              <h4 class="play-inning-heading">{{ inning.inning }}</h4>
+      {% if game.live.scoring_plays %}
+      <div class="scoring-plays-inline scoring-plays-inline--panel" id="game-scoring-plays-section">
+        <h4 class="scoring-plays-inline__title">Scoring Plays</h4>
+        <ul class="play-feed play-feed--plain" id="game-scoring-plays">
+          {% for play in game.live.scoring_plays %}
+          {% set scoring_team = game.away if play.scoring_side == 'away' else (game.home if play.scoring_side == 'home' else none) %}
+          <li class="play-feed-item play-feed-item--scoring-summary">
+            {% if scoring_team %}
+            <span class="play-feed-team" style="--team-color: {{ scoring_team.win_color or scoring_team.color or '#1a2332' }};">
+              {% if scoring_team.logo %}
+              <img class="play-feed-team__logo" src="{{ scoring_team.logo }}" alt="" width="20" height="20" loading="lazy">
+              {% else %}
+              <span class="play-feed-team__logo play-feed-team__logo--placeholder">{{ scoring_team.abbr }}</span>
+              {% endif %}
+              <span class="play-feed-team__abbr">{{ scoring_team.abbr }}</span>
+            </span>
+            {% else %}
+            <span class="play-feed-team play-feed-team--empty" aria-hidden="true"></span>
+            {% endif %}
+            {% if play.period %}<span class="play-feed-period">{{ play.period }}</span>{% else %}<span class="play-feed-period"></span>{% endif %}
+            <span class="play-feed-text">{{ play.text }}</span>
+            <span class="play-feed-score">{{ play.away_score }}-{{ play.home_score }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% else %}
+      <div class="scoring-plays-inline scoring-plays-inline--panel" id="game-scoring-plays-section" hidden>
+        <h4 class="scoring-plays-inline__title">Scoring Plays</h4>
+        <ul class="play-feed play-feed--plain" id="game-scoring-plays"></ul>
+      </div>
+      {% endif %}
+      {% if game.live.recent_plays or (game.status_state == 'post' and game.live.plays_by_inning) %}
+      <h4 class="plays-panel__subhead" id="game-all-plays-heading">{% if game.status_state == 'post' %}Play-by-Play{% else %}Recent{% endif %}</h4>
+      {% endif %}
+      <div id="game-recent-plays-mount">
+        {% if game.status_state == 'post' and game.live.plays_by_inning %}
+          {% for inning in game.live.plays_by_inning %}
+          <details class="play-inning-collapse" data-inning-key="{{ inning.inning }}"{% if loop.first %} open{% endif %}>
+            <summary class="play-inning-heading">{{ inning.inning }}</summary>
+            <div class="play-inning-body">
               <ul class="play-feed">
                 {% for play in inning.plays %}
-                <li class="play-feed-item play-feed-item--compact{% if play.scoring %} play-feed-item--scoring{% endif %}">
+                <li class="play-feed-item play-feed-item--compact{% if play.scoring %} play-feed-item--scoring{% endif %}"{% if play.scoring and play.scoring_side == 'away' %} style="--scoring-team-color: {{ game.away.win_color or game.away.color or '#1a2332' }};"{% elif play.scoring and play.scoring_side == 'home' %} style="--scoring-team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};"{% endif %}>
                   <span class="play-feed-text">{{ play.text }}</span>
                   {% if play.away_score is not none and play.home_score is not none %}
                   <span class="play-feed-score">{{ play.away_score }}-{{ play.home_score }}</span>
@@ -318,22 +357,22 @@
                 </li>
                 {% endfor %}
               </ul>
-            </section>
+            </div>
+          </details>
+          {% endfor %}
+        {% else %}
+          <ul class="play-feed" id="game-recent-plays">
+            {% for play in game.live.recent_plays %}
+            <li class="play-feed-item{% if play.scoring %} play-feed-item--scoring{% endif %}"{% if play.scoring and play.scoring_side == 'away' %} style="--scoring-team-color: {{ game.away.win_color or game.away.color or '#1a2332' }};"{% elif play.scoring and play.scoring_side == 'home' %} style="--scoring-team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};"{% endif %}>
+              {% if play.period %}<span class="play-feed-period">{{ play.period }}</span>{% endif %}
+              <span class="play-feed-text">{{ play.text }}</span>
+              {% if play.away_score is not none and play.home_score is not none %}
+              <span class="play-feed-score">{{ play.away_score }}-{{ play.home_score }}</span>
+              {% endif %}
+            </li>
             {% endfor %}
-          {% else %}
-            <ul class="play-feed" id="game-recent-plays">
-              {% for play in game.live.recent_plays %}
-              <li class="play-feed-item{% if play.scoring %} play-feed-item--scoring{% endif %}">
-                {% if play.period %}<span class="play-feed-period">{{ play.period }}</span>{% endif %}
-                <span class="play-feed-text">{{ play.text }}</span>
-                {% if play.away_score is not none and play.home_score is not none %}
-                <span class="play-feed-score">{{ play.away_score }}-{{ play.home_score }}</span>
-                {% endif %}
-              </li>
-              {% endfor %}
-            </ul>
-          {% endif %}
-        </div>
+          </ul>
+        {% endif %}
       </div>
     </section>
     {% endif %}

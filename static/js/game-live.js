@@ -23,16 +23,59 @@
     if (el) el.hidden = hidden;
   }
 
-  function playFeedItemHtml(play, compact) {
+  function scoringPlayStyle(play, awayTeam, homeTeam) {
+    if (!play.scoring || !play.scoring_side) return '';
+    var team = play.scoring_side === 'home' ? homeTeam : awayTeam;
+    var color = linescoreTeamColor(team) || '#1a2332';
+    return ' style="--scoring-team-color:' + color + ';"';
+  }
+
+  function scoringPlayTeamBadge(team) {
+    if (!team) {
+      return '<span class="play-feed-team play-feed-team--empty" aria-hidden="true"></span>';
+    }
+    var color = linescoreTeamColor(team) || '#1a2332';
+    var logo = team.logo
+      ? '<img class="play-feed-team__logo" src="' + team.logo + '" alt="" width="20" height="20" loading="lazy">'
+      : '<span class="play-feed-team__logo play-feed-team__logo--placeholder">' + (team.abbr || '') + '</span>';
+    return '<span class="play-feed-team" style="--team-color:' + color + ';">' +
+      logo +
+      '<span class="play-feed-team__abbr">' + (team.abbr || '') + '</span>' +
+      '</span>';
+  }
+
+  function scoringPlaySummaryHtml(play, awayTeam, homeTeam) {
+    var team = play.scoring_side === 'home'
+      ? homeTeam
+      : (play.scoring_side === 'away' ? awayTeam : null);
     var score = '';
     if (play.away_score !== null && play.away_score !== undefined &&
         play.home_score !== null && play.home_score !== undefined) {
       score = '<span class="play-feed-score">' + play.away_score + '-' + play.home_score + '</span>';
     }
-    var scoringClass = play.scoring ? ' play-feed-item--scoring' : '';
+    var period = play.period
+      ? '<span class="play-feed-period">' + play.period + '</span>'
+      : '<span class="play-feed-period"></span>';
+    return '<li class="play-feed-item play-feed-item--scoring-summary">' +
+      scoringPlayTeamBadge(team) +
+      period +
+      '<span class="play-feed-text">' + play.text + '</span>' +
+      score +
+      '</li>';
+  }
+
+  function playFeedItemHtml(play, compact, awayTeam, homeTeam, highlightScoring) {
+    var score = '';
+    if (play.away_score !== null && play.away_score !== undefined &&
+        play.home_score !== null && play.home_score !== undefined) {
+      score = '<span class="play-feed-score">' + play.away_score + '-' + play.home_score + '</span>';
+    }
+    var useHighlight = highlightScoring !== false && play.scoring;
+    var scoringClass = useHighlight ? ' play-feed-item--scoring' : '';
     var itemClass = 'play-feed-item' + (compact ? ' play-feed-item--compact' : '') + scoringClass;
+    var itemStyle = useHighlight ? scoringPlayStyle(play, awayTeam, homeTeam) : '';
     if (compact) {
-      return '<li class="' + itemClass + '">' +
+      return '<li class="' + itemClass + '"' + itemStyle + '>' +
         '<span class="play-feed-text">' + play.text + '</span>' +
         score +
         '</li>';
@@ -40,32 +83,41 @@
     var period = play.period
       ? '<span class="play-feed-period">' + play.period + '</span>'
       : '<span></span>';
-    return '<li class="' + itemClass + '">' +
+    return '<li class="' + itemClass + '"' + itemStyle + '>' +
       period +
       '<span class="play-feed-text">' + play.text + '</span>' +
       score +
       '</li>';
   }
 
-  function renderPlayList(containerId, plays, scoringOnly) {
+  function renderPlayList(containerId, plays, scoringOnly, awayTeam, homeTeam, highlightScoring) {
     var container = document.getElementById(containerId);
     if (!container) return;
+    var isScoringList = containerId === 'game-scoring-plays';
+    var section = isScoringList ? document.getElementById('game-scoring-plays-section') : null;
 
     var items = (plays || []).filter(function (play) {
       return !scoringOnly || play.scoring;
     });
 
     if (!items.length) {
-      container.innerHTML = '<li class="play-feed-empty">No plays yet.</li>';
+      if (section) section.hidden = true;
+      container.innerHTML = isScoringList
+        ? ''
+        : '<li class="play-feed-empty">No plays yet.</li>';
       return;
     }
 
+    if (section) section.hidden = false;
     container.innerHTML = items.map(function (play) {
-      return playFeedItemHtml(play, false);
+      if (isScoringList) {
+        return scoringPlaySummaryHtml(play, awayTeam, homeTeam);
+      }
+      return playFeedItemHtml(play, false, awayTeam, homeTeam, highlightScoring);
     }).join('');
   }
 
-  function renderPlaysByInning(playsByInning) {
+  function renderPlaysByInning(playsByInning, awayTeam, homeTeam) {
     var mount = document.getElementById('game-recent-plays-mount');
     if (!mount) return;
 
@@ -74,34 +126,53 @@
       return;
     }
 
-    mount.innerHTML = playsByInning.map(function (group) {
+    var openInnings = {};
+    mount.querySelectorAll('.play-inning-collapse[open]').forEach(function (el) {
+      var key = el.getAttribute('data-inning-key');
+      if (key) openInnings[key] = true;
+    });
+    var hasOpenState = Object.keys(openInnings).length > 0;
+
+    mount.innerHTML = playsByInning.map(function (group, index) {
+      var inningKey = group.inning || String(index);
+      var isOpen = hasOpenState ? Boolean(openInnings[inningKey]) : index === 0;
       var playsHtml = (group.plays || []).map(function (play) {
-        return playFeedItemHtml(play, true);
+        return playFeedItemHtml(play, true, awayTeam, homeTeam);
       }).join('');
-      return '<section class="play-inning-group">' +
-        '<h4 class="play-inning-heading">' + group.inning + '</h4>' +
-        '<ul class="play-feed">' + playsHtml + '</ul>' +
-        '</section>';
+      return '<details class="play-inning-collapse" data-inning-key="' + inningKey + '"' +
+        (isOpen ? ' open' : '') + '>' +
+        '<summary class="play-inning-heading">' + group.inning + '</summary>' +
+        '<div class="play-inning-body"><ul class="play-feed">' + playsHtml + '</ul></div>' +
+        '</details>';
     }).join('');
   }
 
-  function renderRecentPlaysPanel(live, statusState) {
+  function renderRecentPlaysPanel(live, statusState, awayTeam, homeTeam) {
     var tab = document.getElementById('game-recent-plays-tab');
     var heading = document.getElementById('game-recent-plays-heading');
+    var allPlaysHeading = document.getElementById('game-all-plays-heading');
     var isFinal = statusState === 'post';
+    var hasAllPlays = Boolean(
+      (isFinal && live.plays_by_inning && live.plays_by_inning.length) ||
+      (live.recent_plays && live.recent_plays.length)
+    );
 
     if (tab) tab.textContent = isFinal ? 'Plays' : 'Recent Plays';
     if (heading) heading.textContent = isFinal ? 'Plays' : 'Recent Plays';
+    if (allPlaysHeading) {
+      allPlaysHeading.hidden = !hasAllPlays;
+      allPlaysHeading.textContent = isFinal ? 'Play-by-Play' : 'Recent';
+    }
 
     if (isFinal && live.plays_by_inning) {
-      renderPlaysByInning(live.plays_by_inning);
+      renderPlaysByInning(live.plays_by_inning, awayTeam, homeTeam);
       return;
     }
 
     var mount = document.getElementById('game-recent-plays-mount');
     if (!mount) return;
     mount.innerHTML = '<ul class="play-feed" id="game-recent-plays"></ul>';
-    renderPlayList('game-recent-plays', live.recent_plays, false);
+    renderPlayList('game-recent-plays', live.recent_plays, false, awayTeam, homeTeam);
   }
 
   function linescoreTeamColor(team) {
@@ -139,6 +210,85 @@
       '<thead><tr>' + headerCells.join('') + '</tr></thead>' +
       '<tbody>' + row('away', awayTeam) + row('home', homeTeam) + '</tbody>';
 
+  }
+
+  var PITCHING_DECISION_ROLES = [
+    ['win', 'Win'],
+    ['loss', 'Loss'],
+    ['save', 'Save']
+  ];
+
+  function pitchingDecisionRecord(role, record) {
+    if (!record) return '';
+    if (role !== 'save') return record;
+    var n = parseInt(record, 10);
+    if (isNaN(n)) return record + ' Save';
+    var mod100 = n % 100;
+    var suffix = 'th';
+    if (mod100 < 11 || mod100 > 13) {
+      suffix = { 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th';
+    }
+    return n + suffix + ' Save';
+  }
+
+  function pitchingDecisionTeamColor(pitcher, awayTeam, homeTeam) {
+    var team = pitcher.side === 'home' ? homeTeam : awayTeam;
+    return linescoreTeamColor(team) || '#1a2332';
+  }
+
+  function pitchingDecisionStatsLine(pitcher) {
+    return lineupStat(pitcher.ip) + ' IP · ' +
+      lineupStat(pitcher.hits) + ' H · ' +
+      lineupStat(pitcher.er) + ' ER · ' +
+      lineupStat(pitcher.bb) + ' BB · ' +
+      lineupStat(pitcher.k) + ' K · ' +
+      lineupStat(pitcher.season_era) + ' ERA';
+  }
+
+  function renderPitchingDecisionCard(role, label, pitcher, awayTeam, homeTeam) {
+    if (!pitcher) return '';
+
+    var teamColor = pitchingDecisionTeamColor(pitcher, awayTeam, homeTeam);
+    var teamHtml = pitcher.team_abbr
+      ? '<span class="pitching-decision__team">' + pitcher.team_abbr + '</span>'
+      : '';
+    var recordText = pitchingDecisionRecord(role, pitcher.record);
+    var recordHtml = recordText
+      ? '<span class="pitching-decision__record"> · ' + recordText + '</span>'
+      : '';
+
+    return '<article class="pitching-decision pitching-decision--' + role + '" style="--pitching-team-color:' + teamColor + ';">' +
+      '<p class="pitching-decision__label-line">' +
+      '<span class="pitching-decision__label">' + label + '</span>' +
+      '</p>' +
+      '<p class="pitching-decision__player-line">' +
+      '<span class="pitching-decision__name">' + pitcher.name + '</span>' +
+      teamHtml +
+      recordHtml +
+      '</p>' +
+      '<p class="pitching-decision__stats">' + pitchingDecisionStatsLine(pitcher) + '</p>' +
+      '</article>';
+  }
+
+  function renderPitchingDecisions(decisions, awayTeam, homeTeam) {
+    var section = document.getElementById('game-pitching-decisions');
+    if (!section) return;
+
+    if (!decisions || (!decisions.win && !decisions.loss && !decisions.save)) {
+      section.hidden = true;
+      section.innerHTML = '';
+      return;
+    }
+
+    var cards = PITCHING_DECISION_ROLES.map(function (entry) {
+      return renderPitchingDecisionCard(entry[0], entry[1], decisions[entry[0]], awayTeam, homeTeam);
+    }).join('');
+
+    section.hidden = false;
+    section.innerHTML =
+      '<div class="pitching-decisions__grid" id="game-pitching-decisions-grid">' +
+      cards +
+      '</div>';
   }
 
   var TEAM_BOX_STATS = [
@@ -630,7 +780,13 @@
       var row = document.getElementById('game-team-' + side);
       if (!row || !team) return;
 
+      var hasWinner = Boolean(game.away && game.away.winner) ||
+        Boolean(game.home && game.home.winner);
       row.classList.toggle('game-card-team--winner', !!team.winner);
+      row.classList.toggle(
+        'game-card-team--loser',
+        game.status_state === 'post' && hasWinner && !team.winner
+      );
       row.style.setProperty(
         '--team-color',
         team.win_color || team.color || '#1a2332'
@@ -639,6 +795,13 @@
       var scoreEl = document.getElementById('game-' + side + '-score');
       if (scoreEl) {
         scoreEl.textContent = team.score != null ? team.score : '0';
+        var scoreWrap = scoreEl.closest('.game-detail-matchup-score');
+        if (scoreWrap) {
+          scoreWrap.style.setProperty(
+            '--team-color',
+            team.win_color || team.color || '#1a2332'
+          );
+        }
       }
 
       var roleEl = document.getElementById('game-' + side + '-role');
@@ -664,6 +827,12 @@
     var homeWin = preview.home_win_pct;
     var winBar = document.getElementById('game-win-bar');
 
+    if (awayWin == null && homeWin != null) {
+      awayWin = Math.round((100 - homeWin) * 10) / 10;
+    } else if (homeWin == null && awayWin != null) {
+      homeWin = Math.round((100 - awayWin) * 10) / 10;
+    }
+
     if (awayWin != null || homeWin != null) {
       if (winBar) {
         winBar.hidden = false;
@@ -684,20 +853,21 @@
       if (homeWin != null) setText('game-home-win-pct-value', homeWin);
 
       var awayFill = document.getElementById('game-away-win-fill');
-      var homeFill = document.getElementById('game-home-win-fill');
-      if (awayFill && awayWin != null) awayFill.style.width = awayWin + '%';
-      if (homeFill && homeWin != null) homeFill.style.width = homeWin + '%';
+      if (awayFill && awayWin != null) {
+        awayFill.style.width = awayWin + '%';
+      }
     } else if (winBar) {
       winBar.hidden = true;
     }
 
     var live = game.live || {};
     if (live.linescore) renderLinescore(live.linescore, game.away, game.home);
+    renderPitchingDecisions(live.pitching_decisions, game.away, game.home);
     renderTeamBox(live.team_box, game.away, game.home);
     renderLineups(live.lineups, game.away, game.home);
     renderSituation(live, game.status_state);
-    renderPlayList('game-scoring-plays', live.scoring_plays, false);
-    renderRecentPlaysPanel(live, game.status_state);
+    renderPlayList('game-scoring-plays', live.scoring_plays, false, game.away, game.home, false);
+    renderRecentPlaysPanel(live, game.status_state, game.away, game.home);
 
     document.title = game.away.abbr + ' @ ' + game.home.abbr + ' — Scoreboard';
   }

@@ -1,0 +1,30 @@
+{% macro pitching_decision_card(role, label, pitcher, away, home) %}
+{% if pitcher %}
+{% set team_color = (away.win_color or away.color or '#1a2332') if pitcher.side == 'away' else (home.win_color or home.color or '#1a2332') %}
+<article class="pitching-decision pitching-decision--{{ role }}" style="--pitching-team-color: {{ team_color }};">
+  <p class="pitching-decision__label-line">
+    <span class="pitching-decision__label">{{ label }}</span>
+  </p>
+  <p class="pitching-decision__player-line">
+    <span class="pitching-decision__name">{{ pitcher.name }}</span>
+    {%- if pitcher.team_abbr %}<span class="pitching-decision__team">{{ pitcher.team_abbr }}</span>{% endif -%}
+    {%- if pitcher.record %}<span class="pitching-decision__record"> · {{ pitcher.record }}</span>{% endif -%}
+  </p>
+  <p class="pitching-decision__stats">
+    {{ pitcher.ip or '—' }} IP · {{ pitcher.hits or '0' }} H · {{ pitcher.er or '0' }} ER ·
+    {{ pitcher.bb or '0' }} BB · {{ pitcher.k or '0' }} K · {{ pitcher.season_era or '—' }} ERA
+  </p>
+</article>
+{% endif %}
+{% endmacro %}
+
+{% set decisions = game.live.pitching_decisions if game.live else none %}
+<div class="pitching-decisions" id="game-pitching-decisions"{% if not decisions %} hidden{% endif %}>
+  {% if decisions %}
+  <div class="pitching-decisions__grid" id="game-pitching-decisions-grid">
+    {{ pitching_decision_card('win', 'Win', decisions.win, game.away, game.home) }}
+    {{ pitching_decision_card('loss', 'Loss', decisions.loss, game.away, game.home) }}
+    {{ pitching_decision_card('save', 'Save', decisions.save, game.away, game.home) }}
+  </div>
+  {% endif %}
+</div>
