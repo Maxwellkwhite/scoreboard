@@ -70,7 +70,407 @@
     return '<div class="player-panel-toggle" data-panel="' + escapeHtml(panelId) + '">' + buttons + '</div>';
   }
 
-  function buildSplitGroupHtml(group) {
+  function splitCellValue(row, label) {
+    var cells = row.cells || [];
+    for (var i = 0; i < cells.length; i++) {
+      if (cells[i].label === label) return cells[i].value;
+    }
+    return '—';
+  }
+
+  function splitParseNumber(value) {
+    if (value === null || value === undefined || value === '' || value === '—') return null;
+    var num = Number(String(value).replace(/[^\d.-]/g, ''));
+    return Number.isNaN(num) ? null : num;
+  }
+
+  function splitPickMiniStats(columns, preferred) {
+    return preferred.filter(function (label) {
+      return columns.indexOf(label) !== -1;
+    }).slice(0, 6);
+  }
+
+  function splitIsOpsAgainst(columns) {
+    return columns.indexOf('OPS') !== -1 && columns.indexOf('AB') === -1;
+  }
+
+  function splitIsHittingOps(columns) {
+    return columns.indexOf('OPS') !== -1 && columns.indexOf('AB') !== -1;
+  }
+
+  function splitKindMeta(kind) {
+    if (kind === 'cards-era' || kind === 'months-era') {
+      return {
+        metric: 'ERA',
+        higherBetter: false,
+        diffDigits: 2,
+        scaleWord: 'best',
+        detailLabels: ['IP', 'WHIP', 'SO'],
+        detailSuffix: 'IP / WHIP / SO',
+        volumeLabel: 'IP',
+        legendLow: 'Rough',
+        legendHigh: 'Strong'
+      };
+    }
+    if (kind === 'cards-ops-against' || kind === 'months-ops-against') {
+      return {
+        metric: 'OPS',
+        higherBetter: false,
+        diffDigits: 3,
+        scaleWord: 'best',
+        detailLabels: ['BA', 'OBP', 'SLG'],
+        detailSuffix: 'BA / OBP / SLG allowed',
+        volumeLabel: 'PA',
+        legendLow: 'Rough',
+        legendHigh: 'Strong'
+      };
+    }
+    return {
+      metric: 'OPS',
+      higherBetter: true,
+      diffDigits: 3,
+      scaleWord: 'max',
+      detailLabels: ['BA', 'OBP', 'SLG'],
+      detailSuffix: 'BA / OBP / SLG',
+      volumeLabel: 'PA',
+      legendLow: 'Slower',
+      legendHigh: 'Hot'
+    };
+  }
+
+  function splitGroupKind(group) {
+    var title = String(group.title || '').toLowerCase();
+    var rows = group.rows || [];
+    var columns = group.columns || [];
+    if (!rows.length) return 'empty';
+
+    if (title.indexOf('month') !== -1) {
+      return columns.indexOf('ERA') !== -1 ? 'months-era' : 'months-ops';
+    }
+
+    if (rows.length === 2) {
+      if (columns.indexOf('ERA') !== -1) return 'cards-era';
+      if (columns.indexOf('OPS') !== -1) {
+        return splitIsOpsAgainst(columns) ? 'cards-ops-against' : 'cards-ops';
+      }
+    }
+
+    if (columns.indexOf('ERA') !== -1 && columns.indexOf('OPS') === -1 && rows.length >= 2) {
+      return 'months-era';
+    }
+
+    if (splitIsOpsAgainst(columns) && rows.length >= 2) {
+      return 'months-ops-against';
+    }
+
+    if (splitIsHittingOps(columns) && rows.length >= 2) {
+      return 'months-ops';
+    }
+
+    return 'table';
+  }
+
+  function splitFormatRate(value, digits) {
+    if (value === null || value === undefined || Number.isNaN(value)) return '';
+    var precision = digits === undefined ? 3 : digits;
+    var text = Math.abs(value).toFixed(precision);
+    if (precision === 3 && text.startsWith('0.')) text = text.slice(1);
+    return (value < 0 ? '-' : '') + text;
+  }
+
+  function splitHeroMeta(group, kind) {
+    var meta = splitKindMeta(kind);
+    var rows = group.rows || [];
+    var metric = meta.metric;
+    var higherBetter = meta.higherBetter;
+    var values = rows.map(function (row, rowIndex) {
+      return {
+        rowIndex: rowIndex,
+        value: splitParseNumber(splitCellValue(row, metric))
+      };
+    }).filter(function (entry) {
+      return entry.value !== null;
+    });
+
+    if (!values.length) {
+      return {
+        metric: metric,
+        higherBetter: higherBetter,
+        diffDigits: meta.diffDigits,
+        scaleWord: meta.scaleWord,
+        leaderIndex: -1,
+        scaleBest: null,
+        scaleWorst: null,
+        diff: null
+      };
+    }
+
+    var bestEntryIndex = 0;
+    values.forEach(function (entry, index) {
+      var current = values[bestEntryIndex].value;
+      if (higherBetter ? entry.value > current : entry.value < current) {
+        bestEntryIndex = index;
+      }
+    });
+
+    var leaderEntry = values[bestEntryIndex];
+    var otherEntry = values.length > 1 ? values[1 - bestEntryIndex] : null;
+    var diff = otherEntry === null ? null : (
+      higherBetter
+        ? leaderEntry.value - otherEntry.value
+        : otherEntry.value - leaderEntry.value
+    );
+
+    var scaleBest = higherBetter
+      ? Math.max.apply(null, values.map(function (entry) { return entry.value; }))
+      : Math.min.apply(null, values.map(function (entry) { return entry.value; }));
+    var scaleWorst = higherBetter
+      ? Math.min.apply(null, values.map(function (entry) { return entry.value; }))
+      : Math.max.apply(null, values.map(function (entry) { return entry.value; }));
+
+    return {
+      metric: metric,
+      higherBetter: higherBetter,
+      diffDigits: meta.diffDigits,
+      scaleWord: meta.scaleWord,
+      leaderIndex: leaderEntry.rowIndex,
+      scaleBest: scaleBest,
+      scaleWorst: scaleWorst,
+      diff: diff
+    };
+  }
+
+  function splitMetricRange(rows, metric, higherBetter) {
+    var values = rows.map(function (row) {
+      return splitParseNumber(splitCellValue(row, metric));
+    }).filter(function (value) {
+      return value !== null;
+    });
+    if (!values.length) return { best: null, worst: null };
+    return higherBetter
+      ? { best: Math.max.apply(null, values), worst: Math.min.apply(null, values) }
+      : { best: Math.min.apply(null, values), worst: Math.max.apply(null, values) };
+  }
+
+  function splitMetricBarWidth(value, best, worst, higherBetter) {
+    if (value === null || best === null) return 0;
+    if (higherBetter) return Math.min(100, (value / best) * 100);
+    if (worst === null || worst === 0) return 0;
+    return Math.min(100, (value / worst) * 100);
+  }
+
+  function splitMetricTier(value, best, worst, higherBetter) {
+    if (value === null || best === null || worst === null) return 'amber';
+    if (worst === best) return 'green';
+    var ratio = higherBetter
+      ? (value - worst) / (best - worst)
+      : (worst - value) / (worst - best);
+    if (ratio >= 0.9) return 'green';
+    if (ratio >= 0.75) return 'green-light';
+    return 'amber';
+  }
+
+  function splitCardBarWidth(value, scaleBest, scaleWorst, higherBetter) {
+    if (value === null) return 0;
+    if (higherBetter) {
+      if (scaleBest === null || scaleBest === 0) return 0;
+      return Math.min(100, (value / scaleBest) * 100);
+    }
+    if (scaleWorst === null || scaleWorst === 0) return 0;
+    return Math.min(100, (value / scaleWorst) * 100);
+  }
+
+  function splitVolumeLabel(row, preferredLabel) {
+    var labels = preferredLabel ? [preferredLabel, 'PA', 'IP', 'BF'] : ['PA', 'IP', 'BF'];
+    for (var i = 0; i < labels.length; i++) {
+      var value = splitCellValue(row, labels[i]);
+      if (value !== '—') return value + ' ' + labels[i];
+    }
+    return '';
+  }
+
+  function splitDetailText(row, labels) {
+    var values = labels.map(function (label) {
+      return splitCellValue(row, label);
+    });
+    if (!values.every(function (value) { return value !== '—'; })) return '';
+    return values.join(' / ');
+  }
+
+  function buildSplitMiniStatsHtml(row, labels) {
+    return labels.map(function (label) {
+      return (
+        '<div class="player-splits-mini-stat">' +
+          '<div class="player-splits-mini-stat__label">' + escapeHtml(label) + '</div>' +
+          '<div class="player-splits-mini-stat__value">' + escapeHtml(splitCellValue(row, label)) + '</div>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function buildSplitCardHtml(row, options) {
+    var heroMetric = options.heroMetric;
+    var heroDisplay = splitCellValue(row, heroMetric);
+    var volumeLabel = splitVolumeLabel(row, options.volumeLabel);
+    var accent = options.accent || 'blue';
+    var cardClass = 'player-splits-card' + (options.isLeader ? ' is-leader is-leader--' + accent : '');
+    var heroClass = 'player-splits-ops' + (options.isLeader ? ' player-splits-ops--' + accent : '');
+    var diffHtml = '';
+
+    if (options.isLeader && options.diffText) {
+      var diffClass = options.diffPositive ? 'player-splits-diff is-up' : 'player-splits-diff is-down';
+      diffHtml = '<span class="' + diffClass + '">' + escapeHtml(options.diffText) + '</span>';
+    }
+
+    return (
+      '<div class="' + cardClass + '">' +
+        '<div class="player-splits-card__header">' +
+          '<span class="player-splits-card__title">' + escapeHtml(row.label) + '</span>' +
+          (volumeLabel ? '<span class="player-splits-card__pa">' + escapeHtml(volumeLabel) + '</span>' : '') +
+        '</div>' +
+        '<div class="player-splits-ops-row">' +
+          '<span class="' + heroClass + '">' + escapeHtml(heroDisplay) + '</span>' +
+          '<span class="player-splits-ops-label">' + escapeHtml(options.heroLabel || heroMetric) + '</span>' +
+          diffHtml +
+        '</div>' +
+        '<div class="player-splits-ops-bar">' +
+          '<span class="player-splits-ops-bar__fill is-' + accent +
+          (options.isLeader ? '' : '-muted') + '" style="width:' + options.barWidth.toFixed(1) + '%"></span>' +
+        '</div>' +
+        '<div class="player-splits-mini-stats">' + buildSplitMiniStatsHtml(row, options.miniStats) + '</div>' +
+      '</div>'
+    );
+  }
+
+  function buildSplitCardsGroupHtml(group, kind) {
+    var rows = group.rows || [];
+    var meta = splitKindMeta(kind);
+    var hero = splitHeroMeta(group, kind);
+    var miniStats = kind === 'cards-era'
+      ? splitPickMiniStats(group.columns || [], ['IP', 'WHIP', 'SO', 'BB', 'H', 'HR', 'SO9'])
+      : kind === 'cards-ops-against'
+        ? splitPickMiniStats(group.columns || [], ['BA', 'OBP', 'SLG', 'H', 'HR', 'SO', 'BB'])
+        : splitPickMiniStats(group.columns || [], ['BA', 'OBP', 'SLG', 'HR', 'RBI', 'SO', 'BB']);
+
+    var cardsHtml = rows.map(function (row, index) {
+      var value = splitParseNumber(splitCellValue(row, hero.metric));
+      var isLeader = index === hero.leaderIndex;
+      var accent = isLeader ? 'green' : 'blue';
+      var diffText = '';
+      var diffPositive = true;
+      if (isLeader && hero.diff !== null) {
+        diffText = (hero.diff >= 0 ? '+' : '') + splitFormatRate(hero.diff, hero.diffDigits);
+        diffPositive = hero.diff >= 0;
+      }
+
+      return buildSplitCardHtml(row, {
+        heroMetric: hero.metric,
+        heroLabel: kind === 'cards-ops-against' ? 'OPS Allowed' : hero.metric,
+        volumeLabel: meta.volumeLabel,
+        isLeader: isLeader,
+        accent: accent,
+        barWidth: splitCardBarWidth(value, hero.scaleBest, hero.scaleWorst, hero.higherBetter),
+        diffText: diffText,
+        diffPositive: diffPositive,
+        miniStats: miniStats
+      });
+    }).join('');
+
+    var scaleRef = hero.higherBetter ? hero.scaleBest : hero.scaleWorst;
+    var scaleDisplay = scaleRef === null
+      ? ''
+      : hero.metric === 'ERA'
+        ? scaleRef.toFixed(2)
+        : splitFormatRate(scaleRef, 3);
+    var scaleNote = scaleDisplay
+      ? (hero.higherBetter
+        ? hero.metric + (kind === 'cards-ops-against' ? ' allowed' : '') +
+          ' bar scaled to ' + scaleDisplay + ' max'
+        : 'Longer bar = higher ' + hero.metric +
+          (kind === 'cards-ops-against' ? ' allowed' : '') +
+          ' · scaled to ' + scaleDisplay + ' worst')
+      : '';
+
+    return (
+      '<section class="player-splits-section">' +
+        '<p class="player-splits-section__label">' + escapeHtml(group.title) + '</p>' +
+        '<div class="player-splits-grid">' + cardsHtml + '</div>' +
+        (scaleNote ? '<p class="player-splits-scale-note">' + escapeHtml(scaleNote) + '</p>' : '') +
+      '</section>'
+    );
+  }
+
+  function buildSplitMetricBarsGroupHtml(group, kind) {
+    var rows = group.rows || [];
+    var meta = splitKindMeta(kind);
+    var metric = meta.metric;
+    var range = splitMetricRange(rows, metric, meta.higherBetter);
+    var isMonthGroup = String(group.title || '').toLowerCase().indexOf('month') !== -1;
+    var detailLabels = (group.columns || []).indexOf('tOPS+') !== -1
+      ? ['BA', 'OBP', 'SLG']
+      : meta.detailLabels;
+    var detailSuffix = (group.columns || []).indexOf('tOPS+') !== -1
+      ? 'BA / OBP / SLG'
+      : meta.detailSuffix;
+
+    var rowsHtml = rows.map(function (row) {
+      var metricDisplay = splitCellValue(row, metric);
+      var metricValue = splitParseNumber(metricDisplay);
+      var tier = splitMetricTier(metricValue, range.best, range.worst, meta.higherBetter);
+      var barWidth = splitMetricBarWidth(metricValue, range.best, range.worst, meta.higherBetter);
+      var volumeLabel = splitVolumeLabel(row, meta.volumeLabel);
+      var detail = splitDetailText(row, detailLabels);
+
+      return (
+        '<div class="player-splits-month-row">' +
+          '<div class="player-splits-month-row__name' +
+          (isMonthGroup ? '' : ' player-splits-month-row__name--wide') + '">' +
+          escapeHtml(row.label) + '</div>' +
+          '<div class="player-splits-month-row__track">' +
+            '<div class="player-splits-month-row__fill is-' + tier + '" style="width:' + barWidth.toFixed(1) + '%">' +
+              '<span class="player-splits-month-row__ops is-' + tier + '">' + escapeHtml(metricDisplay) + '</span>' +
+            '</div>' +
+          '</div>' +
+          (detail ? '<div class="player-splits-month-row__detail">' + escapeHtml(detail) + '</div>' : '') +
+          (volumeLabel ? '<div class="player-splits-month-row__pa">' + escapeHtml(volumeLabel) + '</div>' : '') +
+        '</div>'
+      );
+    }).join('');
+
+    var scaleRef = meta.higherBetter ? range.best : range.worst;
+    var scaleDisplay = scaleRef === null
+      ? ''
+      : metric === 'ERA'
+        ? scaleRef.toFixed(2)
+        : splitFormatRate(scaleRef, 3);
+    var legendMetric = kind === 'months-ops-against' ? 'OPS allowed' : metric;
+    var legendNote = meta.higherBetter
+      ? (scaleDisplay
+        ? 'Bars scaled to ' + scaleDisplay + ' ' + legendMetric + ' max · detail: ' + detailSuffix
+        : 'detail: ' + detailSuffix)
+      : (scaleDisplay
+        ? 'Longer bar = higher ' + legendMetric + ' · scaled to ' + scaleDisplay +
+          ' worst · detail: ' + detailSuffix
+        : 'detail: ' + detailSuffix);
+
+    return (
+      '<section class="player-splits-section player-splits-section--bars">' +
+        '<p class="player-splits-section__label">' + escapeHtml(group.title) + '</p>' +
+        '<div class="player-splits-month-bars">' + rowsHtml + '</div>' +
+        '<div class="player-splits-month-legend">' +
+          '<span class="player-splits-month-legend__note">' + escapeHtml(legendNote) + '</span>' +
+          '<div class="player-splits-month-legend__swatches">' +
+            '<span class="player-splits-swatch"><span class="player-splits-swatch__dot is-amber"></span>' +
+            escapeHtml(meta.legendLow) + '</span>' +
+            '<span class="player-splits-swatch"><span class="player-splits-swatch__dot is-green"></span>' +
+            escapeHtml(meta.legendHigh) + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</section>'
+    );
+  }
+
+  function buildSplitTableGroupHtml(group) {
     var headerCells = '<th scope="col">Split</th>' +
       (group.columns || []).map(function (col) {
         return '<th scope="col">' + escapeHtml(col) + '</th>';
@@ -87,24 +487,36 @@
     if (!bodyRows) return '';
 
     return (
-      '<div class="player-splits-group">' +
-        '<h4 class="player-splits-group__title">' + escapeHtml(group.title) + '</h4>' +
-        '<div class="player-stats-table-wrap">' +
+      '<section class="player-splits-section player-splits-section--table">' +
+        '<p class="player-splits-section__label">' + escapeHtml(group.title) + '</p>' +
+        '<div class="player-stats-table-wrap player-splits-table-wrap">' +
           '<table class="player-stats-table player-splits-table">' +
             '<thead><tr>' + headerCells + '</tr></thead>' +
             '<tbody>' + bodyRows + '</tbody>' +
           '</table>' +
         '</div>' +
-      '</div>'
+      '</section>'
     );
   }
 
+  function buildSplitGroupHtml(group) {
+    var rows = group.rows || [];
+    if (!rows.length) return '';
+
+    var kind = splitGroupKind(group);
+    if (kind === 'months-ops' || kind === 'months-era' || kind === 'months-ops-against') {
+      return buildSplitMetricBarsGroupHtml(group, kind);
+    }
+    if (kind.indexOf('cards-') === 0) return buildSplitCardsGroupHtml(group, kind);
+    return buildSplitTableGroupHtml(group);
+  }
+
   function buildSplitViewHtml(view) {
-    var groups = (view.groups || []).map(buildSplitGroupHtml).filter(Boolean).join('');
-    if (!groups) {
+    var groups = (view.groups || []).map(buildSplitGroupHtml).filter(Boolean);
+    if (!groups.length) {
       return '<p class="player-splits-empty">No split data for this view.</p>';
     }
-    return '<div class="player-splits-groups">' + groups + '</div>';
+    return '<div class="player-splits-groups">' + groups.join('') + '</div>';
   }
 
   var PITCH_COLORS = {
@@ -178,6 +590,176 @@
     });
     var scaleMax = Math.max(max, dataMax * 1.05);
     return Math.min(100, (num / scaleMax) * 100);
+  }
+
+  var BB_TYPE_COLORS = {
+    ground_ball: '#c9956a',
+    line_drive: '#e74c3c',
+    fly_ball: '#3498db',
+    popup: '#95a5a6'
+  };
+  var BB_TYPE_PALETTE = ['#c9956a', '#e74c3c', '#3498db', '#95a5a6', '#2ecc71', '#9b59b6'];
+
+  function bbTypeColor(bbType, index) {
+    if (BB_TYPE_COLORS[bbType]) return BB_TYPE_COLORS[bbType];
+    return BB_TYPE_PALETTE[index % BB_TYPE_PALETTE.length];
+  }
+
+  function buildUsageDonutGradient(items, colorFn) {
+    var total = 0;
+    items.forEach(function (item) {
+      total += Number(item.usage) || 0;
+    });
+    if (total <= 0) return '#eef1f5';
+
+    var cursor = 0;
+    var stops = [];
+    items.forEach(function (item, index) {
+      var usage = Number(item.usage) || 0;
+      if (usage <= 0) return;
+      var start = (cursor / total) * 100;
+      cursor += usage;
+      var end = (cursor / total) * 100;
+      stops.push(colorFn(item, index) + ' ' + start.toFixed(2) + '% ' + end.toFixed(2) + '%');
+    });
+    return 'conic-gradient(' + stops.join(', ') + ')';
+  }
+
+  function formatSprayMetricValue(metric, value) {
+    if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) {
+      return '—';
+    }
+    var num = Number(value);
+    if (metric.id === 'ev' || metric.id === 'launch_angle' || metric.id === 'distance') {
+      return num.toFixed(1);
+    }
+    if (metric.unit === '%') return num.toFixed(1);
+    if (metric.id === 'xwoba') {
+      var rateText = num.toFixed(3);
+      return rateText.startsWith('0.') ? rateText.slice(1) : rateText;
+    }
+    return String(num);
+  }
+
+  function formatSpraySummaryRate(value) {
+    if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) {
+      return '—';
+    }
+    var rateText = Number(value).toFixed(3);
+    return rateText.startsWith('0.') ? rateText.slice(1) : rateText;
+  }
+
+  function sprayMetricBarWidth(metric, value, types) {
+    var num = Number(value);
+    if (!num && num !== 0) return 0;
+    var max = Number(metric.max) || 100;
+    var dataMax = 0;
+    types.forEach(function (item) {
+      var v = Number(item[metric.id]);
+      if (!Number.isNaN(v) && v > dataMax) dataMax = v;
+    });
+    var scaleMax = Math.max(max, dataMax * 1.05);
+    return Math.min(100, (num / scaleMax) * 100);
+  }
+
+  function buildSprayChartHtml(panel) {
+    var types = panel.types || [];
+    var metrics = panel.metrics || [];
+    var summary = panel.summary || {};
+    if (!summary.total && !types.length) {
+      return '<p class="player-splits-empty">No batted-ball data available.</p>';
+    }
+
+    var summaryItems = [
+      { label: 'Batted Balls', value: summary.total },
+      { label: 'Avg EV', value: summary.avg_ev !== null && summary.avg_ev !== undefined ? summary.avg_ev + ' mph' : null },
+      { label: 'Avg LA', value: summary.avg_launch_angle !== null && summary.avg_launch_angle !== undefined ? summary.avg_launch_angle + '°' : null },
+      { label: 'Avg Dist', value: summary.avg_distance !== null && summary.avg_distance !== undefined ? summary.avg_distance + ' ft' : null },
+      { label: 'xwOBA', value: summary.avg_xwoba !== null && summary.avg_xwoba !== undefined ? formatSpraySummaryRate(summary.avg_xwoba) : null },
+      { label: 'Hard Hit%', value: summary.hard_hit_pct !== null && summary.hard_hit_pct !== undefined ? summary.hard_hit_pct + '%' : null },
+      { label: 'Barrel%', value: summary.barrel_pct !== null && summary.barrel_pct !== undefined ? summary.barrel_pct + '%' : null },
+      { label: 'BABIP', value: summary.babip !== null && summary.babip !== undefined ? formatSpraySummaryRate(summary.babip) : null }
+    ];
+
+    var summaryHtml = summaryItems.map(function (item) {
+      var value = item.value === null || item.value === undefined ? '—' : String(item.value);
+      return (
+        '<div class="spray-chart-stat">' +
+          '<span class="spray-chart-stat__value">' + escapeHtml(value) + '</span>' +
+          '<span class="spray-chart-stat__label">' + escapeHtml(item.label) + '</span>' +
+        '</div>'
+      );
+    }).join('');
+
+    var donutHtml = '';
+    var typeLegendHtml = '';
+    if (types.length) {
+      var donutStyle = 'background:' + buildUsageDonutGradient(types, function (item, index) {
+        return bbTypeColor(item.bb_type, index);
+      });
+      typeLegendHtml = types.map(function (item, index) {
+        var usage = Number(item.usage);
+        var usageText = Number.isNaN(usage) ? '—' : usage.toFixed(1) + '%';
+        return (
+          '<li class="pitch-mix-legend__item">' +
+            '<span class="pitch-mix-legend__swatch" style="background:' + bbTypeColor(item.bb_type, index) + '"></span>' +
+            '<span class="pitch-mix-legend__label">' + escapeHtml(item.label) + '</span>' +
+            '<span class="pitch-mix-legend__value">' + escapeHtml(usageText) + '</span>' +
+          '</li>'
+        );
+      }).join('');
+      donutHtml =
+        '<div class="pitch-mix-donut-wrap">' +
+          '<div class="pitch-mix-donut" style="' + donutStyle + '" role="img" aria-label="Batted ball type breakdown">' +
+            '<div class="pitch-mix-donut__hole"></div>' +
+          '</div>' +
+          '<p class="pitch-mix-donut__caption">' + escapeHtml(panel.season_year || 'Season') + ' Batted Ball Types</p>' +
+        '</div>';
+    }
+
+    var metricsHtml = metrics.length && types.length ? metrics.map(function (metric) {
+      var barsHtml = types.map(function (item, index) {
+        var value = item[metric.id];
+        var display = formatSprayMetricValue(metric, value);
+        var width = sprayMetricBarWidth(metric, value, types);
+        var suffix = '';
+        if (display !== '—') {
+          if (metric.unit === '%') suffix = '%';
+          else if (metric.unit) suffix = ' ' + metric.unit;
+        }
+        return (
+          '<div class="pitch-mix-bar-row">' +
+            '<span class="pitch-mix-bar-row__label" title="' + escapeHtml(item.label) + '">' +
+              escapeHtml(item.label) +
+            '</span>' +
+            '<div class="pitch-mix-bar-row__track" aria-hidden="true">' +
+              '<span class="pitch-mix-bar-row__fill" style="width:' + width.toFixed(1) + '%;background:' +
+              bbTypeColor(item.bb_type, index) + '"></span>' +
+            '</div>' +
+            '<span class="pitch-mix-bar-row__value">' + escapeHtml(display + suffix) + '</span>' +
+          '</div>'
+        );
+      }).join('');
+
+      return (
+        '<section class="pitch-mix-metric">' +
+          '<h4 class="pitch-mix-metric__title">' + escapeHtml(metric.label) + '</h4>' +
+          '<div class="pitch-mix-metric__bars">' + barsHtml + '</div>' +
+        '</section>'
+      );
+    }).join('') : '';
+
+    return (
+      '<div class="spray-chart">' +
+        (types.length ?
+          '<div class="pitch-mix__top">' +
+            donutHtml +
+            '<ul class="pitch-mix-legend">' + typeLegendHtml + '</ul>' +
+          '</div>' : '') +
+        '<div class="spray-chart__summary">' + summaryHtml + '</div>' +
+        (metricsHtml ? '<div class="pitch-mix__metrics">' + metricsHtml + '</div>' : '') +
+      '</div>'
+    );
   }
 
   function buildPitchMixHtml(panel) {
@@ -269,6 +851,10 @@
 
     if (panel.panel_kind === 'pitch_mix') {
       return '<div class="player-panel-body">' + buildPitchMixHtml(panel) + '</div>';
+    }
+
+    if (panel.panel_kind === 'spray_chart') {
+      return '<div class="player-panel-body">' + buildSprayChartHtml(panel) + '</div>';
     }
 
     if (panel.panel_kind === 'split_groups') {

@@ -19,7 +19,7 @@ from pybaseball import (
     get_splits,
     pitching_stats_bref,
     playerid_lookup,
-    statcast_batter_pitch_arsenal,
+    statcast_batter,
     statcast_pitcher_arsenal_stats,
     statcast_pitcher_pitch_arsenal,
 )
@@ -66,12 +66,26 @@ _PITCHER_MIX_METRICS = (
     ("put_away", "Put Away%", "%", 100.0),
     ("xwoba", "xwOBA", "", 0.600),
 )
-_BATTER_MIX_METRICS = (
-    ("whiff", "Whiff%", "%", 100.0),
-    ("ba", "BA", "", 0.500),
-    ("slg", "SLG", "", 1.000),
+_SPRAY_EVENT_LABELS = {
+    "single": "Single",
+    "double": "Double",
+    "triple": "Triple",
+    "home_run": "Home Run",
+    "out": "Out",
+}
+_SPRAY_BB_TYPE_LABELS = {
+    "ground_ball": "Ground Ball",
+    "line_drive": "Line Drive",
+    "fly_ball": "Fly Ball",
+    "popup": "Popup",
+}
+_SPRAY_BB_TYPE_ORDER = ("ground_ball", "line_drive", "fly_ball", "popup")
+_SPRAY_TYPE_METRICS = (
+    ("ev", "Exit Velo", "mph", 115.0),
+    ("launch_angle", "Launch Angle", "°", 45.0),
+    ("distance", "Distance", "ft", 450.0),
     ("xwoba", "xwOBA", "", 0.600),
-    ("hard_hit", "HardHit%", "%", 100.0),
+    ("hard_hit", "Hard Hit%", "%", 100.0),
 )
 _BATTING_SPLIT_REGULAR = (
     ("Platoon Splits", ("vs RHP", "vs LHP")),
@@ -782,18 +796,76 @@ def _pitch_mix_numeric(value: Any) -> float | None:
     return number
 
 
+def _statcast_season_range(season_year: int) -> tuple[str, str]:
+    today = date.today()
+    start = f"{season_year}-03-01"
+    if season_year >= today.year:
+        end = today.isoformat()
+    else:
+        end = f"{season_year}-11-30"
+    return start, end
+
+
+def _spray_event_category(event: str) -> str:
+    if event in {"single", "double", "triple", "home_run"}:
+        return event
+    return "out"
+
+
+def _series_mean(values: pd.Series) -> float | None:
+    numbers = [_parse_number(value) for value in values]
+    valid = [number for number in numbers if number is not None]
+    if not valid:
+        return None
+    return round(sum(valid) / len(valid), 1)
+
+
+def _hard_hit_rate(values: pd.Series) -> float | None:
+    numbers = [_parse_number(value) for value in values]
+    valid = [number for number in numbers if number is not None]
+    if not valid:
+        return None
+    hard = sum(1 for number in valid if number >= 95)
+    return round(hard / len(valid) * 100, 1)
+
+
+def _barrel_rate(values: pd.Series) -> float | None:
+    numbers = [_parse_number(value) for value in values]
+    valid = [number for number in numbers if number is not None]
+    if not valid:
+        return None
+    barrels = sum(1 for number in valid if number == 6)
+    return round(barrels / len(valid) * 100, 1)
+
+
+def _spray_type_stats(group: pd.DataFrame) -> dict[str, float | None]:
+    return {
+        "ev": _series_mean(group.get("launch_speed", pd.Series(dtype=float))),
+        "launch_angle": _series_mean(group.get("launch_angle", pd.Series(dtype=float))),
+        "distance": _series_mean(group.get("hit_distance_sc", pd.Series(dtype=float))),
+        "xwoba": _round_rate_mean(group.get("estimated_woba_using_speedangle", pd.Series(dtype=float))),
+        "hard_hit": _hard_hit_rate(group.get("launch_speed", pd.Series(dtype=float))),
+    }
+
+
+def _round_rate_mean(values: pd.Series) -> float | None:
+    numbers = [_parse_number(value) for value in values]
+    valid = [number for number in numbers if number is not None]
+    if not valid:
+        return None
+    return round(sum(valid) / len(valid), 3)
+
+
 def _fetch_pitch_mix_panel(
     *,
     mlbam_id: int | None,
-    pitching: bool,
     season_year: int,
 ) -> dict[str, Any]:
-    label = "Pitch Mix" if pitching else "vs Pitches"
     empty: dict[str, Any] = {
         "id": "pitch_mix",
-        "label": label,
+        "label": "Pitch Mix",
         "panel_kind": "pitch_mix",
-        "pitching": pitching,
+        "pitching": True,
         "season_year": str(season_year),
         "pitches": [],
         "metrics": [],
@@ -803,85 +875,189 @@ def _fetch_pitch_mix_panel(
 
     pitches: list[dict[str, Any]] = []
     try:
-        if pitching:
-            stats = statcast_pitcher_arsenal_stats(season_year, minPA=1)
-            player_rows = stats[stats["player_id"] == mlbam_id].copy()
-            if player_rows.empty:
-                return empty
+        stats = statcast_pitcher_arsenal_stats(season_year, minPA=1)
+        player_rows = stats[stats["player_id"] == mlbam_id].copy()
+        if player_rows.empty:
+            return empty
 
-            velo_df = statcast_pitcher_pitch_arsenal(season_year, minP=1, arsenal_type="avg_speed")
-            spin_df = statcast_pitcher_pitch_arsenal(season_year, minP=1, arsenal_type="avg_spin")
-            velo_row = velo_df[velo_df["pitcher"] == mlbam_id]
-            spin_row = spin_df[spin_df["pitcher"] == mlbam_id]
-            velo_series = velo_row.iloc[0] if not velo_row.empty else None
-            spin_series = spin_row.iloc[0] if not spin_row.empty else None
+        velo_df = statcast_pitcher_pitch_arsenal(season_year, minP=1, arsenal_type="avg_speed")
+        spin_df = statcast_pitcher_pitch_arsenal(season_year, minP=1, arsenal_type="avg_spin")
+        velo_row = velo_df[velo_df["pitcher"] == mlbam_id]
+        spin_row = spin_df[spin_df["pitcher"] == mlbam_id]
+        velo_series = velo_row.iloc[0] if not velo_row.empty else None
+        spin_series = spin_row.iloc[0] if not spin_row.empty else None
 
-            player_rows = player_rows.sort_values("pitch_usage", ascending=False)
-            for _, row in player_rows.iterrows():
-                pitch_count = _parse_number(row.get("pitches"))
-                if not pitch_count:
-                    continue
-                pitch_type = str(row.get("pitch_type") or "")
-                pitches.append({
-                    "label": str(row.get("pitch_name") or pitch_type),
-                    "pitch_type": pitch_type,
-                    "usage": _pitch_mix_numeric(row.get("pitch_usage")),
-                    "velo": _pitch_mix_numeric(
-                        _pitch_arsenal_wide_value(velo_series, pitch_type, "avg_speed")
-                    ),
-                    "spin": _pitch_mix_numeric(
-                        _pitch_arsenal_wide_value(spin_series, pitch_type, "avg_spin")
-                    ),
-                    "whiff": _pitch_mix_numeric(row.get("whiff_percent")),
-                    "k": _pitch_mix_numeric(row.get("k_percent")),
-                    "put_away": _pitch_mix_numeric(row.get("put_away")),
-                    "xwoba": _pitch_mix_numeric(row.get("est_woba")),
-                })
-            metrics = [
-                {"id": key, "label": label, "unit": unit, "max": max_val}
-                for key, label, unit, max_val in _PITCHER_MIX_METRICS
-            ]
-        else:
-            stats = statcast_batter_pitch_arsenal(season_year, minPA=1)
-            player_rows = stats[stats["player_id"] == mlbam_id].copy()
-            if player_rows.empty:
-                return empty
-
-            player_rows = player_rows.sort_values("pitch_usage", ascending=False)
-            for _, row in player_rows.iterrows():
-                pitch_count = _parse_number(row.get("pitches"))
-                if not pitch_count:
-                    continue
-                pitch_type = str(row.get("pitch_type") or "")
-                pitches.append({
-                    "label": str(row.get("pitch_name") or pitch_type),
-                    "pitch_type": pitch_type,
-                    "usage": _pitch_mix_numeric(row.get("pitch_usage")),
-                    "whiff": _pitch_mix_numeric(row.get("whiff_percent")),
-                    "ba": _pitch_mix_numeric(row.get("ba")),
-                    "slg": _pitch_mix_numeric(row.get("slg")),
-                    "xwoba": _pitch_mix_numeric(row.get("est_woba")),
-                    "hard_hit": _pitch_mix_numeric(row.get("hard_hit_percent")),
-                })
-            metrics = [
-                {"id": key, "label": label, "unit": unit, "max": max_val}
-                for key, label, unit, max_val in _BATTER_MIX_METRICS
-            ]
+        player_rows = player_rows.sort_values("pitch_usage", ascending=False)
+        for _, row in player_rows.iterrows():
+            pitch_count = _parse_number(row.get("pitches"))
+            if not pitch_count:
+                continue
+            pitch_type = str(row.get("pitch_type") or "")
+            pitches.append({
+                "label": str(row.get("pitch_name") or pitch_type),
+                "pitch_type": pitch_type,
+                "usage": _pitch_mix_numeric(row.get("pitch_usage")),
+                "velo": _pitch_mix_numeric(
+                    _pitch_arsenal_wide_value(velo_series, pitch_type, "avg_speed")
+                ),
+                "spin": _pitch_mix_numeric(
+                    _pitch_arsenal_wide_value(spin_series, pitch_type, "avg_spin")
+                ),
+                "whiff": _pitch_mix_numeric(row.get("whiff_percent")),
+                "k": _pitch_mix_numeric(row.get("k_percent")),
+                "put_away": _pitch_mix_numeric(row.get("put_away")),
+                "xwoba": _pitch_mix_numeric(row.get("est_woba")),
+            })
     except Exception:
         return empty
 
     if not pitches:
         return empty
 
+    metrics = [
+        {"id": key, "label": label, "unit": unit, "max": max_val}
+        for key, label, unit, max_val in _PITCHER_MIX_METRICS
+    ]
     return {
         "id": "pitch_mix",
-        "label": label,
+        "label": "Pitch Mix",
         "panel_kind": "pitch_mix",
-        "pitching": pitching,
+        "pitching": True,
         "season_year": str(season_year),
         "pitches": pitches,
         "metrics": metrics,
     }
+
+
+def _fetch_spray_chart_panel(
+    *,
+    mlbam_id: int | None,
+    season_year: int,
+) -> dict[str, Any]:
+    empty: dict[str, Any] = {
+        "id": "spray_chart",
+        "label": "Batting Metrics",
+        "panel_kind": "spray_chart",
+        "season_year": str(season_year),
+        "summary": {},
+        "legend": [],
+        "types": [],
+        "metrics": [],
+        "points": [],
+    }
+    if not mlbam_id:
+        return empty
+
+    try:
+        start_dt, end_dt = _statcast_season_range(season_year)
+        df = statcast_batter(start_dt, end_dt, mlbam_id)
+        if df is None or df.empty:
+            return empty
+
+        sub = df[
+            df["events"].notna()
+            & df["hc_x"].notna()
+            & df["hc_y"].notna()
+        ].copy()
+        if sub.empty:
+            return empty
+
+        total = len(sub)
+        counts: dict[str, int] = {"single": 0, "double": 0, "triple": 0, "home_run": 0, "out": 0}
+        points: list[dict[str, Any]] = []
+
+        for _, row in sub.iterrows():
+            raw_event = str(row.get("events") or "")
+            category = _spray_event_category(raw_event)
+            counts[category] = counts.get(category, 0) + 1
+
+            bb_type = str(row.get("bb_type") or "")
+            launch_speed = _parse_number(row.get("launch_speed"))
+            launch_angle = _parse_number(row.get("launch_angle"))
+            distance = _parse_number(row.get("hit_distance_sc"))
+            xwoba = _parse_number(row.get("estimated_woba_using_speedangle"))
+
+            points.append({
+                "x": round(float(row["hc_x"]), 2),
+                "y": round(float(row["hc_y"]), 2),
+                "event": category,
+                "event_label": _SPRAY_EVENT_LABELS.get(category, category),
+                "bb_type": bb_type,
+                "bb_type_label": _SPRAY_BB_TYPE_LABELS.get(bb_type, bb_type),
+                "launch_speed": launch_speed,
+                "launch_angle": launch_angle,
+                "distance": distance,
+                "xwoba": xwoba,
+            })
+
+        legend_order = ("home_run", "triple", "double", "single", "out")
+        legend = [
+            {
+                "event": event,
+                "label": _SPRAY_EVENT_LABELS[event],
+                "count": counts.get(event, 0),
+            }
+            for event in legend_order
+            if counts.get(event, 0)
+        ]
+
+        hits = counts["single"] + counts["double"] + counts["triple"] + counts["home_run"]
+        non_hr_hits = hits - counts["home_run"]
+        hr_count = counts["home_run"]
+        babip = (
+            round(non_hr_hits / (total - hr_count), 3)
+            if total > hr_count
+            else None
+        )
+
+        bb_type_counts = sub["bb_type"].value_counts() if "bb_type" in sub.columns else pd.Series(dtype=int)
+        types: list[dict[str, Any]] = []
+        for bb_type in _SPRAY_BB_TYPE_ORDER:
+            count = int(bb_type_counts.get(bb_type, 0))
+            if not count:
+                continue
+            group = sub[sub["bb_type"] == bb_type]
+            type_stats = _spray_type_stats(group)
+            types.append({
+                "label": _SPRAY_BB_TYPE_LABELS[bb_type],
+                "bb_type": bb_type,
+                "usage": round(count / total * 100, 1),
+                "count": count,
+                **type_stats,
+            })
+
+        metrics = [
+            {"id": key, "label": label, "unit": unit, "max": max_val}
+            for key, label, unit, max_val in _SPRAY_TYPE_METRICS
+        ]
+
+        return {
+            "id": "spray_chart",
+            "label": "Batting Metrics",
+            "panel_kind": "spray_chart",
+            "season_year": str(season_year),
+            "summary": {
+                "total": total,
+                "hits": hits,
+                "home_runs": counts["home_run"],
+                "outs": counts["out"],
+                "avg_ev": _series_mean(sub.get("launch_speed", pd.Series(dtype=float))),
+                "avg_launch_angle": _series_mean(sub.get("launch_angle", pd.Series(dtype=float))),
+                "avg_distance": _series_mean(sub.get("hit_distance_sc", pd.Series(dtype=float))),
+                "avg_xwoba": _round_rate_mean(
+                    sub.get("estimated_woba_using_speedangle", pd.Series(dtype=float))
+                ),
+                "hard_hit_pct": _hard_hit_rate(sub.get("launch_speed", pd.Series(dtype=float))),
+                "barrel_pct": _barrel_rate(sub.get("launch_speed_angle", pd.Series(dtype=float))),
+                "babip": babip,
+            },
+            "legend": legend,
+            "types": types,
+            "metrics": metrics,
+            "points": points,
+        }
+    except Exception:
+        return empty
 
 
 def _split_cell_value(label: str, value: Any) -> str:
@@ -1095,7 +1271,7 @@ def fetch_player_stat_panels(
 
     kind = "pitching" if is_pitcher_position(position) else "batting"
     pitching = kind == "pitching"
-    cache_key = f"{player_id}:{year}:{kind}:v4"
+    cache_key = f"{player_id}:{year}:{kind}:v7"
     cached = _stat_panels_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
@@ -1144,11 +1320,10 @@ def fetch_player_stat_panels(
         ],
     }
 
-    pitch_mix_panel = _fetch_pitch_mix_panel(
-        mlbam_id=mlbam_id,
-        pitching=pitching,
-        season_year=year,
-    )
+    if pitching:
+        visual_panel = _fetch_pitch_mix_panel(mlbam_id=mlbam_id, season_year=year)
+    else:
+        visual_panel = _fetch_spray_chart_panel(mlbam_id=mlbam_id, season_year=year)
 
     splits_panel = (
         _fetch_splits_panels(bbref_id, pitching=pitching, season_year=year)
@@ -1165,6 +1340,6 @@ def fetch_player_stat_panels(
         }
     )
 
-    panels = [advanced_panel, pitch_mix_panel, splits_panel]
+    panels = [advanced_panel, visual_panel, splits_panel]
     _stat_panels_cache[cache_key] = (now, panels)
     return panels
