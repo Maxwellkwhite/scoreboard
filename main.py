@@ -1067,7 +1067,7 @@ def mlb_player_page(player_id):
 
 @app.route('/api/mlb/player/<player_id>/stats', methods=['GET'], endpoint='api_mlb_player_stats')
 def api_mlb_player_stats(player_id):
-    from espn_mlb import fetch_player, fetch_player_stats
+    from espn_mlb import fetch_player, fetch_player_extra_stat_panels, fetch_player_stats
 
     try:
         player = fetch_player(str(player_id), include_stats=False)
@@ -1079,10 +1079,19 @@ def api_mlb_player_stats(player_id):
         player.get('season_year'),
         position=player.get('position'),
     )
-    if not stats_table:
+    stat_panels = fetch_player_extra_stat_panels(
+        str(player_id),
+        player_name=player.get('name') or '',
+        position=player.get('position'),
+        season_year=player.get('season_year'),
+    )
+    if not stats_table and not stat_panels:
         return jsonify({'error': 'Stats unavailable'}), 404
 
-    return jsonify({'stats_table': stats_table})
+    return jsonify({
+        'stats_table': stats_table,
+        'stat_panels': stat_panels,
+    })
 
 
 @app.route('/api/mlb/player/<player_id>', methods=['GET'], endpoint='api_mlb_player')

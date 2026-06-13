@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import time
+import unicodedata
 from datetime import date, timedelta
 from typing import Any
 
@@ -832,31 +833,108 @@ def _add_player_name(players: dict[str, str], athlete: dict[str, Any] | None) ->
     if not athlete:
         return
     player_id = athlete.get("id")
-    name = athlete.get("shortName") or athlete.get("displayName") or athlete.get("fullName")
+    name = (
+        athlete.get("displayName")
+        or athlete.get("shortName")
+        or athlete.get("fullName")
+    )
     if player_id and name:
         players[str(player_id)] = name
+
+
+def _merge_athlete_record(
+    records: dict[str, dict[str, Any]],
+    athlete: dict[str, Any] | None,
+) -> None:
+    if not athlete or not athlete.get("id"):
+        return
+    player_id = str(athlete["id"])
+    existing = records.get(player_id, {})
+    records[player_id] = {**existing, **athlete}
+
+
+def _athlete_records_from_game(
+    payload: dict[str, Any],
+    competitors: list[dict[str, Any]] | None = None,
+) -> dict[str, dict[str, Any]]:
+    records: dict[str, dict[str, Any]] = {}
+
+    for competitor in competitors or []:
+        for probable in competitor.get("probables") or []:
+            _merge_athlete_record(records, probable.get("athlete"))
+
+    boxscore = payload.get("boxscore") or {}
+    for team_block in boxscore.get("players") or []:
+        for stat in team_block.get("statistics") or []:
+            for entry in stat.get("athletes") or []:
+                _merge_athlete_record(records, entry.get("athlete"))
+
+    for roster_block in payload.get("rosters") or []:
+        for entry in roster_block.get("roster") or []:
+            _merge_athlete_record(records, entry.get("athlete"))
+
+    for play in payload.get("plays") or []:
+        for participant in play.get("participants") or []:
+            _merge_athlete_record(records, participant.get("athlete"))
+
+    return records
 
 
 def _player_map_from_game(
     payload: dict[str, Any],
     competitors: list[dict[str, Any]] | None = None,
 ) -> dict[str, str]:
+    records = _athlete_records_from_game(payload, competitors)
     players: dict[str, str] = {}
-    for competitor in competitors or []:
-        for probable in competitor.get("probables") or []:
-            _add_player_name(players, probable.get("athlete"))
-
-    boxscore = payload.get("boxscore") or {}
-    for team_block in boxscore.get("players") or []:
-        for stat in team_block.get("statistics") or []:
-            for entry in stat.get("athletes") or []:
-                _add_player_name(players, entry.get("athlete"))
-
-    for roster_block in payload.get("rosters") or []:
-        for entry in roster_block.get("roster") or []:
-            _add_player_name(players, entry.get("athlete"))
-
+    for athlete in records.values():
+        _add_player_name(players, athlete)
     return players
+
+
+def _player_name_variants(name: str, athlete: dict[str, Any] | None = None) -> list[str]:
+    variants: list[str] = []
+
+    def add(value: str | None) -> None:
+        text = (value or "").strip()
+        if not text or text in variants:
+            return
+        variants.append(text)
+
+    if athlete:
+        add(athlete.get("displayName"))
+        add(athlete.get("shortName"))
+        add(athlete.get("fullName"))
+        add(athlete.get("lastName"))
+
+    add(name)
+
+    for source in variants[:]:
+        if "." in source:
+            add(source.split(".")[-1].strip())
+        parts = source.split()
+        if len(parts) >= 2:
+            add(parts[-1])
+
+    return variants
+
+
+def _player_link_entries(
+    player_map: dict[str, str],
+    athlete_records: dict[str, dict[str, Any]] | None = None,
+) -> list[tuple[str, str]]:
+    athlete_records = athlete_records or {}
+    entries: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for player_id, name in player_map.items():
+        athlete = athlete_records.get(player_id)
+        for variant in _player_name_variants(name, athlete):
+            key = (player_id, variant)
+            if key in seen:
+                continue
+            seen.add(key)
+            entries.append(key)
+    entries.sort(key=lambda item: len(item[1]), reverse=True)
+    return entries
 
 
 def _runner_player_id(value: Any) -> str | None:
@@ -1082,7 +1160,12 @@ def parse_game_detail(payload: dict[str, Any]) -> dict[str, Any]:
 
     live_win_pct = _parse_win_probability(payload.get("winprobability"))
     plays = payload.get("plays") or []
+    athlete_records = _athlete_records_from_game(payload, comp.get("competitors"))
     player_map = _player_map_from_game(payload, comp.get("competitors"))
+    player_link_entries = [
+        {"id": player_id, "name": name}
+        for player_id, name in _player_link_entries(player_map, athlete_records)
+    ]
     batting_stats_map = _player_batting_stats_map(payload)
     live_situation = _parse_live_situation(
         payload.get("situation"),
@@ -1140,6 +1223,7 @@ def parse_game_detail(payload: dict[str, Any]) -> dict[str, Any]:
         "scoring_plays": _parse_scoring_plays(plays, away_id=away_id, home_id=home_id),
         "win_probability": live_win_pct,
         "player_map": player_map,
+        "player_link_entries": player_link_entries,
     }
     if game.get("status_state") == "post":
         live_data["plays_by_inning"] = _parse_plays_by_inning(
@@ -1314,35 +1398,48 @@ def scoreboard_snapshot(
     }
 
 
+def _fold_for_match(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    folded = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return folded.casefold()
+
+
 def linkify_player_names(
     text: str | None,
     player_map: dict[str, str] | None,
+    *,
+    athlete_records: dict[str, dict[str, Any]] | None = None,
 ) -> Markup:
     if not text:
         return Markup("")
     if not player_map:
         return Markup(escape(text))
 
-    entries = sorted(
-        ((pid, name) for pid, name in player_map.items() if name),
-        key=lambda item: len(item[1]),
-        reverse=True,
-    )
-    placeholders: dict[str, Markup] = {}
-    temp = str(text)
-    for index, (player_id, name) in enumerate(entries):
-        if name not in temp:
-            continue
-        key = f"@@PLAYER_LINK_{index}@@"
-        placeholders[key] = Markup(
-            f'<a href="/player/{escape(player_id)}" class="player-link">{escape(name)}</a>'
-        )
-        temp = temp.replace(name, key)
+    entries = _player_link_entries(player_map, athlete_records)
+    if not entries:
+        return Markup(escape(text))
 
-    result = escape(temp)
-    for key, link in placeholders.items():
-        result = Markup(str(result).replace(key, str(link)))
-    return result
+    entry_by_folded: dict[str, tuple[str, str]] = {}
+    for player_id, name in entries:
+        folded = _fold_for_match(name)
+        if folded not in entry_by_folded or len(name) > len(entry_by_folded[folded][1]):
+            entry_by_folded[folded] = (player_id, name)
+
+    parts = re.split(r"(\W+)", str(text))
+    linked: list[str] = []
+    for part in parts:
+        if not part or not part.strip() or not re.search(r"\w", part):
+            linked.append(escape(part))
+            continue
+        match = entry_by_folded.get(_fold_for_match(part))
+        if match:
+            player_id, _name = match
+            linked.append(
+                f'<a href="/player/{escape(player_id)}" class="player-link">{escape(part)}</a>'
+            )
+        else:
+            linked.append(escape(part))
+    return Markup("".join(linked))
 
 
 def _parse_season_year(season_label: str | None) -> str | None:
@@ -1409,6 +1506,26 @@ def fetch_player_stats(
         return fetch_player_stats_table(player_name, season_year, position=position)
     except Exception:
         return None
+
+
+def fetch_player_extra_stat_panels(
+    player_id: str,
+    *,
+    player_name: str | None = None,
+    position: str | None = None,
+    season_year: str | None = None,
+) -> list[dict[str, Any]]:
+    try:
+        from player_stats import fetch_player_stat_panels
+
+        return fetch_player_stat_panels(
+            player_id,
+            player_name=player_name or "",
+            position=position,
+            season_year=season_year,
+        )
+    except Exception:
+        return []
 
 
 def fetch_player(

@@ -43,11 +43,14 @@
         <div class="game-detail-hero-main">
           <div class="game-detail-matchup-row">
             <div id="game-team-away" class="game-card-team game-card-team--away game-detail-matchup-team game-detail-matchup-team--away{% if game.away.winner %} game-card-team--winner{% elif game.status_state == 'post' and has_winner %} game-card-team--loser{% endif %}" style="--team-color: {{ game.away.win_color or game.away.color or '#1a2332' }};">
-              {% if game.away.logo %}
-              <img class="game-card-logo" src="{{ game.away.logo }}" alt="" width="48" height="48" loading="lazy">
-              {% else %}
-              <div class="game-card-logo game-card-logo--placeholder">{{ game.away.abbr }}</div>
-              {% endif %}
+              <div class="game-detail-matchup-team-mark">
+                {% if game.away.logo %}
+                <img class="game-card-logo" src="{{ game.away.logo }}" alt="" width="48" height="48" loading="lazy">
+                {% else %}
+                <div class="game-card-logo game-card-logo--placeholder">{{ game.away.abbr }}</div>
+                {% endif %}
+                <span class="game-card-role{% if away_role %} game-card-role--{{ away_role }}{% endif %}" id="game-away-role"{% if not away_role %} hidden{% endif %}{% if away_role %} style="color: {{ game.away.win_color or game.away.color }}; border-color: {{ game.away.win_color or game.away.color }};"{% endif %}>{% if away_role == 'batting' %}Batting{% elif away_role == 'pitching' %}Pitching{% endif %}</span>
+              </div>
               <div class="game-card-team-meta">
                 <span class="game-card-abbr">{{ game.away.abbr }}</span>
                 <span class="game-card-name">{{ game.away.short_name or game.away.name }}</span>
@@ -57,12 +60,10 @@
 
             <div class="game-detail-matchup-scores">
               <div class="game-detail-matchup-score game-detail-matchup-score--away" style="--team-color: {{ game.away.win_color or game.away.color or '#1a2332' }};">
-                <span class="game-card-role{% if away_role %} game-card-role--{{ away_role }}{% endif %}" id="game-away-role"{% if not away_role %} hidden{% endif %}{% if away_role %} style="color: {{ game.away.win_color or game.away.color }}; border-color: {{ game.away.win_color or game.away.color }};"{% endif %}>{% if away_role == 'batting' %}Batting{% elif away_role == 'pitching' %}Pitching{% endif %}</span>
                 <span class="game-card-score" id="game-away-score">{{ game.away.score if game.away.score is not none else '0' }}</span>
               </div>
               <span class="game-detail-matchup-score-sep" aria-hidden="true">–</span>
               <div class="game-detail-matchup-score game-detail-matchup-score--home" style="--team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};">
-                <span class="game-card-role{% if home_role %} game-card-role--{{ home_role }}{% endif %}" id="game-home-role"{% if not home_role %} hidden{% endif %}{% if home_role %} style="color: {{ game.home.win_color or game.home.color }}; border-color: {{ game.home.win_color or game.home.color }};"{% endif %}>{% if home_role == 'batting' %}Batting{% elif home_role == 'pitching' %}Pitching{% endif %}</span>
                 <span class="game-card-score" id="game-home-score">{{ game.home.score if game.home.score is not none else '0' }}</span>
               </div>
             </div>
@@ -73,11 +74,14 @@
                 <span class="game-card-name">{{ game.home.short_name or game.home.name }}</span>
                 {% if game.home.record %}<span class="game-card-record">{{ game.home.record }}</span>{% endif %}
               </div>
-              {% if game.home.logo %}
-              <img class="game-card-logo" src="{{ game.home.logo }}" alt="" width="48" height="48" loading="lazy">
-              {% else %}
-              <div class="game-card-logo game-card-logo--placeholder">{{ game.home.abbr }}</div>
-              {% endif %}
+              <div class="game-detail-matchup-team-mark">
+                {% if game.home.logo %}
+                <img class="game-card-logo" src="{{ game.home.logo }}" alt="" width="48" height="48" loading="lazy">
+                {% else %}
+                <div class="game-card-logo game-card-logo--placeholder">{{ game.home.abbr }}</div>
+                {% endif %}
+                <span class="game-card-role{% if home_role %} game-card-role--{{ home_role }}{% endif %}" id="game-home-role"{% if not home_role %} hidden{% endif %}{% if home_role %} style="color: {{ game.home.win_color or game.home.color }}; border-color: {{ game.home.win_color or game.home.color }};"{% endif %}>{% if home_role == 'batting' %}Batting{% elif home_role == 'pitching' %}Pitching{% endif %}</span>
+              </div>
             </div>
           </div>
 
@@ -161,7 +165,7 @@
       {% set tab_ns.first = false %}
       {% endif %}
       {% if game.live.scoring_plays or game.live.recent_plays or (game.status_state == 'post' and game.live.plays_by_inning) %}
-      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="recent-plays" aria-selected="{{ 'true' if tab_ns.first else 'false' }}" id="game-recent-plays-tab">{% if game.status_state == 'post' %}Plays{% else %}Recent Plays{% endif %}</button>
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="recent-plays" aria-selected="{{ 'true' if tab_ns.first else 'false' }}" id="game-recent-plays-tab">Plays</button>
       {% set tab_ns.first = false %}
       {% endif %}
       {% if game.preview.venue or game.preview.weather_temp is not none or game.preview.broadcasts or game.preview.series_summary %}
@@ -306,7 +310,7 @@
     {% if game.live.scoring_plays or game.live.recent_plays or (game.status_state == 'post' and game.live.plays_by_inning) %}
     <section class="game-detail-section game-detail-panel" id="game-plays-section" data-panel="recent-plays"{% if not panel_ns.first %} hidden{% endif %}>
     {% set panel_ns.first = false %}
-      <h3 id="game-recent-plays-heading">{% if game.status_state == 'post' %}Plays{% else %}Recent Plays{% endif %}</h3>
+      <h3 id="game-recent-plays-heading">Plays</h3>
       {% if game.live.scoring_plays %}
       <div class="scoring-plays-inline scoring-plays-inline--panel" id="game-scoring-plays-section">
         <h4 class="scoring-plays-inline__title">Scoring Plays</h4>

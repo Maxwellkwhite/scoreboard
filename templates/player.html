@@ -79,7 +79,7 @@
     </section>
 
     <section
-      class="game-detail-section player-stats-table-section"
+      class="game-detail-section player-stats-summary-section"
       id="player-stats-section"
       data-player-id="{{ player.id }}"
       aria-busy="true"
@@ -89,8 +89,12 @@
         <p class="player-stats-loading__text">Loading stats…</p>
       </div>
       <p class="player-stats-error" id="player-stats-error" hidden>Stats unavailable right now.</p>
-      <div class="player-stats-table-wrap" id="player-stats-table-wrap" hidden></div>
+      <div class="player-stats-summary" id="player-stats-summary" hidden></div>
     </section>
+
+    <nav class="game-detail-tabs player-stats-tabs" id="player-stats-tabs" aria-label="Player stats views" hidden></nav>
+
+    <div id="player-stats-panels"></div>
   </main>
   <script src="{{ url_for('static', filename='js/player.js') }}" defer></script>
 </body>

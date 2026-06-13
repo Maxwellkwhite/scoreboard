@@ -40,33 +40,75 @@
       escapeHtml(name) + '</a>';
   }
 
-  function linkifyPlayerNames(text, playerMap) {
-    if (!text) return '';
-    if (!playerMap) return escapeHtml(text);
+  function playerNameVariants(name) {
+    var variants = [];
+    function add(value) {
+      var text = String(value || '').trim();
+      if (!text || variants.indexOf(text) !== -1) return;
+      variants.push(text);
+    }
+    add(name);
+    variants.slice().forEach(function (source) {
+      if (source.indexOf('.') !== -1) {
+        add(source.split('.').pop().trim());
+      }
+      var parts = source.split(/\s+/);
+      if (parts.length >= 2) {
+        add(parts[parts.length - 1]);
+      }
+    });
+    return variants;
+  }
 
-    var entries = Object.keys(playerMap).map(function (id) {
-      return { id: id, name: playerMap[id] };
-    }).filter(function (entry) {
-      return entry.name;
+  function playerLinkEntries(playerMap, linkEntries) {
+    if (linkEntries && linkEntries.length) {
+      return linkEntries.slice().sort(function (a, b) {
+        return b.name.length - a.name.length;
+      });
+    }
+    if (!playerMap) return [];
+    var entries = [];
+    Object.keys(playerMap).forEach(function (id) {
+      playerNameVariants(playerMap[id]).forEach(function (name) {
+        entries.push({ id: id, name: name });
+      });
     });
     entries.sort(function (a, b) {
       return b.name.length - a.name.length;
     });
+    return entries;
+  }
 
-    var temp = String(text);
-    var placeholders = {};
-    entries.forEach(function (entry, index) {
-      if (temp.indexOf(entry.name) === -1) return;
-      var key = '@@PLAYER_LINK_' + index + '@@';
-      placeholders[key] = playerLink(entry.id, entry.name);
-      temp = temp.split(entry.name).join(key);
+  function foldForMatch(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  }
+
+  function linkifyPlayerNames(text, playerMap, linkEntries) {
+    if (!text) return '';
+    var entries = playerLinkEntries(playerMap, linkEntries);
+    if (!entries.length) return escapeHtml(text);
+
+    var entryByFolded = {};
+    entries.forEach(function (entry) {
+      var folded = foldForMatch(entry.name);
+      if (!entryByFolded[folded] || entry.name.length > entryByFolded[folded].name.length) {
+        entryByFolded[folded] = entry;
+      }
     });
 
-    var result = escapeHtml(temp);
-    Object.keys(placeholders).forEach(function (key) {
-      result = result.split(key).join(placeholders[key]);
-    });
-    return result;
+    return String(text).split(/(\W+)/).map(function (part) {
+      if (!part || !part.trim() || !/\w/.test(part)) {
+        return escapeHtml(part);
+      }
+      var match = entryByFolded[foldForMatch(part)];
+      if (match) {
+        return playerLink(match.id, part);
+      }
+      return escapeHtml(part);
+    }).join('');
   }
 
   function setPlayerNameHtml(el, name, id, playerMap) {
@@ -109,7 +151,7 @@
       '</span>';
   }
 
-  function scoringPlaySummaryHtml(play, awayTeam, homeTeam, playerMap) {
+  function scoringPlaySummaryHtml(play, awayTeam, homeTeam, playerMap, linkEntries) {
     var team = play.scoring_side === 'home'
       ? homeTeam
       : (play.scoring_side === 'away' ? awayTeam : null);
@@ -124,12 +166,12 @@
     return '<li class="play-feed-item play-feed-item--scoring-summary">' +
       scoringPlayTeamBadge(team) +
       period +
-      '<span class="play-feed-text">' + linkifyPlayerNames(play.text, playerMap) + '</span>' +
+      '<span class="play-feed-text">' + linkifyPlayerNames(play.text, playerMap, linkEntries) + '</span>' +
       score +
       '</li>';
   }
 
-  function playFeedItemHtml(play, compact, awayTeam, homeTeam, highlightScoring, playerMap) {
+  function playFeedItemHtml(play, compact, awayTeam, homeTeam, highlightScoring, playerMap, linkEntries) {
     var score = '';
     if (play.away_score !== null && play.away_score !== undefined &&
         play.home_score !== null && play.home_score !== undefined) {
@@ -141,7 +183,7 @@
     var itemStyle = useHighlight ? scoringPlayStyle(play, awayTeam, homeTeam) : '';
     if (compact) {
       return '<li class="' + itemClass + '"' + itemStyle + '>' +
-        '<span class="play-feed-text">' + linkifyPlayerNames(play.text, playerMap) + '</span>' +
+        '<span class="play-feed-text">' + linkifyPlayerNames(play.text, playerMap, linkEntries) + '</span>' +
         score +
         '</li>';
     }
@@ -150,12 +192,12 @@
       : '<span></span>';
     return '<li class="' + itemClass + '"' + itemStyle + '>' +
       period +
-      '<span class="play-feed-text">' + linkifyPlayerNames(play.text, playerMap) + '</span>' +
+      '<span class="play-feed-text">' + linkifyPlayerNames(play.text, playerMap, linkEntries) + '</span>' +
       score +
       '</li>';
   }
 
-  function renderPlayList(containerId, plays, scoringOnly, awayTeam, homeTeam, highlightScoring, playerMap) {
+  function renderPlayList(containerId, plays, scoringOnly, awayTeam, homeTeam, highlightScoring, playerMap, linkEntries) {
     var container = document.getElementById(containerId);
     if (!container) return;
     var isScoringList = containerId === 'game-scoring-plays';
@@ -176,13 +218,13 @@
     if (section) section.hidden = false;
     container.innerHTML = items.map(function (play) {
       if (isScoringList) {
-        return scoringPlaySummaryHtml(play, awayTeam, homeTeam, playerMap);
+        return scoringPlaySummaryHtml(play, awayTeam, homeTeam, playerMap, linkEntries);
       }
-      return playFeedItemHtml(play, false, awayTeam, homeTeam, highlightScoring, playerMap);
+      return playFeedItemHtml(play, false, awayTeam, homeTeam, highlightScoring, playerMap, linkEntries);
     }).join('');
   }
 
-  function renderPlaysByInning(playsByInning, awayTeam, homeTeam, playerMap) {
+  function renderPlaysByInning(playsByInning, awayTeam, homeTeam, playerMap, linkEntries) {
     var mount = document.getElementById('game-recent-plays-mount');
     if (!mount) return;
 
@@ -202,7 +244,7 @@
       var inningKey = group.inning || String(index);
       var isOpen = hasOpenState ? Boolean(openInnings[inningKey]) : index === 0;
       var playsHtml = (group.plays || []).map(function (play) {
-        return playFeedItemHtml(play, true, awayTeam, homeTeam, true, playerMap);
+        return playFeedItemHtml(play, true, awayTeam, homeTeam, true, playerMap, linkEntries);
       }).join('');
       return '<details class="play-inning-collapse" data-inning-key="' + inningKey + '"' +
         (isOpen ? ' open' : '') + '>' +
@@ -222,24 +264,25 @@
       (live.recent_plays && live.recent_plays.length)
     );
 
-    if (tab) tab.textContent = isFinal ? 'Plays' : 'Recent Plays';
-    if (heading) heading.textContent = isFinal ? 'Plays' : 'Recent Plays';
+    if (tab) tab.textContent = 'Plays';
+    if (heading) heading.textContent = 'Plays';
     if (allPlaysHeading) {
       allPlaysHeading.hidden = !hasAllPlays;
       allPlaysHeading.textContent = isFinal ? 'Play-by-Play' : 'Recent';
     }
 
     var playerMap = live.player_map || null;
+    var linkEntries = live.player_link_entries || null;
 
     if (isFinal && live.plays_by_inning) {
-      renderPlaysByInning(live.plays_by_inning, awayTeam, homeTeam, playerMap);
+      renderPlaysByInning(live.plays_by_inning, awayTeam, homeTeam, playerMap, linkEntries);
       return;
     }
 
     var mount = document.getElementById('game-recent-plays-mount');
     if (!mount) return;
     mount.innerHTML = '<ul class="play-feed" id="game-recent-plays"></ul>';
-    renderPlayList('game-recent-plays', live.recent_plays, false, awayTeam, homeTeam, true, playerMap);
+    renderPlayList('game-recent-plays', live.recent_plays, false, awayTeam, homeTeam, true, playerMap, linkEntries);
   }
 
   function linescoreTeamColor(team) {
@@ -594,7 +637,7 @@
     return line + ', ' + runs + ' R, ' + rbi + ' RBI';
   }
 
-  function renderSituation(live, statusState, playerMap) {
+  function renderSituation(live, statusState, playerMap, linkEntries) {
     var section = document.getElementById('game-situation-section');
     if (!live || !live.situation || statusState !== 'in') {
       if (section) section.hidden = true;
@@ -623,7 +666,7 @@
           var nameEl = document.createElement('span');
           nameEl.className = 'due-up-name';
           nameEl.innerHTML = playerLink(batter.id, batter.name) ||
-            linkifyPlayerNames(batter.name, playerMap);
+            linkifyPlayerNames(batter.name, playerMap, linkEntries);
 
           var statsEl = document.createElement('span');
           statsEl.className = 'due-up-stats';
@@ -945,8 +988,9 @@
     renderTeamBox(live.team_box, game.away, game.home);
     renderLineups(live.lineups, game.away, game.home);
     var playerMap = live.player_map || null;
-    renderSituation(live, game.status_state, playerMap);
-    renderPlayList('game-scoring-plays', live.scoring_plays, false, game.away, game.home, false, playerMap);
+    var linkEntries = live.player_link_entries || null;
+    renderSituation(live, game.status_state, playerMap, linkEntries);
+    renderPlayList('game-scoring-plays', live.scoring_plays, false, game.away, game.home, false, playerMap, linkEntries);
     renderRecentPlaysPanel(live, game.status_state, game.away, game.home);
 
     document.title = game.away.abbr + ' @ ' + game.home.abbr + ' — Scoreboard';
