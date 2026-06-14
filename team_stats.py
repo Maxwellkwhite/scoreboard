@@ -102,6 +102,28 @@ _FIELDING_DETAIL_SPECS = (
     ("totalChances", "TC"),
     ("fullInningsPlayed", "INN"),
 )
+_LOWER_IS_BETTER_STATS = frozenset({
+    "ERA", "WHIP", "earnedRuns", "losses", "walks", "hits", "homeRuns",
+    "opponentAvg", "errors", "strikeouts",
+})
+# Pitching strikeouts and walks: for team pitching, K is higher better, BB is lower better
+_PITCHING_LOWER_IS_BETTER = frozenset({
+    "ERA", "WHIP", "earnedRuns", "losses", "walks", "hits", "homeRuns", "opponentAvg",
+})
+_BATTING_LOWER_IS_BETTER = frozenset({"strikeouts"})
+_FIELDING_LOWER_IS_BETTER = frozenset({"errors"})
+_RATE_MEDIAN_STATS = frozenset({
+    "avg", "onBasePct", "slugAvg", "OPS", "WHIP", "opponentAvg",
+    "fieldingPct", "ERA", "strikeoutsPerNineInnings", "winPct",
+    "innings", "fullInningsPlayed",
+})
+
+ESPN_TEAMS_URL = (
+    "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams"
+)
+
+_team_statistics_cache: dict[str, tuple[float, dict[str, dict[str, Any]]]] = {}
+_league_stats_cache: dict[int, tuple[float, dict[str, dict[str, list[float]]]]] = {}
 
 
 def _parse_number(value: Any) -> float | None:
@@ -153,6 +175,11 @@ def _category_stats_map(categories: list[dict[str, Any]], category_name: str) ->
 
 
 def _fetch_team_statistics(team_id: str) -> dict[str, dict[str, Any]]:
+    cached = _team_statistics_cache.get(team_id)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
     response = requests.get(
         ESPN_TEAM_STATISTICS_URL.format(team_id=team_id),
         timeout=20,
@@ -160,11 +187,157 @@ def _fetch_team_statistics(team_id: str) -> dict[str, dict[str, Any]]:
     response.raise_for_status()
     payload = response.json()
     categories = ((payload.get("results") or {}).get("stats") or {}).get("categories") or []
-    return {
+    result = {
         "batting": _category_stats_map(categories, "batting"),
         "pitching": _category_stats_map(categories, "pitching"),
         "fielding": _category_stats_map(categories, "fielding"),
     }
+    _team_statistics_cache[team_id] = (now, result)
+    return result
+
+
+def _get_mlb_team_ids() -> list[str]:
+    response = requests.get(ESPN_TEAMS_URL, timeout=15)
+    response.raise_for_status()
+    payload = response.json()
+    team_ids: list[str] = []
+    for item in (
+        (payload.get("sports") or [{}])[0]
+        .get("leagues", [{}])[0]
+        .get("teams", [])
+    ):
+        team = item.get("team") or {}
+        team_id = team.get("id")
+        if team_id is not None:
+            team_ids.append(str(team_id))
+    return team_ids
+
+
+def _get_league_stats_by_category(season_year: int) -> dict[str, dict[str, list[float]]]:
+    cached = _league_stats_cache.get(season_year)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    league_stats: dict[str, dict[str, list[float]]] = {
+        "batting": {},
+        "pitching": {},
+        "fielding": {},
+    }
+    team_ids = _get_mlb_team_ids()
+    if team_ids:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {
+                executor.submit(_fetch_team_statistics, team_id): team_id
+                for team_id in team_ids
+            }
+            for future in as_completed(futures):
+                try:
+                    stats_by_category = future.result()
+                except Exception:
+                    continue
+                for category_name, category_stats in stats_by_category.items():
+                    bucket = league_stats.setdefault(category_name, {})
+                    for stat_name, raw_value in category_stats.items():
+                        number = _parse_number(raw_value)
+                        if number is None:
+                            continue
+                        bucket.setdefault(stat_name, []).append(number)
+
+    _league_stats_cache[season_year] = (now, league_stats)
+    return league_stats
+
+
+def _stat_lower_is_better(category: str, stat_name: str) -> bool:
+    if category == "pitching":
+        return stat_name in _PITCHING_LOWER_IS_BETTER
+    if category == "batting":
+        return stat_name in _BATTING_LOWER_IS_BETTER
+    if category == "fielding":
+        return stat_name in _FIELDING_LOWER_IS_BETTER
+    return stat_name in _LOWER_IS_BETTER_STATS
+
+
+def _scale_stat_position(value: float, min_value: float, max_value: float) -> float:
+    span = max_value - min_value
+    if span <= 0:
+        return 50.0
+    return max(0.0, min(100.0, (value - min_value) / span * 100.0))
+
+
+def _median(values: list[float], *, stat_name: str) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[mid]
+    if stat_name in _RATE_MEDIAN_STATS:
+        return (ordered[mid - 1] + ordered[mid]) / 2.0
+    return ordered[mid - 1]
+
+
+def _build_stat_metrics(
+    stats: dict[str, Any],
+    specs: tuple[tuple[str, str], ...],
+    *,
+    category: str,
+    league_stats: dict[str, list[float]],
+) -> list[dict[str, Any]]:
+    metrics: list[dict[str, Any]] = []
+    for stat_name, label in specs:
+        if stat_name not in stats:
+            continue
+        team_value = _parse_number(stats.get(stat_name))
+        if team_value is None:
+            continue
+
+        league_values = league_stats.get(stat_name) or []
+        league_median = _median(league_values, stat_name=stat_name)
+        if league_values:
+            min_value = min(league_values)
+            max_value = max(league_values)
+            bar_pct = _scale_stat_position(team_value, min_value, max_value)
+            league_pct = (
+                _scale_stat_position(league_median, min_value, max_value)
+                if league_median is not None
+                else None
+            )
+        else:
+            bar_pct = 50.0
+            league_pct = None
+
+        lower_is_better = _stat_lower_is_better(category, stat_name)
+        better = None
+        above_median = None
+        if league_median is not None:
+            if team_value > league_median:
+                above_median = True
+            elif team_value < league_median:
+                above_median = False
+            if lower_is_better:
+                better = team_value < league_median
+            else:
+                better = team_value > league_median
+            if abs(team_value - league_median) < 1e-9:
+                better = True
+                above_median = None
+
+        metrics.append({
+            "id": stat_name,
+            "label": label,
+            "display": _format_stat_value(stat_name, team_value),
+            "league_display": (
+                _format_stat_value(stat_name, league_median)
+                if league_median is not None
+                else None
+            ),
+            "bar_pct": round(bar_pct, 1),
+            "league_pct": round(league_pct, 1) if league_pct is not None else None,
+            "better": better,
+            "above_median": above_median,
+        })
+    return metrics
 
 
 def _build_summary_table(
@@ -471,7 +644,7 @@ def fetch_team_stat_panels(
     team_detail: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     year = season_year or date.today().year
-    cache_key = f"{team_id}:{year}:panels:v2"
+    cache_key = f"{team_id}:{year}:panels:v6"
     cached = _team_panels_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
@@ -480,22 +653,39 @@ def fetch_team_stat_panels(
     panels: list[dict[str, Any]] = []
     try:
         stats_by_category = _fetch_team_statistics(team_id)
-        batting_rows = _build_stat_rows(stats_by_category.get("batting") or {}, _BATTING_DETAIL_SPECS)
-        pitching_rows = _build_stat_rows(stats_by_category.get("pitching") or {}, _PITCHING_DETAIL_SPECS)
-        fielding_rows = _build_stat_rows(stats_by_category.get("fielding") or {}, _FIELDING_DETAIL_SPECS)
+        league_stats = _get_league_stats_by_category(year)
+
+        batting_metrics = _build_stat_metrics(
+            stats_by_category.get("batting") or {},
+            _BATTING_DETAIL_SPECS,
+            category="batting",
+            league_stats=league_stats.get("batting") or {},
+        )
+        pitching_metrics = _build_stat_metrics(
+            stats_by_category.get("pitching") or {},
+            _PITCHING_DETAIL_SPECS,
+            category="pitching",
+            league_stats=league_stats.get("pitching") or {},
+        )
+        fielding_metrics = _build_stat_metrics(
+            stats_by_category.get("fielding") or {},
+            _FIELDING_DETAIL_SPECS,
+            category="fielding",
+            league_stats=league_stats.get("fielding") or {},
+        )
 
         stat_views: list[dict[str, Any]] = []
-        if batting_rows:
-            stat_views.append({"id": "batting", "label": "Batting", "rows": batting_rows})
-        if pitching_rows:
-            stat_views.append({"id": "pitching", "label": "Pitching", "rows": pitching_rows})
-        if fielding_rows:
-            stat_views.append({"id": "fielding", "label": "Fielding", "rows": fielding_rows})
+        if batting_metrics:
+            stat_views.append({"id": "batting", "label": "Batting", "metrics": batting_metrics})
+        if pitching_metrics:
+            stat_views.append({"id": "pitching", "label": "Pitching", "metrics": pitching_metrics})
+        if fielding_metrics:
+            stat_views.append({"id": "fielding", "label": "Fielding", "metrics": fielding_metrics})
         if stat_views:
             panels.append({
                 "id": "team_stats",
                 "label": "Team Stats",
-                "panel_kind": "toggle_stat_table",
+                "panel_kind": "toggle_stat_bars",
                 "default_view": stat_views[0]["id"],
                 "season_year": str(year),
                 "views": stat_views,

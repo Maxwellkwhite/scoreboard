@@ -78,6 +78,88 @@
     return '<div class="player-panel-toggle" data-panel="' + escapeHtml(panelId) + '">' + buttons + '</div>';
   }
 
+  function teamStatBarColor(metric) {
+    if (metric.better !== false) return '#22a06b';
+    return '#d4183d';
+  }
+
+  function buildTeamStatValueHtml(metric) {
+    var teamValue =
+      '<span class="team-stat-bar-row__value pitch-mix-bar-row__value">' +
+        escapeHtml(metric.display) +
+      '</span>';
+
+    if (!metric.league_display) {
+      return teamValue + '<span class="team-stat-bar-row__league-compare" aria-hidden="true"></span>';
+    }
+
+    var compareClass = 'team-stat-bar-row__league-compare';
+    var arrow = '';
+    if (metric.above_median === true) {
+      arrow = '<span class="team-stat-bar-row__arrow" aria-hidden="true">▲</span>';
+    } else if (metric.above_median === false) {
+      arrow = '<span class="team-stat-bar-row__arrow" aria-hidden="true">▼</span>';
+    }
+    if (metric.better !== false) {
+      compareClass += ' team-stat-bar-row__league-compare--better';
+    } else {
+      compareClass += ' team-stat-bar-row__league-compare--worse';
+    }
+
+    var compareLabel = metric.better === false
+      ? 'Worse than league median'
+      : (metric.above_median == null && metric.league_display
+        ? 'Tied with league median'
+        : 'Better than league median');
+    var compareHtml =
+      '<span class="' + compareClass + '" title="' + escapeHtml(compareLabel) + '">' +
+        arrow +
+        '<span class="team-stat-bar-row__league-value">' + escapeHtml(metric.league_display) + '</span>' +
+      '</span>';
+
+    return teamValue + compareHtml;
+  }
+
+  function buildStatBarsHtml(view) {
+    var metrics = view.metrics || [];
+    if (!metrics.length) {
+      return '<p class="player-splits-empty">No stats available.</p>';
+    }
+
+    var rows = metrics.map(function (metric) {
+      var barPct = Math.max(0, Math.min(100, Number(metric.bar_pct) || 0));
+      var leaguePct = metric.league_pct == null ? null : Math.max(0, Math.min(100, Number(metric.league_pct) || 0));
+      var leagueMarker = leaguePct == null
+        ? ''
+        : (
+          '<span class="team-stat-bar-row__league" style="left:' + leaguePct.toFixed(1) +
+          '%" title="League median ' + escapeHtml(metric.league_display || '') + '"></span>'
+        );
+
+      return (
+        '<div class="pitch-mix-bar-row team-stat-bar-row">' +
+          '<span class="pitch-mix-bar-row__label">' + escapeHtml(metric.label) + '</span>' +
+          '<div class="team-stat-bar-row__track" aria-hidden="true">' +
+            '<span class="team-stat-bar-row__fill" style="width:' + barPct.toFixed(1) +
+            '%;background:' + teamStatBarColor(metric) + '"></span>' +
+            leagueMarker +
+          '</div>' +
+          buildTeamStatValueHtml(metric) +
+        '</div>'
+      );
+    }).join('');
+
+    return (
+      '<div class="team-stat-bars">' +
+        '<div class="team-stat-bars__legend">' +
+          '<span class="team-stat-bars__legend-mark" aria-hidden="true"></span>' +
+          '<span>League median</span>' +
+        '</div>' +
+        '<div class="team-stat-bars__rows">' + rows + '</div>' +
+      '</div>'
+    );
+  }
+
   function buildStatTableHtml(panel) {
     var rows = (panel.rows || []).map(function (row) {
       return (
@@ -230,15 +312,18 @@
   }
 
   function buildPanelInnerHtml(panel) {
-    if (panel.panel_kind === 'toggle_stat_table') {
+    if (panel.panel_kind === 'toggle_stat_bars' || panel.panel_kind === 'toggle_stat_table') {
       var defaultView = panel.default_view || (panel.views[0] && panel.views[0].id);
       var toggleHtml = buildToggleHtml(panel.id, panel.views, defaultView);
       var viewsHtml = (panel.views || []).map(function (view) {
+        var bodyHtml = view.metrics
+          ? buildStatBarsHtml(view)
+          : buildStatTableHtml(view);
         return (
           '<div class="player-panel-view" data-panel="' + escapeHtml(panel.id) +
           '" data-view="' + escapeHtml(view.id) + '"' +
           (view.id === defaultView ? '' : ' hidden') + '>' +
-          buildStatTableHtml(view) +
+          bodyHtml +
           '</div>'
         );
       }).join('');

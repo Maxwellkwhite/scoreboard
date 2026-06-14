@@ -4227,6 +4227,131 @@ a.team-link:hover {
   font-variant-numeric: tabular-nums;
 }
 
+.team-stat-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  width: 100%;
+}
+
+.team-stat-bars__legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #6b7789;
+}
+
+.team-stat-bars__legend-mark {
+  display: inline-block;
+  width: 2px;
+  height: 0.85rem;
+  background: #1a2332;
+  opacity: 0.7;
+  border-radius: 1px;
+}
+
+.team-stat-bars__rows {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, 5.5rem) minmax(0, 1fr) auto auto;
+  column-gap: 0.5rem;
+  row-gap: 0.45rem;
+  align-items: center;
+  width: 100%;
+}
+
+.team-stat-bar-row {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+  width: 100%;
+}
+
+.team-stat-bar-row__track {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #eef1f5;
+  overflow: visible;
+}
+
+.team-stat-bar-row__value {
+  justify-self: end;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.team-stat-bar-row .pitch-mix-bar-row__value {
+  text-align: right;
+}
+
+.team-stat-bar-row__league-compare {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+  margin-left: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #6b7789;
+  white-space: nowrap;
+  justify-self: start;
+}
+
+.team-stat-bar-row__arrow {
+  font-size: 0.58rem;
+  line-height: 1;
+}
+
+.team-stat-bar-row__league-compare--better .team-stat-bar-row__arrow {
+  color: #22a06b;
+}
+
+.team-stat-bar-row__league-compare--worse .team-stat-bar-row__arrow {
+  color: #d4183d;
+}
+
+.team-stat-bar-row__league-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.team-stat-bar-row__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  min-width: 2px;
+  transition: width 0.35s ease;
+}
+
+.team-stat-bar-row__league {
+  position: absolute;
+  top: -0.12rem;
+  bottom: -0.12rem;
+  width: 2px;
+  margin-left: -1px;
+  background: #1a2332;
+  opacity: 0.75;
+  border-radius: 1px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+@media (max-width: 479px) {
+  .team-stat-bars__rows {
+    grid-template-columns: minmax(3.5rem, 4.5rem) minmax(0, 1fr) auto auto;
+    column-gap: 0.35rem;
+    row-gap: 0.35rem;
+  }
+
+  .team-stat-bar-row__league-compare {
+    margin-left: 0.25rem;
+    font-size: 0.62rem;
+  }
+}
+
 .team-leaders-group + .team-leaders-group {
   margin-top: 1.5rem;
 }
