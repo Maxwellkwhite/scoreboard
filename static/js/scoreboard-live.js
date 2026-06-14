@@ -15,6 +15,7 @@
   var POLL_MS_LIVE = 15000;
   var POLL_MS_IDLE = 30000;
   var lastScores = {};
+  var lastStatus = {};
 
   if (!pollUrl || !todayGamesGrid) {
     return;
@@ -52,20 +53,10 @@
     return team.win_color || team.color || null;
   }
 
-  function pulseScoreElement(scoreEl, team) {
-    var color = team && (team.win_color || team.color);
-    if (color) {
-      scoreEl.style.setProperty('--score-pulse-color', color);
+  function flashScoreOnCard(card, side, team) {
+    if (window.gameCardScoreFlash) {
+      window.gameCardScoreFlash.flash(card, side, team);
     }
-    scoreEl.classList.remove('game-card-score--pulse');
-    void scoreEl.offsetWidth;
-    scoreEl.classList.add('game-card-score--pulse');
-  }
-
-  function pulseGameCard(card) {
-    card.classList.remove('game-card--score-changed');
-    void card.offsetWidth;
-    card.classList.add('game-card--score-changed');
   }
 
   function applyBattingTheme(card, game) {
@@ -82,7 +73,19 @@
   }
 
   function applyGameToCard(card, game) {
+    var gameId = String(game.id);
+    var prevStatus = lastStatus[gameId];
+    var flashActive = window.gameCardScoreFlash &&
+      window.gameCardScoreFlash.isActive(card);
+    var packActive = window.gameCardPackOpen &&
+      window.gameCardPackOpen.isActive(card);
     card.className = 'game-card game-card--' + game.status_state + ' game-card--link';
+    if (flashActive) {
+      card.classList.add('game-card--score-flash');
+    }
+    if (packActive) {
+      card.classList.add('game-card--pack-open');
+    }
     card.setAttribute('data-game-id', game.id);
     card.setAttribute('data-game-href', '/game/' + game.id);
     card.setAttribute('role', 'link');
@@ -122,7 +125,6 @@
     var awayScore = scoreForTeam(game, game.away);
     var homeScore = scoreForTeam(game, game.home);
     var prevScores = lastScores[String(game.id)];
-    var scoreChanged = false;
 
     var hasWinner = Boolean(game.away && game.away.winner) || Boolean(game.home && game.home.winner);
 
@@ -134,7 +136,11 @@
       } else if (game.status_state === 'post' && hasWinner) {
         teamClass += ' game-card-team--loser';
       }
+      var scoredActive = entry.el.classList.contains('game-card-team--scored');
       entry.el.className = teamClass;
+      if (scoredActive) {
+        entry.el.classList.add('game-card-team--scored');
+      }
       entry.el.style.setProperty(
         '--team-color',
         entry.team.win_color || entry.team.color || '#1a2332'
@@ -146,19 +152,21 @@
       if (prevScores) {
         var oldScore = entry.side === 'away' ? prevScores.away : prevScores.home;
         if (oldScore !== newScore && newScore !== '—') {
-          scoreChanged = true;
-          pulseScoreElement(scoreEl, entry.team);
+          scoreEl.textContent = newScore;
+          flashScoreOnCard(card, entry.side, entry.team);
+          return;
         }
       }
 
       scoreEl.textContent = newScore;
     });
 
-    lastScores[String(game.id)] = { away: awayScore, home: homeScore };
+    lastScores[gameId] = { away: awayScore, home: homeScore };
 
-    if (scoreChanged) {
-      pulseGameCard(card);
+    if (prevStatus === 'pre' && game.status_state === 'in' && window.gameCardPackOpen) {
+      window.gameCardPackOpen.play(card, game);
     }
+    lastStatus[gameId] = game.status_state;
 
     applyBattingTheme(card, game);
   }

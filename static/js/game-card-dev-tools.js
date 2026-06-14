@@ -26,20 +26,11 @@
     homeScore: 3
   };
 
-  function pulseScoreElement(scoreEl, team) {
-    var color = team && team.color;
-    if (color) {
-      scoreEl.style.setProperty('--score-pulse-color', color);
+  function flashScoreOnCard(side) {
+    if (!window.gameCardScoreFlash) {
+      return;
     }
-    scoreEl.classList.remove('game-card-score--pulse');
-    void scoreEl.offsetWidth;
-    scoreEl.classList.add('game-card-score--pulse');
-  }
-
-  function pulseGameCard() {
-    card.classList.remove('game-card--score-changed');
-    void card.offsetWidth;
-    card.classList.add('game-card--score-changed');
+    window.gameCardScoreFlash.flash(card, side, teams[side]);
   }
 
   function applyBattingTheme() {
@@ -87,7 +78,11 @@
       state.battingSide = options.battingSide;
     }
 
+    var packActive = window.gameCardPackOpen && window.gameCardPackOpen.isActive(card);
     card.className = 'game-card game-card--' + status + ' game-card-dev-tools__sample';
+    if (packActive) {
+      card.classList.add('game-card--pack-open');
+    }
     pill.className = 'status-pill status-pill--' + status;
 
     if (status === 'pre') {
@@ -116,8 +111,7 @@
       state.awayScore = Math.max(0, state.awayScore + delta);
       renderScores();
       if (delta > 0) {
-        pulseScoreElement(awayScoreEl, teams.away);
-        pulseGameCard();
+        flashScoreOnCard('away');
       }
       applyWinnerClasses();
       return;
@@ -125,27 +119,59 @@
     state.homeScore = Math.max(0, state.homeScore + delta);
     renderScores();
     if (delta > 0) {
-      pulseScoreElement(homeScoreEl, teams.home);
-      pulseGameCard();
+      flashScoreOnCard('home');
     }
     applyWinnerClasses();
+  }
+
+  function playGameStartAnimation() {
+    state.awayScore = 0;
+    state.homeScore = 0;
+    state.battingSide = 'away';
+    setCardState('pre');
+    window.setTimeout(function () {
+      setCardState('in', { battingSide: 'away' });
+      if (window.gameCardPackOpen) {
+        window.gameCardPackOpen.play(card, {
+          away: {
+            abbr: teams.away.abbr,
+            short_name: 'Mets',
+            name: 'New York Mets',
+            color: teams.away.color,
+            logo: 'https://a.espncdn.com/i/teamlogos/mlb/500/21.png',
+            record: '24-31',
+            probable_pitcher: { name: 'S. Senga', throws: 'Right' }
+          },
+          home: {
+            abbr: teams.home.abbr,
+            short_name: 'Phillies',
+            name: 'Philadelphia Phillies',
+            color: teams.home.color,
+            logo: 'https://a.espncdn.com/i/teamlogos/mlb/500/22.png',
+            record: '32-23',
+            probable_pitcher: { name: 'Z. Wheeler', throws: 'Right' }
+          }
+        });
+      }
+    }, 500);
   }
 
   function handleAction(action) {
     switch (action) {
       case 'pulse-away':
-        pulseScoreElement(awayScoreEl, teams.away);
+        flashScoreOnCard('away');
         break;
       case 'pulse-home':
-        pulseScoreElement(homeScoreEl, teams.home);
+        flashScoreOnCard('home');
         break;
       case 'pulse-card':
-        pulseGameCard();
+        flashScoreOnCard(state.battingSide);
         break;
       case 'pulse-full':
-        pulseScoreElement(awayScoreEl, teams.away);
-        pulseScoreElement(homeScoreEl, teams.home);
-        pulseGameCard();
+        bumpScore('away', 1);
+        break;
+      case 'game-start':
+        playGameStartAnimation();
         break;
       case 'state-pre':
         setCardState('pre');

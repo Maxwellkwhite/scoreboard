@@ -227,6 +227,9 @@ def _resolve_batting_side(
 
 def _parse_team(competitor: dict[str, Any]) -> dict[str, Any]:
     team = competitor.get("team") or {}
+    record_source = competitor.get("records") or competitor.get("record")
+    if isinstance(record_source, dict):
+        record_source = record_source.get("items") or [record_source]
     return {
         "id": team.get("id"),
         "abbr": team.get("abbreviation", ""),
@@ -237,6 +240,8 @@ def _parse_team(competitor: dict[str, Any]) -> dict[str, Any]:
         "alternate_color": _team_alternate_color(team),
         "score": _parse_score(competitor.get("score")),
         "winner": competitor.get("winner"),
+        "record": _team_record(record_source),
+        "probable_pitcher": _parse_probable(competitor),
     }
 
 
@@ -346,14 +351,55 @@ def find_next_games(
     return None, []
 
 
-def _team_record(records: list[dict[str, Any]] | None) -> str | None:
+def _team_record(records: list[dict[str, Any]] | dict[str, Any] | None) -> str | None:
     if not records:
         return None
+    if isinstance(records, dict):
+        display = records.get("displayValue") or records.get("summary")
+        if display:
+            return str(display)
+        items = records.get("items")
+        if isinstance(items, list):
+            return _team_record(items)
+        return None
     for record in records:
+        if not isinstance(record, dict):
+            continue
         if record.get("type") == "total":
             return record.get("displayValue") or record.get("summary")
     first = records[0]
+    if not isinstance(first, dict):
+        return str(first) if first is not None else None
     return first.get("displayValue") or first.get("summary")
+
+
+def _probable_stat_categories(statistics: Any) -> list[dict[str, Any]]:
+    if isinstance(statistics, dict):
+        splits = statistics.get("splits")
+        if isinstance(splits, dict):
+            categories = splits.get("categories") or []
+            return categories if isinstance(categories, list) else []
+        if isinstance(splits, list):
+            categories: list[dict[str, Any]] = []
+            for split in splits:
+                if not isinstance(split, dict):
+                    continue
+                split_categories = split.get("categories") or []
+                if isinstance(split_categories, list):
+                    categories.extend(split_categories)
+            return categories
+        categories = statistics.get("categories") or []
+        return categories if isinstance(categories, list) else []
+    if isinstance(statistics, list):
+        categories: list[dict[str, Any]] = []
+        for entry in statistics:
+            if not isinstance(entry, dict):
+                continue
+            entry_categories = entry.get("categories") or []
+            if isinstance(entry_categories, list):
+                categories.extend(entry_categories)
+        return categories
+    return []
 
 
 def _parse_probable(competitor: dict[str, Any]) -> dict[str, Any] | None:
@@ -362,21 +408,25 @@ def _parse_probable(competitor: dict[str, Any]) -> dict[str, Any] | None:
             continue
         athlete = probable.get("athlete") or {}
         stats: dict[str, str] = {}
-        for category in (
-            (probable.get("statistics") or {})
-            .get("splits", {})
-            .get("categories", [])
-        ):
+        for category in _probable_stat_categories(probable.get("statistics")):
+            if not isinstance(category, dict):
+                continue
             key = category.get("abbreviation") or category.get("name")
             if key:
                 stats[str(key)] = category.get("displayValue", "")
         headshot = athlete.get("headshot") or {}
+        headshot_href = headshot if isinstance(headshot, str) else headshot.get("href")
+        throws = athlete.get("throws")
+        throws_display = (
+            throws if isinstance(throws, str)
+            else (throws or {}).get("displayValue")
+        )
         return {
             "id": _athlete_id(athlete),
             "name": athlete.get("displayName", ""),
-            "headshot": headshot.get("href"),
+            "headshot": headshot_href,
             "jersey": athlete.get("jersey"),
-            "throws": (athlete.get("throws") or {}).get("displayValue"),
+            "throws": throws_display,
             "stats": stats,
         }
     return None
