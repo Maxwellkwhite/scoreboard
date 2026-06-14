@@ -159,6 +159,133 @@ html[data-scoreboard-view="standings"] #tab-standings {
   gap: 1rem;
 }
 
+.game-card-dev-tools {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  background: #f6f8fb;
+  border: 1px dashed #b8c4d4;
+  border-radius: 14px;
+}
+
+.game-card-dev-tools__header {
+  margin-bottom: 1rem;
+}
+
+.game-card-dev-tools__title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1a2332;
+}
+
+.game-card-dev-tools__hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #6b7789;
+}
+
+.game-card-dev-tools__layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.game-card-dev-tools__sample {
+  max-width: 360px;
+}
+
+.game-card-dev-tools__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.game-card-dev-tools__group {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid #dde3eb;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.game-card-dev-tools__group legend {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7789;
+  padding: 0 0.35rem;
+  width: auto;
+}
+
+.game-card-dev-tools__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.game-card-dev-tools__score-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.game-card-dev-tools__score-row + .game-card-dev-tools__score-row {
+  margin-top: 0.5rem;
+}
+
+.game-card-dev-tools__score-label {
+  min-width: 2.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1a2332;
+}
+
+.game-card-dev-tools__btn {
+  appearance: none;
+  border: 1px solid #c5ceda;
+  border-radius: 8px;
+  background: #fff;
+  color: #1a2332;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.4rem 0.65rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.game-card-dev-tools__btn:hover {
+  background: #eef3f8;
+  border-color: #9aabc0;
+}
+
+.game-card-dev-tools__btn:focus-visible {
+  outline: 2px solid #3d6ea8;
+  outline-offset: 2px;
+}
+
+.game-card-dev-tools__btn--icon {
+  min-width: 2rem;
+  padding-inline: 0;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.game-card-dev-tools__sample.game-card--score-changed {
+  animation: game-card-score-changed 0.7s ease;
+}
+
+@media (max-width: 767px) {
+  .game-card-dev-tools__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .game-card-dev-tools__sample {
+    max-width: none;
+  }
+}
+
 .standings-board {
   display: flex;
   flex-direction: column;

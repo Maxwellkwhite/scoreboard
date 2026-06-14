@@ -1,0 +1,83 @@
+<section class="game-card-dev-tools" id="game-card-dev-tools" aria-label="Game card animation test">
+  <div class="game-card-dev-tools__header">
+    <h3 class="game-card-dev-tools__title">Card animation test</h3>
+    <p class="game-card-dev-tools__hint">Dev preview — always visible below today&apos;s games.</p>
+  </div>
+
+  <div class="game-card-dev-tools__layout">
+    <div
+      class="game-card game-card--in game-card-dev-tools__sample"
+      id="game-card-dev-sample"
+      style="--batting-team-color: #002D72;"
+    >
+      <div class="game-card-status">
+        <span class="status-pill status-pill--in status-pill--batting-team" id="game-card-dev-pill">Top 7th</span>
+        <span class="game-card-count" id="game-card-dev-count">1-2, 1 out</span>
+      </div>
+
+      <div class="game-card-teams">
+        <div
+          class="game-card-team game-card-team--away"
+          id="game-card-dev-away"
+          style="--team-color: #002D72;"
+        >
+          <div class="game-card-logo game-card-logo--placeholder" aria-hidden="true">NYM</div>
+          <div class="game-card-team-meta">
+            <span class="game-card-abbr">NYM</span>
+            <span class="game-card-name">Mets</span>
+          </div>
+          <span class="game-card-score" id="game-card-dev-away-score">4</span>
+        </div>
+
+        <div
+          class="game-card-team game-card-team--home"
+          id="game-card-dev-home"
+          style="--team-color: #E81828;"
+        >
+          <div class="game-card-logo game-card-logo--placeholder" aria-hidden="true">PHI</div>
+          <div class="game-card-team-meta">
+            <span class="game-card-abbr">PHI</span>
+            <span class="game-card-name">Phillies</span>
+          </div>
+          <span class="game-card-score" id="game-card-dev-home-score">3</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="game-card-dev-tools__controls">
+      <fieldset class="game-card-dev-tools__group">
+        <legend>Animations</legend>
+        <div class="game-card-dev-tools__buttons">
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="pulse-away">Away score pulse</button>
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="pulse-home">Home score pulse</button>
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="pulse-card">Card glow</button>
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="pulse-full">Full score update</button>
+        </div>
+      </fieldset>
+
+      <fieldset class="game-card-dev-tools__group">
+        <legend>Card state</legend>
+        <div class="game-card-dev-tools__buttons">
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="state-pre">Pre-game</button>
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="state-live-away">Live (away batting)</button>
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="state-live-home">Live (home batting)</button>
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="state-final">Final</button>
+        </div>
+      </fieldset>
+
+      <fieldset class="game-card-dev-tools__group">
+        <legend>Scores</legend>
+        <div class="game-card-dev-tools__score-row">
+          <span class="game-card-dev-tools__score-label">Away</span>
+          <button type="button" class="game-card-dev-tools__btn game-card-dev-tools__btn--icon" data-dev-action="away-dec" aria-label="Decrease away score">−</button>
+          <button type="button" class="game-card-dev-tools__btn game-card-dev-tools__btn--icon" data-dev-action="away-inc" aria-label="Increase away score">+</button>
+        </div>
+        <div class="game-card-dev-tools__score-row">
+          <span class="game-card-dev-tools__score-label">Home</span>
+          <button type="button" class="game-card-dev-tools__btn game-card-dev-tools__btn--icon" data-dev-action="home-dec" aria-label="Decrease home score">−</button>
+          <button type="button" class="game-card-dev-tools__btn game-card-dev-tools__btn--icon" data-dev-action="home-inc" aria-label="Increase home score">+</button>
+        </div>
+      </fieldset>
+    </div>
+  </div>
+</section>
