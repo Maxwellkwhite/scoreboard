@@ -1094,6 +1094,27 @@ def api_mlb_player_stats(player_id):
     })
 
 
+@app.route(
+    '/api/mlb/player/<player_id>/percentile-ranks',
+    methods=['GET'],
+    endpoint='api_mlb_player_percentile_ranks',
+)
+def api_mlb_player_percentile_ranks(player_id):
+    from espn_mlb import fetch_player, fetch_player_percentile_ranks
+
+    try:
+        player = fetch_player(str(player_id), include_stats=False)
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Player not found'}), 404
+
+    season_year = request.args.get('season_year')
+    panel = fetch_player_percentile_ranks(
+        player.get('name') or '',
+        season_year=season_year or player.get('season_year'),
+    )
+    return jsonify(panel)
+
+
 @app.route('/api/mlb/player/<player_id>', methods=['GET'], endpoint='api_mlb_player')
 def api_mlb_player(player_id):
     from espn_mlb import fetch_player

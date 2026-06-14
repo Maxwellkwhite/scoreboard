@@ -20,6 +20,7 @@ from pybaseball import (
     pitching_stats_bref,
     playerid_lookup,
     statcast_batter,
+    statcast_batter_percentile_ranks,
     statcast_pitcher_arsenal_stats,
     statcast_pitcher_pitch_arsenal,
 )
@@ -87,6 +88,39 @@ _SPRAY_TYPE_METRICS = (
     ("xwoba", "xwOBA", "", 0.600),
     ("hard_hit", "Hard Hit%", "%", 100.0),
 )
+_PERCENTILE_MIN_YEAR = 2015
+_BATTER_PERCENTILE_GROUPS = (
+    ("Expected Stats", (
+        ("xwoba", "xwOBA"),
+        ("xba", "xBA"),
+        ("xslg", "xSLG"),
+        ("xiso", "xISO"),
+        ("xobp", "xOBP"),
+    )),
+    ("Bat-to-Ball Skills", (
+        ("bat_speed", "Bat Speed"),
+        ("squared_up_rate", "Squared Up%"),
+        ("swing_length", "Swing Length"),
+    )),
+    ("Contact", (
+        ("exit_velocity", "Avg Exit Velo"),
+        ("max_ev", "Max Exit Velo"),
+        ("hard_hit_percent", "Hard Hit%"),
+        ("brl_percent", "Barrel%"),
+        ("brl", "Barrels"),
+    )),
+    ("Plate Discipline", (
+        ("k_percent", "K%"),
+        ("bb_percent", "BB%"),
+        ("whiff_percent", "Whiff%"),
+        ("chase_percent", "Chase%"),
+    )),
+    ("Running & Defense", (
+        ("sprint_speed", "Sprint Speed"),
+        ("arm_strength", "Arm Strength"),
+        ("oaa", "Outs Above Avg"),
+    )),
+)
 _BATTING_SPLIT_REGULAR = (
     ("Platoon Splits", ("vs RHP", "vs LHP")),
     ("Home or Away", ("Home", "Away")),
@@ -137,6 +171,7 @@ _bwar_pitch_loaded_at: float = 0.0
 _player_lookup_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _stats_table_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _stat_panels_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_batter_percentile_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
 _pitching_bref_season_cache: dict[int, pd.DataFrame] = {}
 
 
@@ -1060,6 +1095,104 @@ def _fetch_spray_chart_panel(
         return empty
 
 
+def _get_batter_percentile_table(season_year: int) -> pd.DataFrame | None:
+    cached = _batter_percentile_table_cache.get(season_year)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+    try:
+        table = statcast_batter_percentile_ranks(season_year)
+        if table is None or table.empty:
+            result = None
+        else:
+            result = table
+    except Exception:
+        result = None
+    _batter_percentile_table_cache[season_year] = (now, result)
+    return result
+
+
+def _fetch_batter_percentile_panel(
+    *,
+    mlbam_id: int | None,
+    season_year: int,
+) -> dict[str, Any]:
+    empty: dict[str, Any] = {
+        "id": "percentile_ranks",
+        "label": "Percentile Rankings",
+        "panel_kind": "percentile_ranks",
+        "season_year": str(season_year),
+        "groups": [],
+    }
+    if not mlbam_id:
+        return empty
+
+    table = _get_batter_percentile_table(season_year)
+    if table is None or table.empty:
+        return empty
+
+    player_rows = table[table["player_id"] == mlbam_id]
+    if player_rows.empty:
+        return empty
+
+    row = player_rows.iloc[0]
+    groups: list[dict[str, Any]] = []
+    for group_title, metric_specs in _BATTER_PERCENTILE_GROUPS:
+        metrics: list[dict[str, Any]] = []
+        for metric_id, label in metric_specs:
+            if metric_id not in row.index:
+                continue
+            value = _parse_number(row.get(metric_id))
+            if value is None:
+                continue
+            metrics.append({
+                "id": metric_id,
+                "label": label,
+                "value": round(value),
+            })
+        if metrics:
+            groups.append({"title": group_title, "metrics": metrics})
+
+    if not groups:
+        return empty
+
+    return {
+        "id": "percentile_ranks",
+        "label": "Percentile Rankings",
+        "panel_kind": "percentile_ranks",
+        "season_year": str(season_year),
+        "groups": groups,
+    }
+
+
+def _percentile_available_years(debut_year: int | None) -> list[str]:
+    end_year = date.today().year
+    start_year = max(_PERCENTILE_MIN_YEAR, int(debut_year) if debut_year else _PERCENTILE_MIN_YEAR)
+    return [str(y) for y in range(end_year, start_year - 1, -1)]
+
+
+def _attach_percentile_year_options(
+    panel: dict[str, Any],
+    *,
+    debut_year: int | None,
+) -> dict[str, Any]:
+    panel["available_years"] = _percentile_available_years(debut_year)
+    return panel
+
+
+def fetch_batter_percentile_panel(
+    player_name: str,
+    *,
+    season_year: int | None = None,
+) -> dict[str, Any]:
+    year = season_year if season_year is not None else date.today().year
+    record = _lookup_player_record(player_name) if player_name else None
+    mlbam_id = (record or {}).get("mlbam_id")
+    debut_year = (record or {}).get("debut_year")
+    panel = _fetch_batter_percentile_panel(mlbam_id=mlbam_id, season_year=year)
+    return _attach_percentile_year_options(panel, debut_year=debut_year)
+
+
 def _split_cell_value(label: str, value: Any) -> str:
     if label in {"BA", "OBP", "SLG", "OPS", "BAbip"}:
         return _format_rate(value)
@@ -1271,7 +1404,7 @@ def fetch_player_stat_panels(
 
     kind = "pitching" if is_pitcher_position(position) else "batting"
     pitching = kind == "pitching"
-    cache_key = f"{player_id}:{year}:{kind}:v7"
+    cache_key = f"{player_id}:{year}:{kind}:v9"
     cached = _stat_panels_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
@@ -1320,11 +1453,6 @@ def fetch_player_stat_panels(
         ],
     }
 
-    if pitching:
-        visual_panel = _fetch_pitch_mix_panel(mlbam_id=mlbam_id, season_year=year)
-    else:
-        visual_panel = _fetch_spray_chart_panel(mlbam_id=mlbam_id, season_year=year)
-
     splits_panel = (
         _fetch_splits_panels(bbref_id, pitching=pitching, season_year=year)
         if bbref_id
@@ -1340,6 +1468,15 @@ def fetch_player_stat_panels(
         }
     )
 
-    panels = [advanced_panel, visual_panel, splits_panel]
+    if pitching:
+        visual_panel = _fetch_pitch_mix_panel(mlbam_id=mlbam_id, season_year=year)
+        panels = [advanced_panel, visual_panel, splits_panel]
+    else:
+        visual_panel = _fetch_spray_chart_panel(mlbam_id=mlbam_id, season_year=year)
+        percentile_panel = _attach_percentile_year_options(
+            _fetch_batter_percentile_panel(mlbam_id=mlbam_id, season_year=year),
+            debut_year=(player_record or {}).get("debut_year"),
+        )
+        panels = [advanced_panel, visual_panel, percentile_panel, splits_panel]
     _stat_panels_cache[cache_key] = (now, panels)
     return panels

@@ -830,6 +830,145 @@
     );
   }
 
+  function percentileFillColor(pct) {
+    var p = Math.max(0, Math.min(100, Number(pct) || 0));
+    if (p >= 90) return '#d4183d';
+    if (p >= 75) return '#e67e22';
+    if (p >= 50) return '#c9a227';
+    if (p >= 25) return '#5b9bd5';
+    return '#2e6db4';
+  }
+
+  function buildPercentileRowHtml(metric) {
+    var pct = Math.max(0, Math.min(100, Number(metric.value) || 0));
+    var color = percentileFillColor(pct);
+    return (
+      '<div class="percentile-rank-row">' +
+        '<span class="percentile-rank-row__label">' + escapeHtml(metric.label) + '</span>' +
+        '<div class="percentile-rank-row__track" aria-hidden="true">' +
+          '<span class="percentile-rank-row__fill" style="width:' + pct.toFixed(1) +
+          '%;background:' + color + '"></span>' +
+        '</div>' +
+        '<span class="percentile-rank-row__value">' + escapeHtml(String(Math.round(pct))) + '</span>' +
+      '</div>'
+    );
+  }
+
+  function buildPercentileGroupHtml(group) {
+    var rows = (group.metrics || []).map(buildPercentileRowHtml).join('');
+    if (!rows) return '';
+    return (
+      '<section class="percentile-ranks__group">' +
+        '<h4 class="percentile-ranks__group-title">' + escapeHtml(group.title) + '</h4>' +
+        '<div class="percentile-ranks__rows">' + rows + '</div>' +
+      '</section>'
+    );
+  }
+
+  function percentileYearOptions(panel) {
+    if (panel.available_years && panel.available_years.length) {
+      return panel.available_years.slice();
+    }
+    var years = [];
+    var end = new Date().getFullYear();
+    for (var y = end; y >= 2015; y--) {
+      years.push(String(y));
+    }
+    return years;
+  }
+
+  function buildPercentileHeadingHtml(panel) {
+    var seasonYear = String(panel.season_year || new Date().getFullYear());
+    var years = percentileYearOptions(panel);
+    if (years.indexOf(seasonYear) === -1) {
+      years.unshift(seasonYear);
+    }
+    var optionsHtml = years.map(function (year) {
+      return (
+        '<option value="' + escapeHtml(year) + '"' +
+        (year === seasonYear ? ' selected' : '') + '>' +
+        escapeHtml(year) + '</option>'
+      );
+    }).join('');
+
+    return (
+      '<h2 class="percentile-ranks__heading">' +
+        '<select class="percentile-ranks__year-select" aria-label="Season year">' +
+        optionsHtml +
+        '</select>' +
+        ' Statcast Percentiles' +
+      '</h2>'
+    );
+  }
+
+  function buildPercentileLegendHtml() {
+    return (
+      '<div class="percentile-ranks__legend">' +
+        '<span class="percentile-ranks__legend-item"><span class="percentile-ranks__swatch" style="background:#2e6db4"></span>0–25</span>' +
+        '<span class="percentile-ranks__legend-item"><span class="percentile-ranks__swatch" style="background:#5b9bd5"></span>25–50</span>' +
+        '<span class="percentile-ranks__legend-item"><span class="percentile-ranks__swatch" style="background:#c9a227"></span>50–75</span>' +
+        '<span class="percentile-ranks__legend-item"><span class="percentile-ranks__swatch" style="background:#e67e22"></span>75–90</span>' +
+        '<span class="percentile-ranks__legend-item"><span class="percentile-ranks__swatch" style="background:#d4183d"></span>90+</span>' +
+      '</div>'
+    );
+  }
+
+  function buildPercentileRankingsHtml(panel) {
+    var seasonYear = String(panel.season_year || '');
+    var headingHtml = buildPercentileHeadingHtml(panel);
+    var groups = (panel.groups || []).map(buildPercentileGroupHtml).filter(Boolean);
+
+    if (!groups.length) {
+      return (
+        '<div class="percentile-ranks">' +
+          headingHtml +
+          '<p class="player-splits-empty">No Statcast percentile data for ' +
+          escapeHtml(seasonYear || 'this season') + '.</p>' +
+        '</div>'
+      );
+    }
+
+    return (
+      '<div class="percentile-ranks">' +
+        headingHtml +
+        '<div class="percentile-ranks__grid">' + groups.join('') + '</div>' +
+        buildPercentileLegendHtml() +
+      '</div>'
+    );
+  }
+
+  function loadPercentilePanel(panelEl, seasonYear) {
+    panelEl.setAttribute('aria-busy', 'true');
+    fetch(
+      '/api/mlb/player/' + encodeURIComponent(playerId) +
+      '/percentile-ranks?season_year=' + encodeURIComponent(seasonYear)
+    )
+      .then(function (response) {
+        if (!response.ok) throw new Error('Percentiles unavailable');
+        return response.json();
+      })
+      .then(function (panel) {
+        panelEl.innerHTML = buildPercentileRankingsHtml(panel);
+        panelEl.removeAttribute('aria-busy');
+        initPercentileYearSelects();
+      })
+      .catch(function () {
+        panelEl.removeAttribute('aria-busy');
+      });
+  }
+
+  function initPercentileYearSelects() {
+    if (!panelsEl) return;
+    panelsEl.querySelectorAll('.player-stats-panel--percentile').forEach(function (panelEl) {
+      var select = panelEl.querySelector('.percentile-ranks__year-select');
+      if (!select || select.dataset.bound === 'true') return;
+      select.dataset.bound = 'true';
+      select.addEventListener('change', function () {
+        loadPercentilePanel(panelEl, select.value);
+      });
+    });
+  }
+
   function buildPanelInnerHtml(panel) {
     if (panel.panel_kind === 'toggle_table') {
       var defaultView = panel.default_view || (panel.views[0] && panel.views[0].id);
@@ -855,6 +994,10 @@
 
     if (panel.panel_kind === 'spray_chart') {
       return '<div class="player-panel-body">' + buildSprayChartHtml(panel) + '</div>';
+    }
+
+    if (panel.panel_kind === 'percentile_ranks') {
+      return buildPercentileRankingsHtml(panel);
     }
 
     if (panel.panel_kind === 'split_groups') {
@@ -937,9 +1080,13 @@
     }).join('');
 
     panelsEl.innerHTML = statPanels.map(function (panel, index) {
+      var panelClass = 'game-detail-section game-detail-panel player-stats-panel';
+      if (panel.panel_kind === 'percentile_ranks') {
+        panelClass += ' player-stats-panel--percentile';
+      }
       return (
-        '<section class="game-detail-section game-detail-panel player-stats-panel" data-panel="' +
-        escapeHtml(panel.id) + '"' +
+        '<section class="' + panelClass + '"' +
+        ' data-panel="' + escapeHtml(panel.id) + '"' +
         (index === 0 ? '' : ' hidden') + '>' +
         buildPanelInnerHtml(panel) +
         '</section>'
@@ -948,6 +1095,7 @@
 
     tabsEl.hidden = false;
     initPanelToggles(panelsEl);
+    initPercentileYearSelects();
 
     var buttons = tabsEl.querySelectorAll('.game-detail-tab');
     var panels = panelsEl.querySelectorAll('.player-stats-panel');
