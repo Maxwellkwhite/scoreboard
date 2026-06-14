@@ -1321,6 +1321,58 @@ html[data-scoreboard-view="standings"] #tab-standings {
   min-height: 1.5rem;
 }
 
+.game-card-situation {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.game-card-bases {
+  position: relative;
+  width: 22px;
+  height: 17px;
+  flex-shrink: 0;
+}
+
+.game-card-base {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  background: #e8ecf1;
+  border: 1px solid #c5ced8;
+  transform: rotate(45deg);
+  border-radius: 1px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.game-card--link.game-card--in .game-card-base--occupied {
+  background: var(--batting-team-bg, #22a06b);
+  border-color: var(--batting-team-color, #137a4d);
+}
+
+.game-card-base--2nd {
+  top: 0;
+  left: 7px;
+}
+
+.game-card-base--3rd {
+  bottom: 0;
+  left: 1px;
+}
+
+.game-card-base--1st {
+  bottom: 0;
+  right: 1px;
+}
+
+.game-card-count {
+  font-size: 0.82rem;
+  color: #6b7789;
+  font-weight: 600;
+}
+
 .status-pill {
   display: inline-block;
   font-size: 0.72rem;
@@ -1344,12 +1396,6 @@ html[data-scoreboard-view="standings"] #tab-standings {
 .status-pill--post {
   background: #1a2332;
   color: #fff;
-}
-
-.game-card-count {
-  font-size: 0.82rem;
-  color: #6b7789;
-  font-weight: 600;
 }
 
 .game-card-teams {

@@ -6,7 +6,14 @@
     <span class="status-pill status-pill--{{ game.status_state }}{% if game.status_state == 'in' and batting_team %} status-pill--batting-team{% endif %}"
       {% if game.status_state == 'pre' and game.start_time %}data-start-time="{{ game.start_time }}"{% endif %}>{{ game.status_detail }}</span>
     {% if game.status_state == 'in' and game.balls is not none %}
-    <span class="game-card-count">{{ game.balls }}-{{ game.strikes }}, {{ game.outs }} out{% if game.outs != 1 %}s{% endif %}</span>
+    <div class="game-card-situation">
+      <span class="game-card-bases" aria-label="Runners on base">
+        <span class="game-card-base game-card-base--2nd{% if game.on_second %} game-card-base--occupied{% endif %}"></span>
+        <span class="game-card-base game-card-base--3rd{% if game.on_third %} game-card-base--occupied{% endif %}"></span>
+        <span class="game-card-base game-card-base--1st{% if game.on_first %} game-card-base--occupied{% endif %}"></span>
+      </span>
+      <span class="game-card-count">{{ game.balls }}-{{ game.strikes }}, {{ game.outs }} out{% if game.outs != 1 %}s{% endif %}</span>
+    </div>
     {% endif %}
   </div>
 

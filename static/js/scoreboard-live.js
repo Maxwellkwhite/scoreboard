@@ -88,6 +88,30 @@
     }
   }
 
+  function basesHtml() {
+    return (
+      '<span class="game-card-base game-card-base--2nd"></span>' +
+      '<span class="game-card-base game-card-base--3rd"></span>' +
+      '<span class="game-card-base game-card-base--1st"></span>'
+    );
+  }
+
+  function updateBases(basesEl, game) {
+    if (!basesEl) return;
+    basesEl.querySelector('.game-card-base--1st').classList.toggle(
+      'game-card-base--occupied',
+      Boolean(game.on_first)
+    );
+    basesEl.querySelector('.game-card-base--2nd').classList.toggle(
+      'game-card-base--occupied',
+      Boolean(game.on_second)
+    );
+    basesEl.querySelector('.game-card-base--3rd').classList.toggle(
+      'game-card-base--occupied',
+      Boolean(game.on_third)
+    );
+  }
+
   function applyGameToCard(card, game) {
     var gameId = String(game.id);
     var prevStatus = lastStatus[gameId];
@@ -125,16 +149,33 @@
       pill.textContent = game.status_detail || '';
     }
 
-    var countEl = card.querySelector('.game-card-count');
+    var situationWrap = card.querySelector('.game-card-situation');
+    var countEl = situationWrap ? situationWrap.querySelector('.game-card-count') : null;
     if (game.status_state === 'in' && game.balls !== null && game.balls !== undefined) {
+      if (!situationWrap) {
+        situationWrap = document.createElement('div');
+        situationWrap.className = 'game-card-situation';
+        statusWrap.appendChild(situationWrap);
+      }
+
+      var basesEl = situationWrap.querySelector('.game-card-bases');
+      if (!basesEl) {
+        basesEl = document.createElement('span');
+        basesEl.className = 'game-card-bases';
+        basesEl.setAttribute('aria-label', 'Runners on base');
+        basesEl.innerHTML = basesHtml();
+        situationWrap.appendChild(basesEl);
+      }
+      updateBases(basesEl, game);
+
       if (!countEl) {
         countEl = document.createElement('span');
         countEl.className = 'game-card-count';
-        statusWrap.appendChild(countEl);
+        situationWrap.appendChild(countEl);
       }
       countEl.textContent = game.balls + '-' + game.strikes + ', ' + outsLabel(game.outs);
-    } else if (countEl) {
-      countEl.remove();
+    } else if (situationWrap) {
+      situationWrap.remove();
     }
 
     var teamEls = card.querySelectorAll('.game-card-team');
