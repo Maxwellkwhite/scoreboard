@@ -169,7 +169,6 @@
         '<span class="game-card-pack__top"></span>' +
         '<span class="game-card-pack__bottom"></span>' +
         buildPackBrandingHtml(meta) +
-        '<span class="game-card-pack__tear"></span>' +
       '</span>' +
       buildParticlesHtml() +
       buildStreaksHtml() +

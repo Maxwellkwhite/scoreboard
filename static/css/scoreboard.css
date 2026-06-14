@@ -724,25 +724,6 @@ html[data-scoreboard-view="standings"] #tab-standings {
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
-.game-card-pack__tear {
-  position: absolute;
-  top: 46%;
-  left: 8%;
-  right: 8%;
-  height: 8px;
-  margin-top: -4px;
-  border-radius: 999px;
-  z-index: 3;
-  background:
-    repeating-linear-gradient(
-      90deg,
-      rgba(120, 130, 145, 0.35) 0 4px,
-      rgba(255, 255, 255, 0.95) 4px 8px
-    );
-  box-shadow: 0 0 0 1px rgba(120, 130, 145, 0.18);
-  animation: game-card-pack-tear var(--pack-open-duration, 10s) linear forwards;
-}
-
 .game-card-pack__particles {
   position: absolute;
   top: 46%;
@@ -916,15 +897,6 @@ html[data-scoreboard-view="standings"] #tab-standings {
   100% { opacity: 0; visibility: hidden; }
 }
 
-@keyframes game-card-pack-tear {
-  0%, 8% { opacity: 0.9; box-shadow: 0 0 0 1px rgba(120, 130, 145, 0.18); filter: brightness(1); }
-  12% { opacity: 1; box-shadow: 0 0 10px rgba(255, 255, 255, 0.85); filter: brightness(1.1); }
-  16% { opacity: 0.92; box-shadow: 0 0 5px rgba(255, 255, 255, 0.5); }
-  20% { opacity: 1; box-shadow: 0 0 16px rgba(255, 255, 255, 0.95); filter: brightness(1.2); }
-  22% { opacity: 1; box-shadow: 0 0 20px rgba(255, 255, 255, 1); filter: brightness(1.28); }
-  28%, 100% { opacity: 0; box-shadow: none; }
-}
-
 @keyframes game-card-pack-branding {
   0%, 22% { opacity: 1; transform: scale(1); }
   38%, 100% { opacity: 0; transform: scale(0.92); }
@@ -1054,7 +1026,7 @@ html[data-scoreboard-view="standings"] #tab-standings {
   width: 0;
   height: 0;
   transform: translate(-50%, -50%) scale(var(--fw-scale, 1));
-  animation: game-card-firework-shell 3.2s ease-out forwards;
+  pointer-events: none;
 }
 
 .game-card-firework__rocket {
@@ -1065,7 +1037,7 @@ html[data-scoreboard-view="standings"] #tab-standings {
   height: 4px;
   border-radius: 50%;
   opacity: 0;
-  animation: game-card-firework-rocket 0.78s ease-in forwards;
+  animation: game-card-firework-rocket 0.72s ease-in forwards;
 }
 
 .game-card-firework__rocket::after {
@@ -1091,36 +1063,36 @@ html[data-scoreboard-view="standings"] #tab-standings {
   background: #fff;
   opacity: 0;
   box-shadow: 0 0 14px rgba(255, 255, 255, 0.95);
-  animation: game-card-firework-flash 0.72s ease-out 0.68s forwards;
+  animation: game-card-firework-flash 0.55s ease-out 0.62s forwards;
 }
 
-.game-card-firework__particle,
-.game-card-firework__ember {
+.game-card-confetti {
   position: absolute;
-  left: 0;
-  top: 0;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  opacity: 0;
-  transform: rotate(var(--fw-angle)) translateY(0);
-  animation: game-card-firework-particle 2.65s cubic-bezier(0.14, 0.68, 0.18, 1) 0.64s forwards;
-}
-
-.game-card-firework__particle--streak {
-  width: 2px;
+  width: 7px;
   height: 11px;
   border-radius: 1px;
-  animation-name: game-card-firework-streak;
-  animation-duration: 2.85s;
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(0deg);
+  animation: game-card-confetti-fall 6s ease-in forwards;
+  pointer-events: none;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
-.game-card-firework__ember {
+.game-card-confetti--strip {
   width: 3px;
-  height: 3px;
-  animation-name: game-card-firework-ember;
-  animation-duration: 2.35s;
-  animation-delay: 0.72s;
+  height: 14px;
+}
+
+.game-card-confetti--square {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+}
+
+.game-card-confetti--circle {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
 }
 
 .game-card-game-end__ribbon {
@@ -1133,7 +1105,8 @@ html[data-scoreboard-view="standings"] #tab-standings {
   transform: translateX(-50%) rotate(-7deg) scale(0.92);
   opacity: 0;
   z-index: 2;
-  animation: game-card-game-end-ribbon var(--game-end-duration, 12s) cubic-bezier(0.22, 1, 0.28, 1) forwards;
+  animation: game-card-game-end-ribbon var(--game-end-ribbon-duration, 4.5s)
+    cubic-bezier(0.22, 1, 0.28, 1) var(--game-end-ribbon-delay, 11.3s) forwards;
 }
 
 .game-card-game-end__ribbon-text {
@@ -1163,7 +1136,7 @@ html[data-scoreboard-view="standings"] #tab-standings {
   0%, 4% {
     opacity: 0;
   }
-  12%, 86% {
+  12%, 90% {
     opacity: 1;
   }
   100% {
@@ -1171,18 +1144,12 @@ html[data-scoreboard-view="standings"] #tab-standings {
   }
 }
 
-@keyframes game-card-firework-shell {
-  0%, 100% {
-    opacity: 1;
-  }
-}
-
 @keyframes game-card-firework-rocket {
   0% {
     opacity: 0;
-    transform: translateY(30px);
+    transform: translateY(28px);
   }
-  16% {
+  18% {
     opacity: 1;
   }
   72% {
@@ -1200,96 +1167,82 @@ html[data-scoreboard-view="standings"] #tab-standings {
     opacity: 0;
     transform: scale(0.35);
   }
-  18% {
+  24% {
     opacity: 1;
-    transform: scale(1.35);
-  }
-  42% {
-    opacity: 0.9;
-    transform: scale(1.65);
+    transform: scale(1.45);
   }
   100% {
     opacity: 0;
-    transform: scale(2.5);
+    transform: scale(2.6);
   }
 }
 
-@keyframes game-card-firework-particle {
+@keyframes game-card-confetti-fall {
   0% {
     opacity: 0;
-    transform: rotate(var(--fw-angle)) translateY(6px) scale(0.35);
+    transform: translate(-50%, -50%) rotate(0deg) scale(0.45);
   }
-  8% {
+  7% {
     opacity: 1;
   }
-  26% {
+  16% {
     opacity: 1;
-    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -1)) scale(1);
+    transform: translate(
+        calc(-50% + var(--cf-burst-x)),
+        calc(-50% + var(--cf-burst-y))
+      )
+      rotate(calc(var(--cf-spin) * 0.08))
+      scale(1);
   }
-  68% {
+  38% {
+    opacity: 1;
+    transform: translate(
+        calc(-50% + var(--cf-burst-x) + var(--cf-drift) * 0.35),
+        calc(-50% + var(--cf-burst-y) + var(--cf-fall) * 0.28)
+      )
+      rotate(calc(var(--cf-spin) * 0.28));
+  }
+  62% {
     opacity: 0.95;
-    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -0.94)) scale(0.94);
+    transform: translate(
+        calc(-50% + var(--cf-burst-x) + var(--cf-drift) * 0.68),
+        calc(-50% + var(--cf-burst-y) + var(--cf-fall) * 0.58)
+      )
+      rotate(calc(var(--cf-spin) * 0.52));
+  }
+  82% {
+    opacity: 0.78;
+    transform: translate(
+        calc(-50% + var(--cf-burst-x) + var(--cf-drift) * 0.92 + var(--cf-sway) * 0.4),
+        calc(-50% + var(--cf-burst-y) + var(--cf-fall) * 0.82)
+      )
+      rotate(calc(var(--cf-spin) * 0.78));
   }
   100% {
     opacity: 0;
-    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -0.58)) scale(0.28);
-  }
-}
-
-@keyframes game-card-firework-streak {
-  0% {
-    opacity: 0;
-    transform: rotate(var(--fw-angle)) translateY(8px) scale(0.4);
-  }
-  10% {
-    opacity: 1;
-  }
-  28% {
-    opacity: 1;
-    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -1.08)) scale(1);
-  }
-  70% {
-    opacity: 0.92;
-    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -0.96)) scale(0.9);
-  }
-  100% {
-    opacity: 0;
-    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -0.5)) scale(0.22);
-  }
-}
-
-@keyframes game-card-firework-ember {
-  0% {
-    opacity: 0;
-    transform: rotate(var(--fw-angle)) translateY(0);
-  }
-  14% {
-    opacity: 0.95;
-  }
-  32% {
-    opacity: 0.9;
-    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -0.55));
-  }
-  72% {
-    opacity: 0.65;
-    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -0.38)) translateY(8px);
-  }
-  100% {
-    opacity: 0;
-    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -0.22)) translateY(22px) scale(0.2);
+    transform: translate(
+        calc(-50% + var(--cf-burst-x) + var(--cf-drift) + var(--cf-sway)),
+        calc(-50% + var(--cf-burst-y) + var(--cf-fall))
+      )
+      rotate(var(--cf-spin))
+      scale(0.85);
   }
 }
 
 @keyframes game-card-game-end-ribbon {
-  0%, 84% {
+  0% {
     opacity: 0;
     transform: translateX(-180%) rotate(-7deg) scale(0.88);
   }
-  88% {
+  10% {
     opacity: 1;
     transform: translateX(-50%) rotate(-7deg) scale(0.98);
   }
-  93% {
+  16% {
+    opacity: 1;
+    transform: translateX(-50%) rotate(-7deg) scale(1);
+  }
+  78% {
     opacity: 1;
     transform: translateX(-50%) rotate(-7deg) scale(1);
   }
@@ -1304,11 +1257,9 @@ html[data-scoreboard-view="standings"] #tab-standings {
   .game-card-dev-tools__sample.game-card--game-end,
   .game-card-game-end__sky,
   .game-card-game-end__ribbon,
-  .game-card-firework,
   .game-card-firework__rocket,
   .game-card-firework__flash,
-  .game-card-firework__particle,
-  .game-card-firework__ember {
+  .game-card-confetti {
     animation: none !important;
   }
 

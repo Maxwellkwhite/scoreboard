@@ -1,5 +1,7 @@
 (function () {
-  var GAME_END_MS = 12000;
+  var GAME_END_MS = 16000;
+  var RIBBON_MS = 4500;
+  var RIBBON_DELAY_MS = GAME_END_MS - RIBBON_MS - 200;
 
   var endTimers = new WeakMap();
   var fireworkTimers = new WeakMap();
@@ -16,10 +18,6 @@
     { x: 38, y: 22, delay: 7500, count: 26, scale: 1.25, palette: 'winner' },
     { x: 62, y: 48, delay: 8400, count: 28, scale: 1.35, palette: 'winner' }
   ];
-
-  function teamColor(team) {
-    return (team && (team.win_color || team.color)) || null;
-  }
 
   function winnerSide(game) {
     if (!game) {
@@ -97,9 +95,7 @@
     var home = game.home || {};
     return {
       winnerSide: side,
-      mixedColors: uniqueColors(
-        teamColors(away).concat(teamColors(home))
-      ),
+      mixedColors: uniqueColors(teamColors(away).concat(teamColors(home))),
       winnerColors: teamColors(winner),
       intensity: intensityForGame(game)
     };
@@ -151,14 +147,11 @@
     return colors[index % colors.length];
   }
 
-  function spawnFirework(container, show, colors, winnerColors) {
-    var palette = show.palette === 'winner' && winnerColors.length
-      ? winnerColors
-      : colors;
-    if (!palette.length) {
-      palette = ['#ffffff'];
-    }
+  function rand(min, max) {
+    return min + Math.random() * (max - min);
+  }
 
+  function spawnBurst(container, show, palette) {
     var shell = document.createElement('span');
     shell.className = 'game-card-firework';
     shell.style.left = show.x + '%';
@@ -167,51 +160,73 @@
 
     var rocket = document.createElement('span');
     rocket.className = 'game-card-firework__rocket';
-    rocket.style.background = pickColor(palette, 0);
-    rocket.style.boxShadow = '0 0 8px ' + pickColor(palette, 0);
+    var rocketColor = pickColor(palette, 0);
+    rocket.style.background = rocketColor;
+    rocket.style.color = rocketColor;
+    rocket.style.boxShadow = '0 0 8px ' + rocketColor;
     shell.appendChild(rocket);
 
     var flash = document.createElement('span');
     flash.className = 'game-card-firework__flash';
     shell.appendChild(flash);
 
-    var count = Math.max(12, Math.round(show.count * (show.scale || 1)));
-    for (var i = 0; i < count; i += 1) {
-      var particle = document.createElement('span');
-      var streak = i % 4 === 0;
-      particle.className = 'game-card-firework__particle' +
-        (streak ? ' game-card-firework__particle--streak' : '');
-      var angle = (360 / count) * i + ((i * 17) % 11) - 5;
-      var dist = (28 + (i % 6) * 7 + (show.scale || 1) * 10);
-      var color = pickColor(palette, i + (streak ? 1 : 0));
-      particle.style.setProperty('--fw-angle', angle + 'deg');
-      particle.style.setProperty('--fw-dist', dist + 'px');
-      particle.style.setProperty('--fw-color', color);
-      particle.style.background = color;
-      particle.style.boxShadow = streak
-        ? '0 0 10px ' + color
-        : '0 0 6px ' + color + ', 0 0 12px ' + color;
-      shell.appendChild(particle);
-    }
-
-    for (var j = 0; j < 8; j += 1) {
-      var ember = document.createElement('span');
-      ember.className = 'game-card-firework__ember';
-      var emberAngle = j * 45 + 10;
-      var emberDist = 12 + (j % 3) * 8;
-      var emberColor = pickColor(palette, j + 2);
-      ember.style.setProperty('--fw-angle', emberAngle + 'deg');
-      ember.style.setProperty('--fw-dist', emberDist + 'px');
-      ember.style.setProperty('--fw-color', emberColor);
-      ember.style.background = emberColor;
-      ember.style.boxShadow = '0 0 5px ' + emberColor;
-      shell.appendChild(ember);
-    }
-
     container.appendChild(shell);
-    shell.addEventListener('animationend', function () {
+    window.setTimeout(function () {
       shell.remove();
-    });
+    }, 1100);
+  }
+
+  function spawnConfetti(container, show, palette, intensity) {
+    var count = Math.max(18, Math.round(show.count * 1.35 * (show.scale || 1) * (intensity || 0.7)));
+
+    for (var i = 0; i < count; i += 1) {
+      var piece = document.createElement('span');
+      var shapeRoll = i % 5;
+      var shapeClass = 'game-card-confetti';
+      if (shapeRoll === 0) {
+        shapeClass += ' game-card-confetti--strip';
+      } else if (shapeRoll === 1) {
+        shapeClass += ' game-card-confetti--square';
+      } else if (shapeRoll === 2) {
+        shapeClass += ' game-card-confetti--circle';
+      }
+
+      piece.className = shapeClass;
+      piece.style.left = show.x + '%';
+      piece.style.top = show.y + '%';
+
+      var color = pickColor(palette, i);
+      piece.style.background = color;
+      piece.style.setProperty('--cf-color', color);
+
+      var angle = rand(0, 360);
+      var burstDist = rand(14, 38) * (show.scale || 1);
+      piece.style.setProperty('--cf-burst-x', Math.cos(angle * Math.PI / 180) * burstDist + 'px');
+      piece.style.setProperty('--cf-burst-y', Math.sin(angle * Math.PI / 180) * burstDist * 0.55 + 'px');
+      piece.style.setProperty('--cf-drift', rand(-48, 48) + 'px');
+      piece.style.setProperty('--cf-sway', rand(-18, 18) + 'px');
+      piece.style.setProperty('--cf-fall', rand(72, 130) + 'px');
+      piece.style.setProperty('--cf-spin', rand(420, 980) + 'deg');
+      piece.style.animationDelay = rand(0.52, 0.82) + 's';
+      piece.style.animationDuration = rand(5.2, 7.4) + 's';
+
+      container.appendChild(piece);
+      piece.addEventListener('animationend', function () {
+        piece.remove();
+      });
+    }
+  }
+
+  function spawnShow(container, show, colors, winnerColors, intensity) {
+    var palette = show.palette === 'winner' && winnerColors.length
+      ? winnerColors
+      : colors;
+    if (!palette.length) {
+      palette = ['#ffffff'];
+    }
+
+    spawnBurst(container, show, palette);
+    spawnConfetti(container, show, palette, intensity);
   }
 
   function scheduleFireworks(container, meta) {
@@ -221,7 +236,7 @@
 
     FIREWORK_SHOWS.slice(0, showCount).forEach(function (show) {
       var timer = setTimeout(function () {
-        spawnFirework(container, show, meta.mixedColors, meta.winnerColors);
+        spawnShow(container, show, meta.mixedColors, meta.winnerColors, intensity);
       }, show.delay);
       timers.push(timer);
     });
@@ -279,6 +294,8 @@
     }
 
     card.style.setProperty('--game-end-duration', (GAME_END_MS / 1000) + 's');
+    card.style.setProperty('--game-end-ribbon-delay', (RIBBON_DELAY_MS / 1000) + 's');
+    card.style.setProperty('--game-end-ribbon-duration', (RIBBON_MS / 1000) + 's');
     card.classList.remove('game-card--game-end');
     void card.offsetWidth;
     card.classList.add('game-card--game-end');
@@ -297,6 +314,8 @@
         layer.remove();
       }
       card.style.removeProperty('--game-end-duration');
+      card.style.removeProperty('--game-end-ribbon-delay');
+      card.style.removeProperty('--game-end-ribbon-duration');
       endTimers.delete(card);
     }, GAME_END_MS);
 
