@@ -1,5 +1,5 @@
 {% from 'macros/players.html' import player_link %}
-{% from 'macros/teams.html' import team_link %}
+{% from 'macros/teams.html' import team_link, batting_team_style %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -28,7 +28,7 @@
     {% set batting_team = game.away if game.batting_side == 'away' else (game.home if game.batting_side == 'home' else none) %}
     {% set pitching_team = game.home if game.batting_side == 'away' else (game.away if game.batting_side == 'home' else none) %}
     <div class="game-hero-layout{% if game.status_state != 'in' %} game-hero-layout--solo{% endif %}">
-      <section class="game-card game-card--{{ game.status_state }} game-detail-hero" id="game-matchup"{% if game.status_state == 'in' and batting_team %} style="--batting-team-color: {{ batting_team.win_color or batting_team.color }};"{% endif %}>
+      <section class="game-card game-card--{{ game.status_state }} game-detail-hero" id="game-matchup"{% if game.status_state == 'in' and batting_team %} style="{{ batting_team_style(batting_team) }}"{% endif %}>
         <div class="game-card-status">
           <span id="game-status-pill" class="status-pill status-pill--{{ game.status_state }}{% if game.status_state == 'in' and batting_team %} status-pill--batting-team{% endif %}">{{ game.status_detail }}</span>
           <span id="game-count" class="game-card-count"{% if game.status_state != 'in' or game.balls is none %} hidden{% endif %}>
@@ -437,6 +437,7 @@
 
   </main>
 
+  <script src="{{ url_for('static', filename='js/team-batting-pill.js') }}"></script>
   <script src="{{ url_for('static', filename='js/game-live.js') }}"></script>
 </body>
 </html>

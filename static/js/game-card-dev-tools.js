@@ -15,8 +15,20 @@
   }
 
   var teams = {
-    away: { color: '#002D72', abbr: 'NYM' },
-    home: { color: '#E81828', abbr: 'PHI' }
+    away: {
+      color: '#002D72',
+      alternate_color: '#FF5910',
+      abbr: 'NYM',
+      short_name: 'Mets',
+      logo: 'https://a.espncdn.com/i/teamlogos/mlb/500/21.png'
+    },
+    home: {
+      color: '#E81828',
+      alternate_color: '#002D72',
+      abbr: 'PHI',
+      short_name: 'Phillies',
+      logo: 'https://a.espncdn.com/i/teamlogos/mlb/500/22.png'
+    }
   };
 
   var state = {
@@ -36,10 +48,28 @@
   function applyBattingTheme() {
     var battingTeam = teams[state.battingSide];
     if (state.status === 'in' && battingTeam) {
-      card.style.setProperty('--batting-team-color', battingTeam.color);
+      if (window.teamBattingPill) {
+        window.teamBattingPill.apply(
+          card,
+          battingTeam,
+          battingTeam.color
+        );
+      } else {
+        card.style.setProperty('--batting-team-color', battingTeam.color);
+        card.style.setProperty('--batting-team-bg', battingTeam.color);
+        if (battingTeam.alternate_color) {
+          card.style.setProperty('--batting-team-text', battingTeam.alternate_color);
+        }
+      }
       pill.classList.add('status-pill--batting-team');
     } else {
-      card.style.removeProperty('--batting-team-color');
+      if (window.teamBattingPill) {
+        window.teamBattingPill.clear(card);
+      } else {
+        card.style.removeProperty('--batting-team-color');
+        card.style.removeProperty('--batting-team-bg');
+        card.style.removeProperty('--batting-team-text');
+      }
       pill.classList.remove('status-pill--batting-team');
     }
   }
@@ -79,9 +109,13 @@
     }
 
     var packActive = window.gameCardPackOpen && window.gameCardPackOpen.isActive(card);
+    var gameEndActive = window.gameCardGameEnd && window.gameCardGameEnd.isActive(card);
     card.className = 'game-card game-card--' + status + ' game-card-dev-tools__sample';
     if (packActive) {
       card.classList.add('game-card--pack-open');
+    }
+    if (gameEndActive) {
+      card.classList.add('game-card--game-end');
     }
     pill.className = 'status-pill status-pill--' + status;
 
@@ -135,25 +169,52 @@
         window.gameCardPackOpen.play(card, {
           away: {
             abbr: teams.away.abbr,
-            short_name: 'Mets',
+            short_name: teams.away.short_name,
             name: 'New York Mets',
             color: teams.away.color,
-            logo: 'https://a.espncdn.com/i/teamlogos/mlb/500/21.png',
+            logo: teams.away.logo,
             record: '24-31',
             probable_pitcher: { name: 'S. Senga', throws: 'Right' }
           },
           home: {
             abbr: teams.home.abbr,
-            short_name: 'Phillies',
+            short_name: teams.home.short_name,
             name: 'Philadelphia Phillies',
             color: teams.home.color,
-            logo: 'https://a.espncdn.com/i/teamlogos/mlb/500/22.png',
+            logo: teams.home.logo,
             record: '32-23',
             probable_pitcher: { name: 'Z. Wheeler', throws: 'Right' }
           }
         });
       }
     }, 500);
+  }
+
+  function playGameEndAnimation() {
+    state.awayScore = 5;
+    state.homeScore = 3;
+    setCardState('post');
+    if (window.gameCardGameEnd) {
+      window.gameCardGameEnd.play(card, {
+        away: {
+          abbr: teams.away.abbr,
+          short_name: teams.away.short_name,
+          color: teams.away.color,
+          alternate_color: teams.away.alternate_color,
+          logo: teams.away.logo,
+          score: state.awayScore,
+          winner: true
+        },
+        home: {
+          abbr: teams.home.abbr,
+          short_name: teams.home.short_name,
+          color: teams.home.color,
+          alternate_color: teams.home.alternate_color,
+          logo: teams.home.logo,
+          score: state.homeScore
+        }
+      });
+    }
   }
 
   function handleAction(action) {
@@ -172,6 +233,9 @@
         break;
       case 'game-start':
         playGameStartAnimation();
+        break;
+      case 'game-end':
+        playGameEndAnimation();
         break;
       case 'state-pre':
         setCardState('pre');

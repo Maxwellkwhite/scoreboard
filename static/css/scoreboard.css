@@ -546,7 +546,7 @@ html[data-scoreboard-view="standings"] #tab-standings {
   }
 }
 
-.game-card > :not(.game-card-ripple-layer):not(.game-card-pack-layer) {
+.game-card > :not(.game-card-ripple-layer):not(.game-card-pack-layer):not(.game-card-game-end-layer) {
   position: relative;
   z-index: 1;
 }
@@ -1014,6 +1014,315 @@ html[data-scoreboard-view="standings"] #tab-standings {
   }
 }
 
+.game-card--game-end,
+.game-card-dev-tools__sample.game-card--game-end {
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.game-card--game-end.game-card--link:focus-visible,
+.game-card-dev-tools__sample.game-card--game-end:focus-visible {
+  outline: none;
+}
+
+.game-card-game-end-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 3;
+}
+
+.game-card-game-end__sky {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 120%, rgba(12, 18, 32, 0.08), transparent 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(12, 18, 32, 0.04) 100%);
+  opacity: 0;
+  animation: game-card-game-end-sky var(--game-end-duration, 10s) ease-out forwards;
+}
+
+.game-card-game-end__fireworks {
+  position: absolute;
+  inset: 0;
+}
+
+.game-card-firework {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform: translate(-50%, -50%) scale(var(--fw-scale, 1));
+  animation: game-card-firework-shell 3.2s ease-out forwards;
+}
+
+.game-card-firework__rocket {
+  position: absolute;
+  left: -2px;
+  top: 18px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  opacity: 0;
+  animation: game-card-firework-rocket 0.78s ease-in forwards;
+}
+
+.game-card-firework__rocket::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 2px;
+  height: 16px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: linear-gradient(180deg, currentColor, transparent);
+  opacity: 0.75;
+}
+
+.game-card-firework__flash {
+  position: absolute;
+  left: -5px;
+  top: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0;
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.95);
+  animation: game-card-firework-flash 0.72s ease-out 0.68s forwards;
+}
+
+.game-card-firework__particle,
+.game-card-firework__ember {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  opacity: 0;
+  transform: rotate(var(--fw-angle)) translateY(0);
+  animation: game-card-firework-particle 2.65s cubic-bezier(0.14, 0.68, 0.18, 1) 0.64s forwards;
+}
+
+.game-card-firework__particle--streak {
+  width: 2px;
+  height: 11px;
+  border-radius: 1px;
+  animation-name: game-card-firework-streak;
+  animation-duration: 2.85s;
+}
+
+.game-card-firework__ember {
+  width: 3px;
+  height: 3px;
+  animation-name: game-card-firework-ember;
+  animation-duration: 2.35s;
+  animation-delay: 0.72s;
+}
+
+.game-card-game-end__ribbon {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  width: min(88%, 240px);
+  display: flex;
+  justify-content: center;
+  transform: translateX(-50%) rotate(-7deg) scale(0.92);
+  opacity: 0;
+  z-index: 2;
+  animation: game-card-game-end-ribbon var(--game-end-duration, 12s) cubic-bezier(0.22, 1, 0.28, 1) forwards;
+}
+
+.game-card-game-end__ribbon-text {
+  display: block;
+  padding: 0.38rem 1.35rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #1a2332;
+  background: linear-gradient(
+    135deg,
+    #f8fafc 0%,
+    #c8d0da 28%,
+    #eef2f7 52%,
+    #aab4c2 76%,
+    #e8ecf1 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow:
+    0 4px 18px rgba(26, 35, 50, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  border-radius: 4px;
+}
+
+@keyframes game-card-game-end-sky {
+  0%, 4% {
+    opacity: 0;
+  }
+  12%, 86% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes game-card-firework-shell {
+  0%, 100% {
+    opacity: 1;
+  }
+}
+
+@keyframes game-card-firework-rocket {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  16% {
+    opacity: 1;
+  }
+  72% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(0) scale(0.4);
+  }
+}
+
+@keyframes game-card-firework-flash {
+  0% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+  18% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+  42% {
+    opacity: 0.9;
+    transform: scale(1.65);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.5);
+  }
+}
+
+@keyframes game-card-firework-particle {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--fw-angle)) translateY(6px) scale(0.35);
+  }
+  8% {
+    opacity: 1;
+  }
+  26% {
+    opacity: 1;
+    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -1)) scale(1);
+  }
+  68% {
+    opacity: 0.95;
+    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -0.94)) scale(0.94);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -0.58)) scale(0.28);
+  }
+}
+
+@keyframes game-card-firework-streak {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--fw-angle)) translateY(8px) scale(0.4);
+  }
+  10% {
+    opacity: 1;
+  }
+  28% {
+    opacity: 1;
+    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -1.08)) scale(1);
+  }
+  70% {
+    opacity: 0.92;
+    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -0.96)) scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -0.5)) scale(0.22);
+  }
+}
+
+@keyframes game-card-firework-ember {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--fw-angle)) translateY(0);
+  }
+  14% {
+    opacity: 0.95;
+  }
+  32% {
+    opacity: 0.9;
+    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -0.55));
+  }
+  72% {
+    opacity: 0.65;
+    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -0.38)) translateY(8px);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--fw-angle)) translateY(calc(var(--fw-dist) * -0.22)) translateY(22px) scale(0.2);
+  }
+}
+
+@keyframes game-card-game-end-ribbon {
+  0%, 84% {
+    opacity: 0;
+    transform: translateX(-180%) rotate(-7deg) scale(0.88);
+  }
+  88% {
+    opacity: 1;
+    transform: translateX(-50%) rotate(-7deg) scale(0.98);
+  }
+  93% {
+    opacity: 1;
+    transform: translateX(-50%) rotate(-7deg) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) rotate(-7deg) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-card--game-end,
+  .game-card-dev-tools__sample.game-card--game-end,
+  .game-card-game-end__sky,
+  .game-card-game-end__ribbon,
+  .game-card-firework,
+  .game-card-firework__rocket,
+  .game-card-firework__flash,
+  .game-card-firework__particle,
+  .game-card-firework__ember {
+    animation: none !important;
+  }
+
+  .game-card--game-end,
+  .game-card-dev-tools__sample.game-card--game-end {
+    pointer-events: auto;
+  }
+
+  .game-card-game-end__ribbon {
+    opacity: 1;
+    transform: translateX(-50%) rotate(-7deg) scale(1);
+  }
+}
+
 .game-card--link {
   text-decoration: none;
   color: inherit;
@@ -1047,9 +1356,10 @@ html[data-scoreboard-view="standings"] #tab-standings {
 }
 
 .game-card--link .status-pill--in.status-pill--batting-team,
-.game-detail-hero .status-pill--in.status-pill--batting-team {
-  background: color-mix(in srgb, var(--batting-team-color, #22a06b) 16%, white);
-  color: var(--batting-team-color, #137a4d);
+.game-detail-hero .status-pill--in.status-pill--batting-team,
+.game-mini-card .status-pill--in.status-pill--batting-team {
+  background: var(--batting-team-bg, var(--batting-team-color, #22a06b));
+  color: var(--batting-team-text, #ffffff);
 }
 
 .game-card-status {
@@ -2117,11 +2427,6 @@ html[data-scoreboard-view="standings"] #tab-standings {
   font-size: 0.58rem;
   padding: 0.14rem 0.4rem;
   align-self: flex-start;
-}
-
-.game-mini-card .status-pill--in.status-pill--batting-team {
-  background: color-mix(in srgb, var(--batting-team-color, #22a06b) 16%, white);
-  color: var(--batting-team-color, #137a4d);
 }
 
 .game-mini-card__teams {

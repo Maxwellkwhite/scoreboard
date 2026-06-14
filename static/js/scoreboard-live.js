@@ -46,10 +46,15 @@
     return String(team.score);
   }
 
-  function battingTeamColor(game) {
+  function battingTeam(game) {
     var side = game.batting_side;
     if (!side || !game[side]) return null;
-    var team = game[side];
+    return game[side];
+  }
+
+  function battingTeamColor(game) {
+    var team = battingTeam(game);
+    if (!team) return null;
     return team.win_color || team.color || null;
   }
 
@@ -61,13 +66,24 @@
 
   function applyBattingTheme(card, game) {
     var pill = card.querySelector('.status-pill');
-    var color = battingTeamColor(game);
+    var team = battingTeam(game);
+    var borderColor = battingTeamColor(game);
 
-    if (game.status_state === 'in' && color) {
-      card.style.setProperty('--batting-team-color', color);
+    if (game.status_state === 'in' && team) {
+      if (window.teamBattingPill) {
+        window.teamBattingPill.apply(card, team, borderColor);
+      } else if (borderColor) {
+        card.style.setProperty('--batting-team-color', borderColor);
+      }
       if (pill) pill.classList.add('status-pill--batting-team');
     } else {
-      card.style.removeProperty('--batting-team-color');
+      if (window.teamBattingPill) {
+        window.teamBattingPill.clear(card);
+      } else {
+        card.style.removeProperty('--batting-team-color');
+        card.style.removeProperty('--batting-team-bg');
+        card.style.removeProperty('--batting-team-text');
+      }
       if (pill) pill.classList.remove('status-pill--batting-team');
     }
   }
@@ -79,12 +95,17 @@
       window.gameCardScoreFlash.isActive(card);
     var packActive = window.gameCardPackOpen &&
       window.gameCardPackOpen.isActive(card);
+    var gameEndActive = window.gameCardGameEnd &&
+      window.gameCardGameEnd.isActive(card);
     card.className = 'game-card game-card--' + game.status_state + ' game-card--link';
     if (flashActive) {
       card.classList.add('game-card--score-flash');
     }
     if (packActive) {
       card.classList.add('game-card--pack-open');
+    }
+    if (gameEndActive) {
+      card.classList.add('game-card--game-end');
     }
     card.setAttribute('data-game-id', game.id);
     card.setAttribute('data-game-href', '/game/' + game.id);
@@ -165,6 +186,9 @@
 
     if (prevStatus === 'pre' && game.status_state === 'in' && window.gameCardPackOpen) {
       window.gameCardPackOpen.play(card, game);
+    }
+    if (prevStatus && prevStatus !== 'post' && game.status_state === 'post' && window.gameCardGameEnd) {
+      window.gameCardGameEnd.play(card, game);
     }
     lastStatus[gameId] = game.status_state;
 

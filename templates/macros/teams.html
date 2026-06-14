@@ -5,3 +5,9 @@
 {{ label }}
 {%- endif %}
 {%- endmacro %}
+
+{% macro batting_team_style(team) -%}
+{% if team -%}
+--batting-team-color: {{ team.win_color or team.color }}; --batting-team-bg: {{ team.color or team.win_color }};{% if team.alternate_color %} --batting-team-text: {{ team.alternate_color }};{% endif %}
+{%- endif %}
+{%- endmacro %}

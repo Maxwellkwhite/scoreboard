@@ -733,10 +733,15 @@
     }
   }
 
-  function battingTeamColor(game) {
+  function battingTeam(game) {
     var side = game.batting_side;
     if (!side || !game[side]) return null;
-    var team = game[side];
+    return game[side];
+  }
+
+  function battingTeamColor(game) {
+    var team = battingTeam(game);
+    if (!team) return null;
     return team.win_color || team.color || null;
   }
 
@@ -772,17 +777,30 @@
   function applyBattingTheme(game) {
     var matchup = document.getElementById('game-matchup');
     var pill = document.getElementById('game-status-pill');
-    var color = battingTeamColor(game);
+    var team = battingTeam(game);
+    var borderColor = battingTeamColor(game);
 
     if (matchup) {
       matchup.className = 'game-card game-card--' + game.status_state + ' game-detail-hero';
     }
 
-    if (game.status_state === 'in' && color && matchup) {
-      matchup.style.setProperty('--batting-team-color', color);
+    if (game.status_state === 'in' && team && matchup) {
+      if (window.teamBattingPill) {
+        window.teamBattingPill.apply(matchup, team, borderColor);
+      } else if (borderColor) {
+        matchup.style.setProperty('--batting-team-color', borderColor);
+      }
       if (pill) pill.classList.add('status-pill--batting-team');
     } else {
-      if (matchup) matchup.style.removeProperty('--batting-team-color');
+      if (matchup) {
+        if (window.teamBattingPill) {
+          window.teamBattingPill.clear(matchup);
+        } else {
+          matchup.style.removeProperty('--batting-team-color');
+          matchup.style.removeProperty('--batting-team-bg');
+          matchup.style.removeProperty('--batting-team-text');
+        }
+      }
       if (pill) pill.classList.remove('status-pill--batting-team');
     }
   }
@@ -807,12 +825,21 @@
 
   function applyMiniCard(card, game) {
     var isLink = card.tagName === 'A';
-    var color = battingTeamColor(game);
+    var team = battingTeam(game);
+    var borderColor = battingTeamColor(game);
 
-    if (game.status_state === 'in' && color) {
-      card.style.setProperty('--batting-team-color', color);
+    if (game.status_state === 'in' && team) {
+      if (window.teamBattingPill) {
+        window.teamBattingPill.apply(card, team, borderColor);
+      } else if (borderColor) {
+        card.style.setProperty('--batting-team-color', borderColor);
+      }
+    } else if (window.teamBattingPill) {
+      window.teamBattingPill.clear(card);
     } else {
       card.style.removeProperty('--batting-team-color');
+      card.style.removeProperty('--batting-team-bg');
+      card.style.removeProperty('--batting-team-text');
     }
 
     card.className = 'game-mini-card game-mini-card--' + game.status_state +
@@ -821,7 +848,7 @@
     var pill = card.querySelector('.status-pill');
     if (pill) {
       pill.className = 'status-pill status-pill--' + game.status_state;
-      if (game.status_state === 'in' && color) {
+      if (game.status_state === 'in' && team) {
         pill.classList.add('status-pill--batting-team');
       }
       if (game.status_state === 'pre' && game.start_time) {
