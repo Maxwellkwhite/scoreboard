@@ -1053,6 +1053,54 @@ def api_mlb_game(game_id):
     return jsonify({'game': game, 'strip_games': strip_games})
 
 
+@app.route('/team/<team_id>', methods=['GET'], endpoint='mlb_team_page')
+def mlb_team_page(team_id):
+    from espn_mlb import fetch_team
+
+    try:
+        team = fetch_team(str(team_id), include_stats=False)
+    except (requests.RequestException, ValueError):
+        abort(404)
+
+    return render_template('team.html', team=team)
+
+
+@app.route('/api/mlb/team/<team_id>/stats', methods=['GET'], endpoint='api_mlb_team_stats')
+def api_mlb_team_stats(team_id):
+    from espn_mlb import fetch_team, fetch_team_extra_stat_panels, fetch_team_stats
+
+    try:
+        team = fetch_team(str(team_id), include_stats=False)
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Team not found'}), 404
+
+    stats_table = fetch_team_stats(team_id, team.get('season_year'))
+    stat_panels = fetch_team_extra_stat_panels(
+        str(team_id),
+        season_year=team.get('season_year'),
+        team_detail=team,
+    )
+    if not stats_table and not stat_panels:
+        return jsonify({'error': 'Stats unavailable'}), 404
+
+    return jsonify({
+        'stats_table': stats_table,
+        'stat_panels': stat_panels,
+    })
+
+
+@app.route('/api/mlb/team/<team_id>', methods=['GET'], endpoint='api_mlb_team')
+def api_mlb_team(team_id):
+    from espn_mlb import fetch_team
+
+    try:
+        team = fetch_team(str(team_id), force_refresh=True)
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Team not found'}), 404
+
+    return jsonify({'team': team})
+
+
 @app.route('/player/<player_id>', methods=['GET'], endpoint='mlb_player_page')
 def mlb_player_page(player_id):
     from espn_mlb import fetch_player

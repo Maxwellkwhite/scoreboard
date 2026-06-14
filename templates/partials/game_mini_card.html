@@ -1,3 +1,4 @@
+{% from 'macros/teams.html' import team_link %}
 {% set batting_team = game.away if game.batting_side == 'away' else (game.home if game.batting_side == 'home' else none) %}
 {% set has_winner = game.away.winner or game.home.winner %}
 {% set is_current = game.id == current_game_id %}
@@ -11,7 +12,7 @@
 {% if is_current %}
 <div class="game-mini-card game-mini-card--{{ game.status_state }} game-mini-card--active" data-game-id="{{ game.id }}" aria-current="page"{% if game.status_state == 'in' and batting_team %} style="--batting-team-color: {{ batting_team.win_color or batting_team.color }};"{% endif %}>
 {% else %}
-<a href="/game/{{ game.id }}" class="game-mini-card game-mini-card--{{ game.status_state }} game-mini-card--link" data-game-id="{{ game.id }}"{% if game.status_state == 'in' and batting_team %} style="--batting-team-color: {{ batting_team.win_color or batting_team.color }};"{% endif %}>
+<div class="game-mini-card game-mini-card--{{ game.status_state }} game-mini-card--link" role="link" tabindex="0" data-game-id="{{ game.id }}" data-game-href="/game/{{ game.id }}"{% if game.status_state == 'in' and batting_team %} style="--batting-team-color: {{ batting_team.win_color or batting_team.color }};"{% endif %}>
 {% endif %}
   <span class="status-pill status-pill--{{ game.status_state }}{% if game.status_state == 'in' and batting_team %} status-pill--batting-team{% endif %}"
     {% if game.status_state == 'pre' and game.start_time %}data-start-time="{{ game.start_time }}"{% endif %}>{{ status_label }}</span>
@@ -24,7 +25,7 @@
       {% else %}
       <span class="game-mini-card__logo-fallback">{{ team.abbr }}</span>
       {% endif %}
-      <span class="game-mini-card__abbr">{{ team.abbr }}</span>
+      <span class="game-mini-card__abbr">{% if team.id %}{{ team_link(team.id, team.abbr) }}{% else %}{{ team.abbr }}{% endif %}</span>
       <span class="game-mini-card__score">{% if game.status_state == 'pre' %}—{% else %}{{ team.score if team.score is not none else '0' }}{% endif %}</span>
     </div>
     {% endfor %}
@@ -32,5 +33,5 @@
 {% if is_current %}
 </div>
 {% else %}
-</a>
+</div>
 {% endif %}

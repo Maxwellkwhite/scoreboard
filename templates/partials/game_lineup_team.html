@@ -1,4 +1,5 @@
 {% from 'macros/players.html' import player_link %}
+{% from 'macros/teams.html' import team_link %}
 <div class="lineup-team lineup-team--{{ side }}">
   <header class="lineup-team__head">
     {% if team.logo %}
@@ -6,7 +7,7 @@
     {% else %}
     <span class="lineup-team__logo-fallback">{{ team.abbr }}</span>
     {% endif %}
-    <span class="lineup-team__abbr">{{ lineup_team.abbr or team.abbr }}</span>
+    <span class="lineup-team__abbr">{{ team_link(team.id, lineup_team.abbr or team.abbr) if team.id else (lineup_team.abbr or team.abbr) }}</span>
   </header>
 
   {% if lineup_team.batters %}

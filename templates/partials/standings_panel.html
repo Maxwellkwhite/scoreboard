@@ -1,3 +1,4 @@
+{% from 'macros/teams.html' import team_link %}
 <div class="standings-board" aria-label="MLB standings">
   {% if standings %}
   {% for league in standings %}
@@ -22,7 +23,7 @@
               {% endif %}
             </span>
             <div class="standings-team-row__main">
-              <span class="standings-team-row__name" title="{{ team.name }}">{{ team.abbr }}</span>
+              <span class="standings-team-row__name" title="{{ team.name }}">{{ team_link(team.id, team.abbr) if team.id else team.abbr }}</span>
               <span class="standings-team-row__pct">{{ team.pct or '—' }}</span>
             </div>
             <div class="standings-team-row__stats">

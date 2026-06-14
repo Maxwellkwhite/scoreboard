@@ -1,6 +1,7 @@
+{% from 'macros/teams.html' import team_link %}
 {% set batting_team = game.away if game.batting_side == 'away' else (game.home if game.batting_side == 'home' else none) %}
 {% set has_winner = game.away.winner or game.home.winner %}
-<a href="/game/{{ game.id }}" class="game-card game-card--{{ game.status_state }} game-card--link" data-game-id="{{ game.id }}"{% if game.status_state == 'in' and batting_team %} style="--batting-team-color: {{ batting_team.win_color or batting_team.color }};"{% endif %}>
+<div class="game-card game-card--{{ game.status_state }} game-card--link" role="link" tabindex="0" data-game-id="{{ game.id }}" data-game-href="/game/{{ game.id }}"{% if game.status_state == 'in' and batting_team %} style="--batting-team-color: {{ batting_team.win_color or batting_team.color }};"{% endif %}>
   <div class="game-card-status">
     <span class="status-pill status-pill--{{ game.status_state }}{% if game.status_state == 'in' and batting_team %} status-pill--batting-team{% endif %}"
       {% if game.status_state == 'pre' and game.start_time %}data-start-time="{{ game.start_time }}"{% endif %}>{{ game.status_detail }}</span>
@@ -19,8 +20,8 @@
       <div class="game-card-logo game-card-logo--placeholder">{{ team.abbr }}</div>
       {% endif %}
       <div class="game-card-team-meta">
-        <span class="game-card-abbr">{{ team.abbr }}</span>
-        <span class="game-card-name">{{ team.short_name or team.name }}</span>
+        <span class="game-card-abbr">{% if team.id %}{{ team_link(team.id, team.abbr) }}{% else %}{{ team.abbr }}{% endif %}</span>
+        <span class="game-card-name">{% if team.id %}{{ team_link(team.id, team.short_name or team.name) }}{% else %}{{ team.short_name or team.name }}{% endif %}</span>
       </div>
       <span class="game-card-score">
         {% if game.status_state in ('in', 'post') and team.score is not none %}
@@ -34,4 +35,4 @@
     </div>
     {% endfor %}
   </div>
-</a>
+</div>

@@ -40,6 +40,14 @@
       escapeHtml(name) + '</a>';
   }
 
+  function teamLink(id, label, className) {
+    className = className || 'team-link';
+    if (!label) return '';
+    if (!id) return escapeHtml(label);
+    return '<a href="/team/' + encodeURIComponent(id) + '" class="' + className + '">' +
+      escapeHtml(label) + '</a>';
+  }
+
   function playerNameVariants(name) {
     var variants = [];
     function add(value) {
@@ -147,7 +155,7 @@
       : '<span class="play-feed-team__logo play-feed-team__logo--placeholder">' + (team.abbr || '') + '</span>';
     return '<span class="play-feed-team" style="--team-color:' + color + ';">' +
       logo +
-      '<span class="play-feed-team__abbr">' + (team.abbr || '') + '</span>' +
+      '<span class="play-feed-team__abbr">' + teamLink(team.id, team.abbr || '') + '</span>' +
       '</span>';
   }
 
@@ -491,9 +499,9 @@
     container.innerHTML =
       '<div class="team-stats__head">' +
       '<div class="team-stats__team team-stats__team--away">' +
-      teamStatsLogo(awayTeam) + '<span class="team-stats__abbr">' + awayAbbr + '</span></div>' +
+      teamStatsLogo(awayTeam) + '<span class="team-stats__abbr">' + teamLink(awayTeam && awayTeam.id, awayAbbr) + '</span></div>' +
       '<div class="team-stats__team team-stats__team--home">' +
-      teamStatsLogo(homeTeam) + '<span class="team-stats__abbr">' + homeAbbr + '</span></div>' +
+      teamStatsLogo(homeTeam) + '<span class="team-stats__abbr">' + teamLink(homeTeam && homeTeam.id, homeAbbr) + '</span></div>' +
       '</div>' +
       '<div class="team-stats__rows">' + rows + '</div>';
   }
@@ -606,7 +614,7 @@
 
     return '<div class="lineup-team lineup-team--' + side + '">' +
       '<header class="lineup-team__head">' + lineupTeamLogo(team) +
-      '<span class="lineup-team__abbr">' + (lineupTeam.abbr || (team && team.abbr) || '') + '</span></header>' +
+      '<span class="lineup-team__abbr">' + teamLink(team && team.id, lineupTeam.abbr || (team && team.abbr) || '') + '</span></header>' +
       renderLineupBattingTable(lineupTeam.batters) +
       renderLineupPitchingTable(lineupTeam.pitchers) +
       '</div>';

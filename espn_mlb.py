@@ -23,6 +23,9 @@ ESPN_STANDINGS_URL = (
 ESPN_TEAMS_URL = (
     "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams"
 )
+ESPN_TEAM_URL = (
+    "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{team_id}"
+)
 ESPN_ATHLETE_URL = (
     "https://site.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{player_id}"
 )
@@ -33,6 +36,7 @@ _summary_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _standings_cache: tuple[float, list[dict[str, Any]]] | None = None
 _teams_cache: tuple[float, dict[str, dict[str, Any]]] | None = None
 _athlete_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_team_detail_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
 def _parse_score(value: Any) -> int | None:
@@ -1269,15 +1273,18 @@ def _fetch_mlb_teams_lookup(*, force_refresh: bool = False) -> dict[str, dict[st
         .get("teams", [])
     ):
         team = item.get("team") or {}
+        team_id = team.get("id")
+        abbr = team.get("abbreviation")
         meta = {
+            "id": str(team_id) if team_id is not None else None,
+            "abbr": abbr,
+            "name": team.get("displayName") or "",
             "logo": _team_logo(team),
             "color": _team_color(team),
             "alternate_color": _team_alternate_color(team),
         }
-        team_id = team.get("id")
         if team_id is not None:
             lookup[str(team_id)] = meta
-        abbr = team.get("abbreviation")
         if abbr:
             lookup[str(abbr)] = meta
 
@@ -1299,6 +1306,7 @@ def _parse_standing_team(
     )
     color = meta.get("color") or _team_color(team) or "#1a2332"
     return {
+        "id": str(team_id) if team_id is not None else "",
         "abbr": abbr,
         "name": team.get("displayName", ""),
         "logo": meta.get("logo") or _team_logo(team),
@@ -1608,4 +1616,171 @@ def fetch_player(
                 detail["season_year"] = stats_table["season_year"]
 
     _athlete_cache[player_id] = (now, detail)
+    return detail
+
+
+def _team_record_stats(team: dict[str, Any]) -> dict[str, Any]:
+    items = ((team.get("record") or {}).get("items") or [])
+    if not items:
+        return {}
+    stats = {
+        stat.get("name"): stat.get("value")
+        for stat in items[0].get("stats") or []
+        if stat.get("name")
+    }
+    return stats
+
+
+def _format_team_streak(value: Any) -> str | None:
+    number = value
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    if number > 0:
+        return f"W{number}"
+    if number < 0:
+        return f"L{abs(number)}"
+    return None
+
+
+def parse_team_detail(payload: dict[str, Any]) -> dict[str, Any]:
+    team = payload.get("team") or {}
+    franchise = team.get("franchise") or {}
+    venue = franchise.get("venue") or {}
+    record_stats = _team_record_stats(team)
+    wins = record_stats.get("wins")
+    losses = record_stats.get("losses")
+    home_wins = record_stats.get("homeWins")
+    home_losses = record_stats.get("homeLosses")
+    road_wins = record_stats.get("roadWins")
+    road_losses = record_stats.get("roadLosses")
+    division_gb = record_stats.get("divisionGamesBehind")
+    win_pct = record_stats.get("winPercent")
+
+    record = None
+    if wins is not None and losses is not None:
+        record = f"{int(float(wins))}–{int(float(losses))}"
+
+    home_record = None
+    if home_wins is not None and home_losses is not None:
+        home_record = f"{int(float(home_wins))}–{int(float(home_losses))}"
+
+    road_record = None
+    if road_wins is not None and road_losses is not None:
+        road_record = f"{int(float(road_wins))}–{int(float(road_losses))}"
+
+    pct = None
+    if win_pct is not None:
+        try:
+            pct = f"{float(win_pct):.3f}".lstrip("0")
+        except (TypeError, ValueError):
+            pct = None
+
+    return {
+        "id": str(team.get("id") or ""),
+        "abbr": team.get("abbreviation") or "",
+        "name": team.get("displayName") or "",
+        "short_name": team.get("shortDisplayName") or "",
+        "location": team.get("location") or franchise.get("location") or "",
+        "logo": _team_logo(team),
+        "color": _team_color(team),
+        "alternate_color": _team_alternate_color(team),
+        "record": record or team.get("recordSummary"),
+        "pct": pct,
+        "standing_summary": team.get("standingSummary") or "",
+        "venue": venue.get("fullName") or venue.get("shortName"),
+        "home_record": home_record,
+        "road_record": road_record,
+        "division_gb": (
+            f"{float(division_gb):g} GB"
+            if division_gb is not None and str(division_gb) not in {"", "-"}
+            else None
+        ),
+        "streak": _format_team_streak(record_stats.get("streak")),
+        "season_year": str(date.today().year),
+        "stats_table": None,
+    }
+
+
+def fetch_team_stats(team_id: str, season_year: str | int | None = None) -> dict[str, Any] | None:
+    try:
+        from team_stats import fetch_team_stats_table
+
+        year = None
+        if season_year is not None:
+            try:
+                year = int(season_year)
+            except (TypeError, ValueError):
+                year = date.today().year
+        if year is None:
+            year = date.today().year
+        return fetch_team_stats_table(team_id, season_year=year)
+    except Exception:
+        return None
+
+
+def fetch_team_extra_stat_panels(
+    team_id: str,
+    *,
+    season_year: str | int | None = None,
+    team_detail: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    try:
+        from team_stats import fetch_team_stat_panels
+
+        year = None
+        if season_year is not None:
+            try:
+                year = int(season_year)
+            except (TypeError, ValueError):
+                year = date.today().year
+        if year is None:
+            year = date.today().year
+        return fetch_team_stat_panels(
+            team_id,
+            season_year=year,
+            team_detail=team_detail,
+        )
+    except Exception:
+        return []
+
+
+def fetch_team(
+    team_id: str,
+    *,
+    force_refresh: bool = False,
+    include_stats: bool = True,
+) -> dict[str, Any]:
+    now = time.time()
+    cached = _team_detail_cache.get(team_id)
+    if not force_refresh and cached and now - cached[0] < CACHE_TTL_SECONDS:
+        detail = cached[1]
+        if include_stats and not detail.get("stats_table"):
+            stats_table = fetch_team_stats(team_id, detail.get("season_year"))
+            if stats_table:
+                detail = {**detail, "stats_table": stats_table}
+                if stats_table.get("season_year"):
+                    detail["season_year"] = stats_table["season_year"]
+                _team_detail_cache[team_id] = (now, detail)
+        return detail
+
+    response = requests.get(
+        ESPN_TEAM_URL.format(team_id=team_id),
+        timeout=15,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not payload.get("team"):
+        raise ValueError(f"No team for id {team_id}")
+
+    detail = parse_team_detail(payload)
+    if include_stats:
+        stats_table = fetch_team_stats(team_id, detail.get("season_year"))
+        if stats_table:
+            detail["stats_table"] = stats_table
+            if stats_table.get("season_year"):
+                detail["season_year"] = stats_table["season_year"]
+
+    _team_detail_cache[team_id] = (now, detail)
     return detail

@@ -1139,9 +1139,19 @@
       });
     }
 
+    function scrollToPanel(panelId) {
+      var panel = panelsEl.querySelector('.player-stats-panel[data-panel="' + panelId + '"]');
+      if (!panel || panel.hidden) return;
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
     buttons.forEach(function (btn) {
       btn.addEventListener('click', function () {
-        showPanel(btn.getAttribute('data-panel'));
+        var panelId = btn.getAttribute('data-panel');
+        showPanel(panelId);
+        requestAnimationFrame(function () {
+          scrollToPanel(panelId);
+        });
       });
     });
   }

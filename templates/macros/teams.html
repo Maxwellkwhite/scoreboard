@@ -1,0 +1,7 @@
+{% macro team_link(id, label, class='team-link', stop_nav=false) -%}
+{% if id and label -%}
+<a href="{{ url_for('mlb_team_page', team_id=id) }}" class="{{ class }}{% if stop_nav %} team-link--stop{% endif %}"{% if stop_nav %} onclick="event.stopPropagation();"{% endif %}>{{ label }}</a>
+{%- elif label -%}
+{{ label }}
+{%- endif %}
+{%- endmacro %}

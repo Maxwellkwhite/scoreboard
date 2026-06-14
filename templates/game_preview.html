@@ -1,4 +1,5 @@
 {% from 'macros/players.html' import player_link %}
+{% from 'macros/teams.html' import team_link %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,7 +23,7 @@
 
     <header class="game-detail-header">
       <p class="game-detail-kicker">Game Preview</p>
-      <h1>{{ game.away.abbr }} @ {{ game.home.abbr }}</h1>
+      <h1>{{ team_link(game.away.id, game.away.abbr) }} @ {{ team_link(game.home.id, game.home.abbr) }}</h1>
       <p class="game-detail-start">
         <span class="status-pill status-pill--pre" data-start-time="{{ game.start_time }}">{{ game.status_detail }}</span>
       </p>
@@ -33,7 +34,7 @@
         {% if game.away.logo %}
         <img src="{{ game.away.logo }}" alt="" class="matchup-logo" width="72" height="72">
         {% endif %}
-        <h2>{{ game.away.name }}</h2>
+        <h2>{{ team_link(game.away.id, game.away.name) }}</h2>
         {% if game.away.record %}<p class="matchup-record">{{ game.away.record }}</p>{% endif %}
         {% if game.preview.away_win_pct %}
         <p class="matchup-win-pct">{{ game.preview.away_win_pct }}% win chance</p>
@@ -44,7 +45,7 @@
         {% if game.home.logo %}
         <img src="{{ game.home.logo }}" alt="" class="matchup-logo" width="72" height="72">
         {% endif %}
-        <h2>{{ game.home.name }}</h2>
+        <h2>{{ team_link(game.home.id, game.home.name) }}</h2>
         {% if game.home.record %}<p class="matchup-record">{{ game.home.record }}</p>{% endif %}
         {% if game.preview.home_win_pct %}
         <p class="matchup-win-pct">{{ game.preview.home_win_pct }}% win chance</p>
@@ -60,7 +61,7 @@
         {% set team = side[1] %}
         {% set pitcher = team.probable_pitcher %}
         <div class="pitcher-card">
-          <p class="pitcher-team">{{ team.abbr }}</p>
+          <p class="pitcher-team">{{ team_link(team.id, team.abbr) }}</p>
           {% if pitcher %}
           <div class="pitcher-body">
             {% if pitcher.headshot %}

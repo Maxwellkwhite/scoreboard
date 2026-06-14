@@ -1,4 +1,5 @@
 {% from 'macros/players.html' import player_link %}
+{% from 'macros/teams.html' import team_link %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -52,8 +53,8 @@
                 <span class="game-card-role{% if away_role %} game-card-role--{{ away_role }}{% endif %}" id="game-away-role"{% if not away_role %} hidden{% endif %}{% if away_role %} style="color: {{ game.away.win_color or game.away.color }}; border-color: {{ game.away.win_color or game.away.color }};"{% endif %}>{% if away_role == 'batting' %}Batting{% elif away_role == 'pitching' %}Pitching{% endif %}</span>
               </div>
               <div class="game-card-team-meta">
-                <span class="game-card-abbr">{{ game.away.abbr }}</span>
-                <span class="game-card-name">{{ game.away.short_name or game.away.name }}</span>
+                <span class="game-card-abbr">{{ team_link(game.away.id, game.away.abbr) }}</span>
+                <span class="game-card-name">{{ team_link(game.away.id, game.away.short_name or game.away.name) }}</span>
                 {% if game.away.record %}<span class="game-card-record">{{ game.away.record }}</span>{% endif %}
               </div>
             </div>
@@ -70,8 +71,8 @@
 
             <div id="game-team-home" class="game-card-team game-card-team--home game-detail-matchup-team game-detail-matchup-team--home{% if game.home.winner %} game-card-team--winner{% elif game.status_state == 'post' and has_winner %} game-card-team--loser{% endif %}" style="--team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};">
               <div class="game-card-team-meta">
-                <span class="game-card-abbr">{{ game.home.abbr }}</span>
-                <span class="game-card-name">{{ game.home.short_name or game.home.name }}</span>
+                <span class="game-card-abbr">{{ team_link(game.home.id, game.home.abbr) }}</span>
+                <span class="game-card-name">{{ team_link(game.home.id, game.home.short_name or game.home.name) }}</span>
                 {% if game.home.record %}<span class="game-card-record">{{ game.home.record }}</span>{% endif %}
               </div>
               <div class="game-detail-matchup-team-mark">
@@ -231,7 +232,7 @@
             {% else %}
             <span class="team-stats__logo-fallback">{{ game.away.abbr }}</span>
             {% endif %}
-            <span class="team-stats__abbr">{{ away_box.abbr if away_box else game.away.abbr }}</span>
+            <span class="team-stats__abbr">{{ team_link(game.away.id, away_box.abbr if away_box else game.away.abbr) }}</span>
           </div>
           <div class="team-stats__team team-stats__team--home">
             {% if game.home.logo %}
@@ -239,7 +240,7 @@
             {% else %}
             <span class="team-stats__logo-fallback">{{ game.home.abbr }}</span>
             {% endif %}
-            <span class="team-stats__abbr">{{ home_box.abbr if home_box else game.home.abbr }}</span>
+            <span class="team-stats__abbr">{{ team_link(game.home.id, home_box.abbr if home_box else game.home.abbr) }}</span>
           </div>
         </div>
         <div class="team-stats__rows">
@@ -325,7 +326,7 @@
               {% else %}
               <span class="play-feed-team__logo play-feed-team__logo--placeholder">{{ scoring_team.abbr }}</span>
               {% endif %}
-              <span class="play-feed-team__abbr">{{ scoring_team.abbr }}</span>
+              <span class="play-feed-team__abbr">{{ team_link(scoring_team.id, scoring_team.abbr) if scoring_team.id else scoring_team.abbr }}</span>
             </span>
             {% else %}
             <span class="play-feed-team play-feed-team--empty" aria-hidden="true"></span>

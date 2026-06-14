@@ -84,7 +84,9 @@
   function applyGameToCard(card, game) {
     card.className = 'game-card game-card--' + game.status_state + ' game-card--link';
     card.setAttribute('data-game-id', game.id);
-    card.setAttribute('href', '/game/' + game.id);
+    card.setAttribute('data-game-href', '/game/' + game.id);
+    card.setAttribute('role', 'link');
+    card.setAttribute('tabindex', '0');
 
     var statusWrap = card.querySelector('.game-card-status');
     var pill = card.querySelector('.status-pill');
@@ -241,4 +243,38 @@
   if (activeDay === 'today') {
     refreshTodayScores();
   }
+
+  function navigateGameCard(card) {
+    var href = card.getAttribute('data-game-href');
+    if (href) {
+      window.location.href = href;
+    }
+  }
+
+  document.addEventListener('click', function (event) {
+    if (event.target.closest('.team-link')) {
+      return;
+    }
+    var card = event.target.closest('.game-card--link, .game-mini-card--link');
+    if (card) {
+      navigateGameCard(card);
+    }
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+    if (event.target.closest('.team-link')) {
+      return;
+    }
+    var card = event.target.closest('.game-card--link, .game-mini-card--link');
+    if (!card) {
+      return;
+    }
+    if (event.key === ' ') {
+      event.preventDefault();
+    }
+    navigateGameCard(card);
+  });
 })();

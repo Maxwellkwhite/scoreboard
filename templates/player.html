@@ -1,3 +1,4 @@
+{% from 'macros/teams.html' import team_link %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -35,7 +36,7 @@
             <div class="player-profile__details">
               {% if player.team.abbr or player.position or player.jersey %}
               <p class="player-profile__tags">
-                {%- if player.team.abbr -%}<span>{{ player.team.abbr }}</span>{%- endif -%}
+                {%- if player.team.abbr -%}<span>{% if player.team.id %}{{ team_link(player.team.id, player.team.abbr) }}{% else %}{{ player.team.abbr }}{% endif %}</span>{%- endif -%}
                 {%- if player.position -%}<span>{{ player.position }}</span>{%- endif -%}
                 {%- if player.jersey -%}<span>#{{ player.jersey }}</span>{%- endif -%}
               </p>
@@ -45,7 +46,7 @@
                 {% if player.team.logo %}
                 <img class="player-profile__team-logo" src="{{ player.team.logo }}" alt="" width="24" height="24" loading="lazy">
                 {% endif %}
-                <span>{{ player.team.name }}</span>
+                <span>{{ team_link(player.team.id, player.team.name) if player.team.id else player.team.name }}</span>
               </p>
               {% endif %}
             </div>
