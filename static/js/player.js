@@ -839,7 +839,16 @@
     return '#2e6db4';
   }
 
-  function buildPercentileRowHtml(metric) {
+  function buildPercentileRowHtml(metric, panel) {
+    if (panel && panel.qualified === false && metric.display) {
+      return (
+        '<div class="percentile-rank-row percentile-rank-row--raw">' +
+          '<span class="percentile-rank-row__label">' + escapeHtml(metric.label) + '</span>' +
+          '<span class="percentile-rank-row__stat">' + escapeHtml(metric.display) + '</span>' +
+        '</div>'
+      );
+    }
+
     var pct = Math.max(0, Math.min(100, Number(metric.value) || 0));
     var color = percentileFillColor(pct);
     return (
@@ -854,8 +863,10 @@
     );
   }
 
-  function buildPercentileGroupHtml(group) {
-    var rows = (group.metrics || []).map(buildPercentileRowHtml).join('');
+  function buildPercentileGroupHtml(group, panel) {
+    var rows = (group.metrics || []).map(function (metric) {
+      return buildPercentileRowHtml(metric, panel);
+    }).join('');
     if (!rows) return '';
     return (
       '<section class="percentile-ranks__group">' +
@@ -913,17 +924,33 @@
     );
   }
 
+  function buildPercentileNoticeHtml(panel) {
+    if (panel.qualified !== false) return '';
+    var seasonYear = String(panel.season_year || '');
+    return (
+      '<div class="percentile-ranks__notice" role="status">' +
+        'Not Qualified' +
+        (seasonYear ? ' for ' + escapeHtml(seasonYear) : '') +
+        '<span class="percentile-ranks__notice-detail">Season Statcast stats shown below. Percentile ranks unavailable.</span>' +
+      '</div>'
+    );
+  }
+
   function buildPercentileRankingsHtml(panel) {
     var seasonYear = String(panel.season_year || '');
     var headingHtml = buildPercentileHeadingHtml(panel);
-    var groups = (panel.groups || []).map(buildPercentileGroupHtml).filter(Boolean);
+    var noticeHtml = buildPercentileNoticeHtml(panel);
+    var groups = (panel.groups || []).map(function (group) {
+      return buildPercentileGroupHtml(group, panel);
+    }).filter(Boolean);
 
     if (!groups.length) {
       return (
         '<div class="percentile-ranks">' +
           headingHtml +
-          '<p class="player-splits-empty">No Statcast percentile data for ' +
-          escapeHtml(seasonYear || 'this season') + '.</p>' +
+          noticeHtml +
+          '<p class="player-splits-empty">No Statcast data' +
+          (seasonYear ? ' for ' + escapeHtml(seasonYear) : '') + '.</p>' +
         '</div>'
       );
     }
@@ -931,8 +958,9 @@
     return (
       '<div class="percentile-ranks">' +
         headingHtml +
+        noticeHtml +
         '<div class="percentile-ranks__grid">' + groups.join('') + '</div>' +
-        buildPercentileLegendHtml() +
+        (panel.qualified === false ? '' : buildPercentileLegendHtml()) +
       '</div>'
     );
   }

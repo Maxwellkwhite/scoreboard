@@ -20,8 +20,13 @@ from pybaseball import (
     pitching_stats_bref,
     playerid_lookup,
     statcast_batter,
+    statcast_batter_expected_stats,
+    statcast_batter_exitvelo_barrels,
     statcast_batter_percentile_ranks,
     statcast_pitcher_arsenal_stats,
+    statcast_pitcher_exitvelo_barrels,
+    statcast_pitcher_expected_stats,
+    statcast_pitcher_percentile_ranks,
     statcast_pitcher_pitch_arsenal,
 )
 from pybaseball.playerid_lookup import get_closest_names, get_lookup_table
@@ -121,6 +126,40 @@ _BATTER_PERCENTILE_GROUPS = (
         ("oaa", "Outs Above Avg"),
     )),
 )
+_PITCHER_PERCENTILE_GROUPS = (
+    ("Expected Stats", (
+        ("xera", "xERA"),
+        ("xwoba", "xwOBA Allowed"),
+        ("xba", "xBA Allowed"),
+        ("xslg", "xSLG Allowed"),
+        ("xiso", "xISO Allowed"),
+        ("xobp", "xOBP Allowed"),
+    )),
+    ("Contact Allowed", (
+        ("exit_velocity", "Avg Exit Velo"),
+        ("max_ev", "Max Exit Velo"),
+        ("hard_hit_percent", "Hard Hit%"),
+        ("brl_percent", "Barrel%"),
+        ("brl", "Barrels"),
+    )),
+    ("Plate Discipline", (
+        ("k_percent", "K%"),
+        ("bb_percent", "BB%"),
+        ("whiff_percent", "Whiff%"),
+        ("chase_percent", "Chase%"),
+    )),
+    ("Pitch Arsenal", (
+        ("fb_velocity", "Fastball Velo"),
+        ("fb_spin", "Fastball Spin"),
+        ("curve_spin", "Curve Spin"),
+    )),
+)
+_SAVANT_DISCIPLINE_URL = (
+    "https://baseballsavant.mlb.com/leaderboard/custom"
+    "?year={year}&type={player_type}&filter=&min=0"
+    "&selections=player_id%2Ck_percent%2Cbb_percent%2Cwhiff_percent%2Cchase_percent"
+    "&csv=true"
+)
 _BATTING_SPLIT_REGULAR = (
     ("Platoon Splits", ("vs RHP", "vs LHP")),
     ("Home or Away", ("Home", "Away")),
@@ -172,6 +211,10 @@ _player_lookup_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _stats_table_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _stat_panels_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _batter_percentile_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
+_pitcher_percentile_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
+_discipline_table_cache: dict[tuple[int, str], tuple[float, pd.DataFrame | None]] = {}
+_bat_tracking_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
+_sprint_speed_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
 _pitching_bref_season_cache: dict[int, pd.DataFrame] = {}
 
 
@@ -1112,32 +1155,335 @@ def _get_batter_percentile_table(season_year: int) -> pd.DataFrame | None:
     return result
 
 
-def _fetch_batter_percentile_panel(
-    *,
-    mlbam_id: int | None,
+def _get_pitcher_percentile_table(season_year: int) -> pd.DataFrame | None:
+    cached = _pitcher_percentile_table_cache.get(season_year)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+    try:
+        table = statcast_pitcher_percentile_ranks(season_year)
+        if table is None or table.empty:
+            result = None
+        else:
+            result = table
+    except Exception:
+        result = None
+    _pitcher_percentile_table_cache[season_year] = (now, result)
+    return result
+
+
+def _get_discipline_table(season_year: int, player_type: str) -> pd.DataFrame | None:
+    cache_key = (season_year, player_type)
+    cached = _discipline_table_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+    try:
+        response = requests.get(
+            _SAVANT_DISCIPLINE_URL.format(year=season_year, player_type=player_type),
+            timeout=20,
+        )
+        response.raise_for_status()
+        table = pd.read_csv(pd.io.common.StringIO(response.text))
+        result = table if not table.empty else None
+    except Exception:
+        result = None
+    _discipline_table_cache[cache_key] = (now, result)
+    return result
+
+
+def _get_bat_tracking_table(season_year: int) -> pd.DataFrame | None:
+    cached = _bat_tracking_table_cache.get(season_year)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+    try:
+        response = requests.get(
+            f"https://baseballsavant.mlb.com/leaderboard/bat-tracking?year={season_year}&csv=true",
+            timeout=20,
+        )
+        response.raise_for_status()
+        table = pd.read_csv(pd.io.common.StringIO(response.text))
+        result = table if not table.empty else None
+    except Exception:
+        result = None
+    _bat_tracking_table_cache[season_year] = (now, result)
+    return result
+
+
+def _get_sprint_speed_table(season_year: int) -> pd.DataFrame | None:
+    cached = _sprint_speed_table_cache.get(season_year)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+    try:
+        response = requests.get(
+            f"https://baseballsavant.mlb.com/leaderboard/sprint_speed?year={season_year}&csv=true",
+            timeout=20,
+        )
+        response.raise_for_status()
+        table = pd.read_csv(pd.io.common.StringIO(response.text))
+        result = table if not table.empty else None
+    except Exception:
+        result = None
+    _sprint_speed_table_cache[season_year] = (now, result)
+    return result
+
+
+def _weighted_pitcher_arsenal_rates(
+    rows: pd.DataFrame,
+    column: str,
+) -> float | None:
+    if rows.empty or column not in rows.columns:
+        return None
+    pitches = rows["pitches"].apply(_parse_number)
+    values = rows[column].apply(_parse_number)
+    valid = [
+        (pitch_count, value)
+        for pitch_count, value in zip(pitches, values, strict=False)
+        if pitch_count and value is not None
+    ]
+    if not valid:
+        return None
+    total_pitches = sum(pitch_count for pitch_count, _ in valid)
+    if not total_pitches:
+        return None
+    return sum(pitch_count * value for pitch_count, value in valid) / total_pitches
+
+
+def _format_unqualified_percentile_stat(metric_id: str, value: float | int) -> str:
+    number = _parse_number(value)
+    if number is None:
+        return "—"
+    if metric_id in {"xera"}:
+        return f"{number:.2f}"
+    if metric_id in {
+        "xwoba", "xba", "xslg", "xiso", "xobp",
+    }:
+        return f"{number:.3f}"
+    if metric_id in {
+        "hard_hit_percent", "brl_percent", "k_percent", "bb_percent",
+        "whiff_percent", "chase_percent", "squared_up_rate",
+    }:
+        return f"{number:.1f}%"
+    if metric_id in {"exit_velocity", "max_ev", "fb_velocity", "sprint_speed", "arm_strength"}:
+        return f"{number:.1f}"
+    if metric_id in {"fb_spin", "curve_spin"}:
+        return f"{round(number):,}"
+    if metric_id in {"brl", "oaa"}:
+        return str(round(number))
+    if metric_id in {"bat_speed"}:
+        return f"{number:.1f}"
+    if metric_id in {"swing_length"}:
+        return f"{number:.1f}"
+    return str(round(number, 1))
+
+
+def _fetch_pitcher_raw_statcast_values(
+    mlbam_id: int,
     season_year: int,
-) -> dict[str, Any]:
-    empty: dict[str, Any] = {
-        "id": "percentile_ranks",
-        "label": "Percentile Rankings",
-        "panel_kind": "percentile_ranks",
-        "season_year": str(season_year),
-        "groups": [],
-    }
-    if not mlbam_id:
-        return empty
+) -> dict[str, float | int]:
+    values: dict[str, float | int] = {}
 
-    table = _get_batter_percentile_table(season_year)
-    if table is None or table.empty:
-        return empty
+    try:
+        expected = statcast_pitcher_expected_stats(season_year, minPA=0)
+        row = expected[expected["player_id"] == mlbam_id]
+        if not row.empty:
+            record = row.iloc[0]
+            for metric_id, column in (
+                ("xera", "xera"),
+                ("xwoba", "est_woba"),
+                ("xba", "est_ba"),
+                ("xslg", "est_slg"),
+            ):
+                parsed = _parse_number(record.get(column))
+                if parsed is not None:
+                    values[metric_id] = parsed
+            est_ba = _parse_number(record.get("est_ba"))
+            est_slg = _parse_number(record.get("est_slg"))
+            if est_ba is not None and est_slg is not None:
+                values["xiso"] = est_slg - est_ba
+    except Exception:
+        pass
 
-    player_rows = table[table["player_id"] == mlbam_id]
-    if player_rows.empty:
-        return empty
+    try:
+        contact = statcast_pitcher_exitvelo_barrels(season_year, minBBE=0)
+        row = contact[contact["player_id"] == mlbam_id]
+        if not row.empty:
+            record = row.iloc[0]
+            for metric_id, column in (
+                ("exit_velocity", "avg_hit_speed"),
+                ("max_ev", "max_hit_speed"),
+                ("brl_percent", "brl_percent"),
+                ("brl", "barrels"),
+            ):
+                parsed = _parse_number(record.get(column))
+                if parsed is not None:
+                    values[metric_id] = parsed
+            hard_hit = _parse_number(record.get("ev95percent"))
+            if hard_hit is not None:
+                values["hard_hit_percent"] = hard_hit
+    except Exception:
+        pass
 
-    row = player_rows.iloc[0]
+    try:
+        discipline = _get_discipline_table(season_year, "pitcher")
+        if discipline is not None:
+            row = discipline[discipline["player_id"] == mlbam_id]
+            if not row.empty:
+                record = row.iloc[0]
+                for metric_id, column in (
+                    ("k_percent", "k_percent"),
+                    ("bb_percent", "bb_percent"),
+                    ("whiff_percent", "whiff_percent"),
+                    ("chase_percent", "chase_percent"),
+                ):
+                    parsed = _parse_number(record.get(column))
+                    if parsed is not None:
+                        values[metric_id] = parsed
+    except Exception:
+        pass
+
+    try:
+        arsenal = statcast_pitcher_arsenal_stats(season_year, minPA=1)
+        rows = arsenal[arsenal["player_id"] == mlbam_id]
+        if not rows.empty:
+            for metric_id, column in (
+                ("k_percent", "k_percent"),
+                ("whiff_percent", "whiff_percent"),
+                ("hard_hit_percent", "hard_hit_percent"),
+            ):
+                if metric_id not in values:
+                    parsed = _weighted_pitcher_arsenal_rates(rows, column)
+                    if parsed is not None:
+                        values[metric_id] = parsed
+    except Exception:
+        pass
+
+    try:
+        velo_df = statcast_pitcher_pitch_arsenal(season_year, minP=1, arsenal_type="avg_speed")
+        spin_df = statcast_pitcher_pitch_arsenal(season_year, minP=1, arsenal_type="avg_spin")
+        velo_row = velo_df[velo_df["pitcher"] == mlbam_id]
+        spin_row = spin_df[spin_df["pitcher"] == mlbam_id]
+        if not velo_row.empty:
+            ff_velo = _parse_number(velo_row.iloc[0].get("ff_avg_speed"))
+            if ff_velo is not None:
+                values["fb_velocity"] = ff_velo
+        if not spin_row.empty:
+            ff_spin = _parse_number(spin_row.iloc[0].get("ff_avg_spin"))
+            curve_spin = _parse_number(spin_row.iloc[0].get("cu_avg_spin"))
+            if ff_spin is not None:
+                values["fb_spin"] = ff_spin
+            if curve_spin is not None:
+                values["curve_spin"] = curve_spin
+    except Exception:
+        pass
+
+    return values
+
+
+def _fetch_batter_raw_statcast_values(
+    mlbam_id: int,
+    season_year: int,
+) -> dict[str, float | int]:
+    values: dict[str, float | int] = {}
+
+    try:
+        expected = statcast_batter_expected_stats(season_year, minPA=0)
+        row = expected[expected["player_id"] == mlbam_id]
+        if not row.empty:
+            record = row.iloc[0]
+            for metric_id, column in (
+                ("xwoba", "est_woba"),
+                ("xba", "est_ba"),
+                ("xslg", "est_slg"),
+            ):
+                parsed = _parse_number(record.get(column))
+                if parsed is not None:
+                    values[metric_id] = parsed
+            est_ba = _parse_number(record.get("est_ba"))
+            est_slg = _parse_number(record.get("est_slg"))
+            if est_ba is not None and est_slg is not None:
+                values["xiso"] = est_slg - est_ba
+    except Exception:
+        pass
+
+    try:
+        contact = statcast_batter_exitvelo_barrels(season_year, minBBE=0)
+        row = contact[contact["player_id"] == mlbam_id]
+        if not row.empty:
+            record = row.iloc[0]
+            for metric_id, column in (
+                ("exit_velocity", "avg_hit_speed"),
+                ("max_ev", "max_hit_speed"),
+                ("brl_percent", "brl_percent"),
+                ("brl", "barrels"),
+            ):
+                parsed = _parse_number(record.get(column))
+                if parsed is not None:
+                    values[metric_id] = parsed
+            hard_hit = _parse_number(record.get("ev95percent"))
+            if hard_hit is not None:
+                values["hard_hit_percent"] = hard_hit
+    except Exception:
+        pass
+
+    try:
+        discipline = _get_discipline_table(season_year, "batter")
+        if discipline is not None:
+            row = discipline[discipline["player_id"] == mlbam_id]
+            if not row.empty:
+                record = row.iloc[0]
+                for metric_id, column in (
+                    ("k_percent", "k_percent"),
+                    ("bb_percent", "bb_percent"),
+                    ("whiff_percent", "whiff_percent"),
+                    ("chase_percent", "chase_percent"),
+                ):
+                    parsed = _parse_number(record.get(column))
+                    if parsed is not None:
+                        values[metric_id] = parsed
+    except Exception:
+        pass
+
+    try:
+        tracking = _get_bat_tracking_table(season_year)
+        if tracking is not None and "id" in tracking.columns:
+            row = tracking[tracking["id"] == mlbam_id]
+            if not row.empty:
+                record = row.iloc[0]
+                bat_speed = _parse_number(record.get("avg_bat_speed"))
+                swing_length = _parse_number(record.get("swing_length"))
+                squared_up = _parse_number(record.get("squared_up_per_swing"))
+                if bat_speed is not None:
+                    values["bat_speed"] = bat_speed
+                if swing_length is not None:
+                    values["swing_length"] = swing_length
+                if squared_up is not None:
+                    values["squared_up_rate"] = squared_up * 100
+    except Exception:
+        pass
+
+    try:
+        sprint = _get_sprint_speed_table(season_year)
+        if sprint is not None:
+            row = sprint[sprint["player_id"] == mlbam_id]
+            if not row.empty:
+                sprint_speed = _parse_number(row.iloc[0].get("sprint_speed"))
+                if sprint_speed is not None:
+                    values["sprint_speed"] = sprint_speed
+    except Exception:
+        pass
+
+    return values
+
+
+def _build_percentile_groups(
+    row: pd.Series,
+    group_specs: tuple[tuple[str, tuple[tuple[str, str], ...]], ...],
+) -> list[dict[str, Any]]:
     groups: list[dict[str, Any]] = []
-    for group_title, metric_specs in _BATTER_PERCENTILE_GROUPS:
+    for group_title, metric_specs in group_specs:
         metrics: list[dict[str, Any]] = []
         for metric_id, label in metric_specs:
             if metric_id not in row.index:
@@ -1152,17 +1498,113 @@ def _fetch_batter_percentile_panel(
             })
         if metrics:
             groups.append({"title": group_title, "metrics": metrics})
+    return groups
 
-    if not groups:
-        return empty
 
+def _build_unqualified_percentile_groups(
+    raw_values: dict[str, float | int],
+    group_specs: tuple[tuple[str, tuple[tuple[str, str], ...]], ...],
+) -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = []
+    for group_title, metric_specs in group_specs:
+        metrics: list[dict[str, Any]] = []
+        for metric_id, label in metric_specs:
+            if metric_id not in raw_values:
+                continue
+            value = raw_values[metric_id]
+            if value is None:
+                continue
+            metrics.append({
+                "id": metric_id,
+                "label": label,
+                "display": _format_unqualified_percentile_stat(metric_id, value),
+            })
+        if metrics:
+            groups.append({"title": group_title, "metrics": metrics})
+    return groups
+
+
+def _empty_percentile_panel(season_year: int) -> dict[str, Any]:
     return {
         "id": "percentile_ranks",
         "label": "Percentile Rankings",
         "panel_kind": "percentile_ranks",
         "season_year": str(season_year),
+        "qualified": False,
+        "groups": [],
+    }
+
+
+def _qualified_percentile_panel(
+    season_year: int,
+    *,
+    groups: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        **_empty_percentile_panel(season_year),
+        "qualified": True,
         "groups": groups,
     }
+
+
+def _unqualified_percentile_panel(
+    season_year: int,
+    *,
+    groups: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        **_empty_percentile_panel(season_year),
+        "qualified": False,
+        "groups": groups,
+    }
+
+
+def _fetch_batter_percentile_panel(
+    *,
+    mlbam_id: int | None,
+    season_year: int,
+) -> dict[str, Any]:
+    empty = _empty_percentile_panel(season_year)
+    if not mlbam_id:
+        return empty
+
+    table = _get_batter_percentile_table(season_year)
+    if table is not None and not table.empty:
+        player_rows = table[table["player_id"] == mlbam_id]
+        if not player_rows.empty:
+            groups = _build_percentile_groups(player_rows.iloc[0], _BATTER_PERCENTILE_GROUPS)
+            if groups:
+                return _qualified_percentile_panel(season_year, groups=groups)
+
+    raw_values = _fetch_batter_raw_statcast_values(mlbam_id, season_year)
+    groups = _build_unqualified_percentile_groups(raw_values, _BATTER_PERCENTILE_GROUPS)
+    if groups:
+        return _unqualified_percentile_panel(season_year, groups=groups)
+    return empty
+
+
+def _fetch_pitcher_percentile_panel(
+    *,
+    mlbam_id: int | None,
+    season_year: int,
+) -> dict[str, Any]:
+    empty = _empty_percentile_panel(season_year)
+    if not mlbam_id:
+        return empty
+
+    table = _get_pitcher_percentile_table(season_year)
+    if table is not None and not table.empty:
+        player_rows = table[table["player_id"] == mlbam_id]
+        if not player_rows.empty:
+            groups = _build_percentile_groups(player_rows.iloc[0], _PITCHER_PERCENTILE_GROUPS)
+            if groups:
+                return _qualified_percentile_panel(season_year, groups=groups)
+
+    raw_values = _fetch_pitcher_raw_statcast_values(mlbam_id, season_year)
+    groups = _build_unqualified_percentile_groups(raw_values, _PITCHER_PERCENTILE_GROUPS)
+    if groups:
+        return _unqualified_percentile_panel(season_year, groups=groups)
+    return empty
 
 
 def _percentile_available_years(debut_year: int | None) -> list[str]:
@@ -1190,6 +1632,19 @@ def fetch_batter_percentile_panel(
     mlbam_id = (record or {}).get("mlbam_id")
     debut_year = (record or {}).get("debut_year")
     panel = _fetch_batter_percentile_panel(mlbam_id=mlbam_id, season_year=year)
+    return _attach_percentile_year_options(panel, debut_year=debut_year)
+
+
+def fetch_pitcher_percentile_panel(
+    player_name: str,
+    *,
+    season_year: int | None = None,
+) -> dict[str, Any]:
+    year = season_year if season_year is not None else date.today().year
+    record = _lookup_player_record(player_name) if player_name else None
+    mlbam_id = (record or {}).get("mlbam_id")
+    debut_year = (record or {}).get("debut_year")
+    panel = _fetch_pitcher_percentile_panel(mlbam_id=mlbam_id, season_year=year)
     return _attach_percentile_year_options(panel, debut_year=debut_year)
 
 
@@ -1404,7 +1859,7 @@ def fetch_player_stat_panels(
 
     kind = "pitching" if is_pitcher_position(position) else "batting"
     pitching = kind == "pitching"
-    cache_key = f"{player_id}:{year}:{kind}:v9"
+    cache_key = f"{player_id}:{year}:{kind}:v11"
     cached = _stat_panels_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
@@ -1470,7 +1925,11 @@ def fetch_player_stat_panels(
 
     if pitching:
         visual_panel = _fetch_pitch_mix_panel(mlbam_id=mlbam_id, season_year=year)
-        panels = [advanced_panel, visual_panel, splits_panel]
+        percentile_panel = _attach_percentile_year_options(
+            _fetch_pitcher_percentile_panel(mlbam_id=mlbam_id, season_year=year),
+            debut_year=(player_record or {}).get("debut_year"),
+        )
+        panels = [advanced_panel, visual_panel, percentile_panel, splits_panel]
     else:
         visual_panel = _fetch_spray_chart_panel(mlbam_id=mlbam_id, season_year=year)
         percentile_panel = _attach_percentile_year_options(

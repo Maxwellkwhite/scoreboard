@@ -1110,6 +1110,7 @@ def api_mlb_player_percentile_ranks(player_id):
     season_year = request.args.get('season_year')
     panel = fetch_player_percentile_ranks(
         player.get('name') or '',
+        position=player.get('position'),
         season_year=season_year or player.get('season_year'),
     )
     return jsonify(panel)

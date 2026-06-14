@@ -1531,10 +1531,24 @@ def fetch_player_extra_stat_panels(
 def fetch_player_percentile_ranks(
     player_name: str,
     *,
+    position: str | None = None,
     season_year: str | int | None = None,
 ) -> dict[str, Any]:
+    empty = {
+        "id": "percentile_ranks",
+        "label": "Percentile Rankings",
+        "panel_kind": "percentile_ranks",
+        "season_year": str(season_year or ""),
+        "qualified": False,
+        "available_years": [],
+        "groups": [],
+    }
     try:
-        from player_stats import fetch_batter_percentile_panel
+        from player_stats import (
+            fetch_batter_percentile_panel,
+            fetch_pitcher_percentile_panel,
+            is_pitcher_position,
+        )
 
         year = None
         if season_year is not None:
@@ -1542,16 +1556,11 @@ def fetch_player_percentile_ranks(
                 year = int(season_year)
             except (TypeError, ValueError):
                 year = None
+        if is_pitcher_position(position):
+            return fetch_pitcher_percentile_panel(player_name, season_year=year)
         return fetch_batter_percentile_panel(player_name, season_year=year)
     except Exception:
-        return {
-            "id": "percentile_ranks",
-            "label": "Percentile Rankings",
-            "panel_kind": "percentile_ranks",
-            "season_year": str(season_year or ""),
-            "available_years": [],
-            "groups": [],
-        }
+        return empty
 
 
 def fetch_player(
