@@ -774,6 +774,158 @@ def _format_espn_value(value: Any) -> str:
     return text
 
 
+_PLAYER_BATTING_ESPN_MAP = {
+    "AVG": "avg",
+    "OBP": "onBasePct",
+    "SLG": "slugAvg",
+    "OPS": "OPS",
+    "R": "runs",
+    "H": "hits",
+    "2B": "doubles",
+    "3B": "triples",
+    "HR": "homeRuns",
+    "RBI": "RBIs",
+    "BB": "walks",
+    "SO": "strikeouts",
+    "SB": "stolenBases",
+    "AB": "atBats",
+}
+
+_PLAYER_PITCHING_ESPN_MAP = {
+    "ERA": "ERA",
+    "WHIP": "WHIP",
+    "IP": "innings",
+    "W": "wins",
+    "L": "losses",
+    "SV": "saves",
+    "K": "strikeouts",
+    "SO": "strikeouts",
+    "BB": "walks",
+    "H": "hits",
+    "ER": "earnedRuns",
+    "HR": "homeRuns",
+}
+
+
+def _espn_row_to_stats(
+    row: dict[str, str],
+    mapping: dict[str, str],
+) -> dict[str, Any]:
+    stats: dict[str, Any] = {}
+    for espn_label, stat_name in mapping.items():
+        value = row.get(espn_label)
+        if value is not None and str(value).strip() not in {"", "—", "--", "-"}:
+            stats[stat_name] = value
+    return stats
+
+
+def _parse_player_batting_stats(
+    categories: dict[str, Any],
+    *,
+    season_year: int,
+) -> dict[str, Any]:
+    from team_stats import _espn_category_season_row
+
+    batting_row = _espn_category_season_row(
+        categories.get("career-batting"),
+        season_year,
+    )
+    expanded_row = _espn_category_season_row(
+        categories.get("expanded-batting"),
+        season_year,
+    )
+    stats = _espn_row_to_stats(batting_row, _PLAYER_BATTING_ESPN_MAP)
+    if expanded_row.get("PA") is not None:
+        stats["plateAppearances"] = expanded_row["PA"]
+    return stats
+
+
+def _parse_player_pitching_stats(
+    categories: dict[str, Any],
+    *,
+    season_year: int,
+) -> dict[str, Any]:
+    from team_stats import _espn_category_season_row
+
+    pitching_row = _espn_category_season_row(
+        categories.get("pitching"),
+        season_year,
+    )
+    expanded_row = _espn_category_season_row(
+        categories.get("expanded-pitching"),
+        season_year,
+    )
+    opponent_row = _espn_category_season_row(
+        categories.get("opponent-batting"),
+        season_year,
+    )
+    stats = _espn_row_to_stats(pitching_row, _PLAYER_PITCHING_ESPN_MAP)
+    if expanded_row.get("K/9") is not None:
+        stats["strikeoutsPerNineInnings"] = expanded_row["K/9"]
+    if expanded_row.get("QS") is not None:
+        stats["qualityStarts"] = expanded_row["QS"]
+    if opponent_row.get("OBA") is not None:
+        stats["opponentAvg"] = opponent_row["OBA"]
+    return stats
+
+
+def _build_player_stats_panel(
+    categories: dict[str, Any],
+    *,
+    pitching: bool,
+    season_year: int,
+) -> dict[str, Any] | None:
+    from league_player_averages import get_league_player_stats_by_category
+    from team_stats import (
+        _BATTING_DETAIL_SPECS,
+        _PITCHING_DETAIL_SPECS,
+        _build_stat_metrics,
+    )
+
+    league_stats = get_league_player_stats_by_category(season_year)
+    views: list[dict[str, Any]] = []
+    if pitching:
+        player_pitching = _parse_player_pitching_stats(categories, season_year=season_year)
+        pitching_metrics = _build_stat_metrics(
+            player_pitching,
+            _PITCHING_DETAIL_SPECS,
+            category="pitching",
+            league_stats=league_stats.get("pitching") or {},
+        )
+        if pitching_metrics:
+            views.append({
+                "id": "pitching",
+                "label": "Pitching",
+                "metrics": pitching_metrics,
+            })
+    else:
+        player_batting = _parse_player_batting_stats(categories, season_year=season_year)
+        batting_metrics = _build_stat_metrics(
+            player_batting,
+            _BATTING_DETAIL_SPECS,
+            category="batting",
+            league_stats=league_stats.get("batting") or {},
+        )
+        if batting_metrics:
+            views.append({
+                "id": "batting",
+                "label": "Batting",
+                "metrics": batting_metrics,
+            })
+
+    if not views:
+        return None
+
+    return {
+        "id": "player_stats",
+        "label": "Player Stats",
+        "panel_kind": "toggle_stat_bars",
+        "default_view": views[0]["id"],
+        "season_year": str(season_year),
+        "views": views,
+    }
+
+
 def _empty_stats_table(labels: list[str] | tuple[str, ...], season_year: int) -> dict[str, Any]:
     return {
         "season_year": str(season_year),
@@ -1859,7 +2011,7 @@ def fetch_player_stat_panels(
 
     kind = "pitching" if is_pitcher_position(position) else "batting"
     pitching = kind == "pitching"
-    cache_key = f"{player_id}:{year}:{kind}:v11"
+    cache_key = f"{player_id}:{year}:{kind}:v13"
     cached = _stat_panels_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
@@ -1885,27 +2037,21 @@ def fetch_player_stat_panels(
     bbref_id = (player_record or {}).get("bbref_id")
     mlbam_id = (player_record or {}).get("mlbam_id")
 
-    advanced_panel = {
-        "id": "advanced",
-        "label": "Advanced",
-        "panel_kind": "toggle_table",
-        "default_view": "regular",
-        "views": [
-            {
-                "id": "regular",
-                "label": "Regular Season",
-                "stats_table": _espn_advanced_table(
-                    categories, kind=kind, view="regular", season_year=year,
-                ),
-            },
-            {
-                "id": "postseason",
-                "label": "Postseason",
-                "stats_table": _espn_advanced_table(
-                    categories, kind=kind, view="postseason", season_year=year,
-                ),
-            },
-        ],
+    player_stats_panel = _build_player_stats_panel(
+        categories,
+        pitching=pitching,
+        season_year=year,
+    ) or {
+        "id": "player_stats",
+        "label": "Player Stats",
+        "panel_kind": "toggle_stat_bars",
+        "default_view": "pitching" if pitching else "batting",
+        "season_year": str(year),
+        "views": [{
+            "id": "pitching" if pitching else "batting",
+            "label": "Pitching" if pitching else "Batting",
+            "metrics": [],
+        }],
     }
 
     splits_panel = (
@@ -1929,13 +2075,13 @@ def fetch_player_stat_panels(
             _fetch_pitcher_percentile_panel(mlbam_id=mlbam_id, season_year=year),
             debut_year=(player_record or {}).get("debut_year"),
         )
-        panels = [advanced_panel, visual_panel, percentile_panel, splits_panel]
+        panels = [player_stats_panel, visual_panel, percentile_panel, splits_panel]
     else:
         visual_panel = _fetch_spray_chart_panel(mlbam_id=mlbam_id, season_year=year)
         percentile_panel = _attach_percentile_year_options(
             _fetch_batter_percentile_panel(mlbam_id=mlbam_id, season_year=year),
             debut_year=(player_record or {}).get("debut_year"),
         )
-        panels = [advanced_panel, visual_panel, percentile_panel, splits_panel]
+        panels = [player_stats_panel, visual_panel, percentile_panel, splits_panel]
     _stat_panels_cache[cache_key] = (now, panels)
     return panels

@@ -70,6 +70,96 @@
     return '<div class="player-panel-toggle" data-panel="' + escapeHtml(panelId) + '">' + buttons + '</div>';
   }
 
+  function playerStatBarColor(metric) {
+    if (metric.better !== false) return '#22a06b';
+    return '#d4183d';
+  }
+
+  function buildPlayerStatValueHtml(metric) {
+    var playerValue =
+      '<span class="team-stat-bar-row__value pitch-mix-bar-row__value">' +
+        escapeHtml(metric.display) +
+      '</span>';
+
+    if (!metric.league_display) {
+      return playerValue + '<span class="team-stat-bar-row__league-compare" aria-hidden="true"></span>';
+    }
+
+    var compareClass = 'team-stat-bar-row__league-compare';
+    var arrow = '';
+    if (metric.above_median === true) {
+      arrow = '<span class="team-stat-bar-row__arrow" aria-hidden="true">▲</span>';
+    } else if (metric.above_median === false) {
+      arrow = '<span class="team-stat-bar-row__arrow" aria-hidden="true">▼</span>';
+    }
+    if (metric.better !== false) {
+      compareClass += ' team-stat-bar-row__league-compare--better';
+    } else {
+      compareClass += ' team-stat-bar-row__league-compare--worse';
+    }
+
+    var compareLabel = metric.better === false
+      ? 'Worse than league median'
+      : (metric.above_median == null && metric.league_display
+        ? 'Tied with league median'
+        : 'Better than league median');
+    var compareHtml =
+      '<span class="' + compareClass + '" title="' + escapeHtml(compareLabel) + '">' +
+        arrow +
+        '<span class="team-stat-bar-row__league-value">' + escapeHtml(metric.league_display) + '</span>' +
+      '</span>';
+
+    return playerValue + compareHtml;
+  }
+
+  function buildStatBarsHtml(view) {
+    var metrics = view.metrics || [];
+    if (!metrics.length) {
+      return '<p class="player-splits-empty">No stats available.</p>';
+    }
+
+    var rows = metrics.map(function (metric) {
+      var barPct = Math.max(0, Math.min(100, Number(metric.bar_pct) || 0));
+      var leaguePct = metric.league_pct == null ? null : Math.max(0, Math.min(100, Number(metric.league_pct) || 0));
+      var leagueMarker = leaguePct == null
+        ? ''
+        : (
+          '<span class="team-stat-bar-row__league" style="left:' + leaguePct.toFixed(1) +
+          '%" title="League median ' + escapeHtml(metric.league_display || '') + '"></span>'
+        );
+
+      return (
+        '<div class="pitch-mix-bar-row team-stat-bar-row">' +
+          '<span class="pitch-mix-bar-row__label">' + escapeHtml(metric.label) + '</span>' +
+          '<div class="team-stat-bar-row__track" aria-hidden="true">' +
+            '<span class="team-stat-bar-row__fill" style="width:' + barPct.toFixed(1) +
+            '%;background:' + playerStatBarColor(metric) + '"></span>' +
+            leagueMarker +
+          '</div>' +
+          buildPlayerStatValueHtml(metric) +
+        '</div>'
+      );
+    }).join('');
+
+    return (
+      '<div class="team-stat-bars">' +
+        '<div class="team-stat-bars__rows">' + rows + '</div>' +
+        '<div class="team-stat-bars__footer">' +
+          '<p class="team-stat-bars__color-note">' +
+            'Bar color: <span class="team-stat-bars__color-swatch team-stat-bars__color-swatch--better">green</span> ' +
+            'at or above league median, ' +
+            '<span class="team-stat-bars__color-swatch team-stat-bars__color-swatch--worse">red</span> below. ' +
+            'Bar length ranks this player among qualified MLB players for that stat.' +
+          '</p>' +
+          '<div class="team-stat-bars__legend">' +
+            '<span class="team-stat-bars__legend-mark" aria-hidden="true"></span>' +
+            '<span>League median</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
   function splitCellValue(row, label) {
     var cells = row.cells || [];
     for (var i = 0; i < cells.length; i++) {
@@ -998,6 +1088,27 @@
   }
 
   function buildPanelInnerHtml(panel) {
+    if (panel.panel_kind === 'toggle_stat_bars') {
+      var statDefaultView = panel.default_view || (panel.views[0] && panel.views[0].id);
+      var statViews = panel.views || [];
+      var statToggleHtml = statViews.length > 1
+        ? buildToggleHtml(panel.id, statViews, statDefaultView)
+        : '';
+      var statViewsHtml = statViews.map(function (view) {
+        return (
+          '<div class="player-panel-view" data-panel="' + escapeHtml(panel.id) +
+          '" data-view="' + escapeHtml(view.id) + '"' +
+          (view.id === statDefaultView ? '' : ' hidden') + '>' +
+          buildStatBarsHtml(view) +
+          '</div>'
+        );
+      }).join('');
+      return (
+        (statToggleHtml ? '<div class="player-panel-header">' + statToggleHtml + '</div>' : '') +
+        '<div class="team-panel-body">' + statViewsHtml + '</div>'
+      );
+    }
+
     if (panel.panel_kind === 'toggle_table') {
       var defaultView = panel.default_view || (panel.views[0] && panel.views[0].id);
       var toggleHtml = buildToggleHtml(panel.id, panel.views, defaultView);
@@ -1070,7 +1181,7 @@
       btn.addEventListener('click', function () {
         var panelId = btn.getAttribute('data-panel');
         var viewId = btn.getAttribute('data-view');
-        var panel = root.querySelector('.player-stats-panel[data-panel="' + panelId + '"]');
+        var panel = btn.closest('.player-stats-panel');
         if (!panel) return;
 
         panel.querySelectorAll('.player-panel-toggle__btn').forEach(function (toggleBtn) {
@@ -1111,6 +1222,9 @@
       var panelClass = 'game-detail-section game-detail-panel player-stats-panel';
       if (panel.panel_kind === 'percentile_ranks') {
         panelClass += ' player-stats-panel--percentile';
+      }
+      if (panel.panel_kind === 'toggle_stat_bars') {
+        panelClass += ' team-stats-panel';
       }
       return (
         '<section class="' + panelClass + '"' +
