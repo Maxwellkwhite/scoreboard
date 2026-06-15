@@ -6159,3 +6159,96 @@ a.team-schedule-calendar__game-card:focus-visible {
     justify-self: start;
   }
 }
+
+/* Desktop-only gate (phones) — mirrors zperiod.app approach A */
+.desktop-only-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 2rem;
+  background: #eef1f5;
+}
+
+.desktop-only-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 440px;
+  padding: 3rem 2.5rem;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.82));
+  border: 1px solid rgba(26, 35, 50, 0.06);
+  box-shadow:
+    0 20px 40px rgba(26, 35, 50, 0.08),
+    0 1px 3px rgba(26, 35, 50, 0.04);
+}
+
+.desktop-only-icon {
+  width: 64px;
+  height: 64px;
+  color: #1a2332;
+  margin-bottom: 1.5rem;
+  opacity: 0.85;
+}
+
+.desktop-only-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #1a2332;
+  margin: 0 0 1rem;
+  letter-spacing: -0.02em;
+}
+
+.desktop-only-text {
+  font-size: 1rem;
+  color: #5c6b7f;
+  line-height: 1.6;
+  margin: 0;
+  font-weight: 450;
+}
+
+@media (pointer: coarse) and (max-width: 767px) {
+  html:not(.is-desktop) .desktop-only-overlay {
+    display: flex !important;
+  }
+
+  html:not(.is-desktop).is-mobile-gate body.scoreboard-page,
+  html:not(.is-desktop) body.scoreboard-page {
+    overflow: hidden;
+  }
+
+  html:not(.is-desktop) body.scoreboard-page > *:not(.desktop-only-overlay) {
+    display: none !important;
+  }
+}
+
+@media (pointer: coarse) and (max-height: 767px) and (max-width: 932px) {
+  html:not(.is-desktop) .desktop-only-overlay {
+    display: flex !important;
+  }
+
+  html:not(.is-desktop) body.scoreboard-page > *:not(.desktop-only-overlay) {
+    display: none !important;
+  }
+}
+
+html.is-desktop .desktop-only-overlay {
+  display: none !important;
+}
+
+html.is-mobile-gate .desktop-only-overlay {
+  display: flex !important;
+}
+
+html.is-mobile-gate body.scoreboard-page {
+  overflow: hidden;
+}
+
+html.is-mobile-gate body.scoreboard-page > *:not(.desktop-only-overlay) {
+  display: none !important;
+}

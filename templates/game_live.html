@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/scoreboard.css') }}">
 </head>
 <body class="scoreboard-page game-live-page" data-game-api="/api/mlb/game/{{ game.id }}">
+  {% include "partials/desktop_only_gate.html" %}
   <nav class="navbar scoreboard-nav">
     <div class="container">
       <a class="navbar-brand" href="{{ url_for('home_page') }}">Scoreboard</a>
