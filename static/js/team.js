@@ -291,57 +291,347 @@
     }).join('');
   }
 
-  function formatGameDate(value) {
+  function formatGameTime(value) {
     if (!value) return '';
     var date = new Date(value);
     if (isNaN(date.getTime())) return '';
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   }
 
-  function buildScheduleSection(title, games) {
-    if (!games.length) return '';
-    var rows = games.map(function (game) {
-      var prefix = game.home_away === 'away' ? '@ ' : 'vs ';
-      var opponent = teamLink(game.opponent_id, prefix + (game.opponent_abbr || game.opponent_name || ''));
-      var score = '';
-      if (game.result && game.team_score != null && game.opponent_score != null) {
-        score =
-          '<span class="team-schedule-row__result team-schedule-row__result--' +
-          escapeHtml(String(game.result).toLowerCase()) + '">' +
-          escapeHtml(game.result) + ' ' +
-          escapeHtml(String(game.team_score)) + '–' + escapeHtml(String(game.opponent_score)) +
+  function isPostponedGame(game) {
+    if (game.postponed) return true;
+    return /postpon/i.test(String(game.status || ''));
+  }
+
+  function normalizeScheduleGame(game) {
+    if (isPostponedGame(game)) {
+      return {
+        teamScore: null,
+        oppScore: null,
+        result: null,
+        postponed: true,
+        statusLabel: 'Postponed',
+        isFinal: false,
+      };
+    }
+
+    function parseScore(score) {
+      if (score == null) return null;
+      if (typeof score === 'object') {
+        if (score.displayValue != null && String(score.displayValue).trim() !== '') {
+          return String(score.displayValue);
+        }
+        if (score.value != null) {
+          return String(Math.round(Number(score.value)));
+        }
+        return null;
+      }
+      return String(score);
+    }
+
+    var teamScore = parseScore(game.team_score);
+    var oppScore = parseScore(game.opponent_score);
+    var result = game.result || null;
+    var isFinal = Boolean(result) || /final/i.test(String(game.status || ''));
+    if (!result && isFinal && teamScore != null && oppScore != null) {
+      var teamRuns = Number(teamScore);
+      var oppRuns = Number(oppScore);
+      if (!isNaN(teamRuns) && !isNaN(oppRuns)) {
+        result = teamRuns > oppRuns ? 'W' : (teamRuns < oppRuns ? 'L' : 'T');
+      }
+    }
+
+    return {
+      teamScore: teamScore,
+      oppScore: oppScore,
+      result: result,
+      postponed: false,
+      statusLabel: game.status || '',
+      isFinal: isFinal,
+    };
+  }
+
+  function scheduleStatusHtml(game, normalized) {
+    if (normalized.postponed) {
+      return '<span class="team-schedule-calendar__status team-schedule-calendar__status--postponed">Postponed</span>';
+    }
+    return (
+      '<span class="team-schedule-calendar__status">' +
+        escapeHtml(game.status || formatGameTime(game.date)) +
+      '</span>'
+    );
+  }
+
+  function scheduleResultClass(normalized) {
+    if (normalized.postponed) return 'postponed';
+    if (normalized.result) return String(normalized.result).toLowerCase();
+    return 'upcoming';
+  }
+
+  function buildScheduleGameCard(game) {
+    var normalized = normalizeScheduleGame(game);
+    var resultKey = scheduleResultClass(normalized);
+    var classes = ['team-schedule-calendar__game-card', 'team-schedule-calendar__game-card--' + resultKey];
+
+    var prefix = game.home_away === 'away' ? '@' : 'vs';
+    var opponent = game.opponent_abbr || game.opponent_name || '';
+    var badge = normalized.result
+      ? (
+        '<span class="team-schedule-calendar__result-badge team-schedule-calendar__result-badge--' +
+        escapeHtml(resultKey) + '">' + escapeHtml(normalized.result) + '</span>'
+      )
+      : '';
+
+    var scoreHtml;
+    if (!normalized.postponed && normalized.teamScore != null && normalized.oppScore != null) {
+      scoreHtml =
+        '<span class="team-schedule-calendar__score">' +
+          escapeHtml(normalized.teamScore) + '–' + escapeHtml(normalized.oppScore) +
+        '</span>';
+    } else {
+      scoreHtml = scheduleStatusHtml(game, normalized);
+    }
+
+    var inner =
+      '<div class="team-schedule-calendar__matchup">' +
+        badge +
+        '<span class="team-schedule-calendar__opponent">' +
+          escapeHtml(prefix + ' ' + opponent) +
+        '</span>' +
+      '</div>' +
+      scoreHtml;
+
+    if (game.id) {
+      return (
+        '<a href="/game/' + encodeURIComponent(game.id) + '" class="' + classes.join(' ') + '">' +
+        inner +
+        '</a>'
+      );
+    }
+
+    return '<div class="' + classes.join(' ') + '">' + inner + '</div>';
+  }
+
+  function buildScheduleDayCell(day, dayGames, isToday) {
+    if (!dayGames.length) {
+      return (
+        '<div class="team-schedule-calendar__day' + (isToday ? ' team-schedule-calendar__day--today' : '') + '">' +
+          '<span class="team-schedule-calendar__day-num">' + day + '</span>' +
+        '</div>'
+      );
+    }
+
+    if (dayGames.length === 1) {
+      var game = dayGames[0];
+      var normalized = normalizeScheduleGame(game);
+      var resultKey = scheduleResultClass(normalized);
+      var classes = ['team-schedule-calendar__day', 'team-schedule-calendar__day--game', 'team-schedule-calendar__day--' + resultKey];
+      if (isToday) classes.push('team-schedule-calendar__day--today');
+
+      var prefix = game.home_away === 'away' ? '@' : 'vs';
+      var opponent = game.opponent_abbr || game.opponent_name || '';
+      var badge = normalized.result
+        ? (
+          '<span class="team-schedule-calendar__result-badge team-schedule-calendar__result-badge--' +
+          escapeHtml(resultKey) + '">' + escapeHtml(normalized.result) + '</span>'
+        )
+        : '';
+
+      var scoreHtml;
+      if (!normalized.postponed && normalized.teamScore != null && normalized.oppScore != null) {
+        scoreHtml =
+          '<span class="team-schedule-calendar__score">' +
+            escapeHtml(normalized.teamScore) + '–' + escapeHtml(normalized.oppScore) +
           '</span>';
       } else {
-        score = '<span class="team-schedule-row__status">' + escapeHtml(game.status || '') + '</span>';
+        scoreHtml = scheduleStatusHtml(game, normalized);
       }
-      var gameLink = game.id
-        ? '<a href="/game/' + encodeURIComponent(game.id) + '" class="team-schedule-row__game-link">Box</a>'
-        : '';
+
+      var inner =
+        '<span class="team-schedule-calendar__day-num">' + day + '</span>' +
+        '<div class="team-schedule-calendar__matchup">' +
+          badge +
+          '<span class="team-schedule-calendar__opponent">' +
+            escapeHtml(prefix + ' ' + opponent) +
+          '</span>' +
+        '</div>' +
+        scoreHtml;
+
+      if (game.id) {
+        return (
+          '<a href="/game/' + encodeURIComponent(game.id) + '" class="' + classes.join(' ') + '">' +
+          inner +
+          '</a>'
+        );
+      }
+
+      return '<div class="' + classes.join(' ') + '">' + inner + '</div>';
+    }
+
+    return (
+      '<div class="team-schedule-calendar__day team-schedule-calendar__day--double' +
+      (isToday ? ' team-schedule-calendar__day--today' : '') + '">' +
+        '<span class="team-schedule-calendar__day-num">' + day + '</span>' +
+        '<div class="team-schedule-calendar__day-games">' +
+          dayGames.map(buildScheduleGameCard).join('') +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function buildScheduleMonthGrid(month) {
+    var games = month.games || [];
+    var year = month.year;
+    var monthIndex = month.month - 1;
+    var firstDay = new Date(year, monthIndex, 1).getDay();
+    var daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    var gamesByDay = {};
+
+    games.forEach(function (game) {
+      var day = game.day;
+      if (!day) return;
+      if (!gamesByDay[day]) gamesByDay[day] = [];
+      gamesByDay[day].push(game);
+    });
+
+    var weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    var weekdays = weekdayLabels.map(function (label) {
+      return '<div class="team-schedule-calendar__weekday">' + label + '</div>';
+    }).join('');
+
+    var cells = [];
+    var pad = 0;
+    while (pad < firstDay) {
+      cells.push('<div class="team-schedule-calendar__day team-schedule-calendar__day--empty" aria-hidden="true"></div>');
+      pad += 1;
+    }
+
+    for (var day = 1; day <= daysInMonth; day += 1) {
+      var dayGames = gamesByDay[day] || [];
+      var today = new Date();
+      var isToday = today.getFullYear() === year &&
+        today.getMonth() === monthIndex &&
+        today.getDate() === day;
+      cells.push(buildScheduleDayCell(day, dayGames, isToday));
+    }
+
+    return (
+      '<div class="team-schedule-calendar__grid">' +
+        '<div class="team-schedule-calendar__weekdays">' + weekdays + '</div>' +
+        '<div class="team-schedule-calendar__days">' + cells.join('') + '</div>' +
+      '</div>'
+    );
+  }
+
+  function monthRecordLabel(month) {
+    var wins = 0;
+    var losses = 0;
+    var ties = 0;
+    (month.games || []).forEach(function (game) {
+      var normalized = normalizeScheduleGame(game);
+      if (normalized.postponed || !normalized.result) return;
+      if (normalized.result === 'W') wins += 1;
+      else if (normalized.result === 'L') losses += 1;
+      else if (normalized.result === 'T') ties += 1;
+    });
+    if (ties) {
+      return wins + '–' + losses + '–' + ties;
+    }
+    return wins + '–' + losses;
+  }
+
+  function buildScheduleMonthNav(months, defaultMonth) {
+    var active = months.find(function (month) {
+      return month.id === defaultMonth;
+    }) || months[0];
+
+    return (
+      '<div class="team-schedule-calendar__nav">' +
+        '<button type="button" class="team-schedule-calendar__arrow team-schedule-calendar__arrow--prev" aria-label="Previous month">' +
+          '<span aria-hidden="true">‹</span>' +
+        '</button>' +
+        '<div class="team-schedule-calendar__month-meta">' +
+          '<h3 class="team-schedule-calendar__month-label">' + escapeHtml(active.label) + '</h3>' +
+          '<p class="team-schedule-calendar__month-record">' + escapeHtml(monthRecordLabel(active)) + '</p>' +
+        '</div>' +
+        '<button type="button" class="team-schedule-calendar__arrow team-schedule-calendar__arrow--next" aria-label="Next month">' +
+          '<span aria-hidden="true">›</span>' +
+        '</button>' +
+      '</div>'
+    );
+  }
+
+  function buildScheduleCalendarHtml(panel) {
+    var months = panel.months || [];
+    if (!months.length) {
+      return '<p class="player-splits-empty">Schedule unavailable.</p>';
+    }
+
+    var defaultMonth = panel.default_month || months[0].id;
+    var viewsHtml = months.map(function (month) {
       return (
-        '<li class="team-schedule-row">' +
-          '<span class="team-schedule-row__date">' + escapeHtml(formatGameDate(game.date)) + '</span>' +
-          '<span class="team-schedule-row__matchup">' + opponent + '</span>' +
-          score +
-          gameLink +
-        '</li>'
+        '<div class="team-schedule-calendar__month"' +
+        ' data-month="' + escapeHtml(month.id) + '"' +
+        ' data-label="' + escapeHtml(month.label) + '"' +
+        ' data-record="' + escapeHtml(monthRecordLabel(month)) + '"' +
+        (month.id === defaultMonth ? '' : ' hidden') + '>' +
+        buildScheduleMonthGrid(month) +
+        '</div>'
       );
     }).join('');
 
     return (
-      '<section class="team-schedule-section">' +
-        '<h3 class="team-schedule-section__title">' + escapeHtml(title) + '</h3>' +
-        '<ul class="team-schedule-list">' + rows + '</ul>' +
-      '</section>'
+      '<div class="team-schedule-calendar">' +
+        '<div class="team-schedule-calendar__header">' +
+          buildScheduleMonthNav(months, defaultMonth) +
+        '</div>' +
+        '<div class="team-schedule-calendar__body">' + viewsHtml + '</div>' +
+      '</div>'
     );
   }
 
-  function buildScheduleHtml(panel) {
-    var recent = buildScheduleSection('Recent Games', panel.recent || []);
-    var upcoming = buildScheduleSection('Upcoming', panel.upcoming || []);
-    if (!recent && !upcoming) {
-      return '<p class="player-splits-empty">Schedule unavailable.</p>';
-    }
-    return '<div class="team-schedule">' + recent + upcoming + '</div>';
+  function initScheduleCalendars(root) {
+    root.querySelectorAll('.team-schedule-calendar').forEach(function (calendar) {
+      var views = Array.prototype.slice.call(
+        calendar.querySelectorAll('.team-schedule-calendar__month')
+      );
+      if (!views.length) return;
+
+      var labelEl = calendar.querySelector('.team-schedule-calendar__month-label');
+      var recordEl = calendar.querySelector('.team-schedule-calendar__month-record');
+      var prevBtn = calendar.querySelector('.team-schedule-calendar__arrow--prev');
+      var nextBtn = calendar.querySelector('.team-schedule-calendar__arrow--next');
+      if (!labelEl || !recordEl || !prevBtn || !nextBtn) return;
+
+      var currentIndex = views.findIndex(function (viewEl) {
+        return !viewEl.hidden;
+      });
+      if (currentIndex < 0) currentIndex = 0;
+
+      function showMonth(index) {
+        currentIndex = index;
+        views.forEach(function (viewEl, viewIndex) {
+          viewEl.hidden = viewIndex !== index;
+        });
+        labelEl.textContent = views[index].getAttribute('data-label') || '';
+        recordEl.textContent = views[index].getAttribute('data-record') || '';
+        var atStart = index <= 0;
+        var atEnd = index >= views.length - 1;
+        prevBtn.classList.toggle('is-disabled', atStart);
+        nextBtn.classList.toggle('is-disabled', atEnd);
+        prevBtn.disabled = atStart;
+        nextBtn.disabled = atEnd;
+      }
+
+      prevBtn.addEventListener('click', function () {
+        if (currentIndex > 0) showMonth(currentIndex - 1);
+      });
+      nextBtn.addEventListener('click', function () {
+        if (currentIndex < views.length - 1) showMonth(currentIndex + 1);
+      });
+
+      showMonth(currentIndex);
+    });
   }
 
   function buildInfoCardsHtml(panel) {
@@ -391,8 +681,8 @@
     if (panel.panel_kind === 'roster_groups') {
       return '<div class="team-panel-body team-panel-body--roster">' + buildRosterHtml(panel) + '</div>';
     }
-    if (panel.panel_kind === 'schedule_list') {
-      return '<div class="team-panel-body">' + buildScheduleHtml(panel) + '</div>';
+    if (panel.panel_kind === 'schedule_calendar') {
+      return '<div class="team-panel-body">' + buildScheduleCalendarHtml(panel) + '</div>';
     }
     if (panel.panel_kind === 'info_cards') {
       return '<div class="team-panel-body">' + buildInfoCardsHtml(panel) + '</div>';
@@ -430,6 +720,7 @@
     tabsEl.hidden = false;
     initPanelToggles(panelsEl);
     wireLeaderHeadshotFallbacks(panelsEl);
+    initScheduleCalendars(panelsEl);
 
     var buttons = tabsEl.querySelectorAll('.game-detail-tab');
     var panels = panelsEl.querySelectorAll('.team-stats-panel');

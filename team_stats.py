@@ -846,9 +846,74 @@ def _build_leader_views(
     return views
 
 
-def _parse_schedule_games(team_id: str, payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
-    completed: list[dict[str, Any]] = []
-    upcoming: list[dict[str, Any]] = []
+def _game_month_key(iso_date: str | None) -> str | None:
+    if not iso_date or len(iso_date) < 7:
+        return None
+    return iso_date[:7]
+
+
+def _game_day(iso_date: str | None) -> int | None:
+    if not iso_date or len(iso_date) < 10:
+        return None
+    try:
+        return int(iso_date[8:10])
+    except ValueError:
+        return None
+
+
+def _default_schedule_month(
+    months: list[dict[str, Any]],
+    games: list[dict[str, Any]],
+) -> str:
+    if not months:
+        return ""
+    month_ids = {month["id"] for month in months}
+    today_key = date.today().strftime("%Y-%m")
+    if today_key in month_ids:
+        return today_key
+
+    today_iso = date.today().isoformat()
+    for game in games:
+        game_date = (game.get("date") or "")[:10]
+        if game_date >= today_iso and not game.get("result"):
+            month_key = _game_month_key(game.get("date"))
+            if month_key in month_ids:
+                return month_key
+
+    return months[0]["id"]
+
+
+def _parse_espn_score(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        display = value.get("displayValue")
+        if display is not None and str(display).strip() not in {"", "—", "--"}:
+            parsed = _parse_number(display)
+            return int(parsed) if parsed is not None else None
+        raw = value.get("value")
+        if raw is not None:
+            parsed = _parse_number(raw)
+            return int(parsed) if parsed is not None else None
+        return None
+    parsed = _parse_number(value)
+    return int(parsed) if parsed is not None else None
+
+
+def _is_postponed_status(status: dict[str, Any]) -> bool:
+    name = str(status.get("name") or "").upper()
+    state = str(status.get("state") or "").lower()
+    detail = " ".join(
+        str(status.get(key) or "")
+        for key in ("detail", "shortDetail", "description")
+    ).lower()
+    if "POSTPONED" in name or state == "postponed":
+        return True
+    return "postpon" in detail
+
+
+def _parse_schedule_games(team_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    games: list[dict[str, Any]] = []
 
     for event in payload.get("events") or []:
         competition = (event.get("competitions") or [{}])[0]
@@ -865,14 +930,19 @@ def _parse_schedule_games(team_id: str, payload: dict[str, Any]) -> dict[str, li
             continue
 
         status = (competition.get("status") or {}).get("type") or {}
-        is_completed = bool(status.get("completed"))
-        team_score = team_comp.get("score")
-        opp_score = opp_comp.get("score")
+        is_postponed = _is_postponed_status(status)
+        is_completed = not is_postponed and (
+            bool(status.get("completed")) or status.get("state") == "post"
+        )
+        team_score = _parse_espn_score(team_comp.get("score"))
+        opp_score = _parse_espn_score(opp_comp.get("score"))
         opp_team = opp_comp.get("team") or {}
         home_away = team_comp.get("homeAway") or ""
+        iso_date = event.get("date")
         game = {
             "id": str(competition.get("id") or event.get("id") or ""),
-            "date": event.get("date"),
+            "date": iso_date,
+            "day": _game_day(iso_date),
             "opponent_id": str(opp_team.get("id") or ""),
             "opponent_abbr": opp_team.get("abbreviation") or "",
             "opponent_name": opp_team.get("displayName") or "",
@@ -881,27 +951,51 @@ def _parse_schedule_games(team_id: str, payload: dict[str, Any]) -> dict[str, li
             "team_score": team_score,
             "opponent_score": opp_score,
             "result": None,
+            "postponed": is_postponed,
         }
-        if is_completed and team_score is not None and opp_score is not None:
-            try:
-                team_runs = int(team_score)
-                opp_runs = int(opp_score)
-                game["result"] = "W" if team_runs > opp_runs else ("L" if team_runs < opp_runs else "T")
-            except (TypeError, ValueError):
-                pass
+        if is_postponed:
+            game["status"] = "Postponed"
+            game["team_score"] = None
+            game["opponent_score"] = None
+        elif is_completed and team_score is not None and opp_score is not None:
+            game["result"] = (
+                "W" if team_score > opp_score
+                else ("L" if team_score < opp_score else "T")
+            )
+        elif is_completed and not game.get("status"):
+            game["status"] = "Final"
 
-        if is_completed:
-            completed.append(game)
-        else:
-            upcoming.append(game)
+        games.append(game)
+
+    games.sort(key=lambda row: row.get("date") or "")
+
+    months_map: dict[str, list[dict[str, Any]]] = {}
+    for game in games:
+        month_key = _game_month_key(game.get("date"))
+        if not month_key:
+            continue
+        months_map.setdefault(month_key, []).append(game)
+
+    months: list[dict[str, Any]] = []
+    for month_key in sorted(months_map.keys()):
+        year_str, month_str = month_key.split("-", 1)
+        month_number = int(month_str)
+        month_label = date(int(year_str), month_number, 1).strftime("%B %Y")
+        months.append({
+            "id": month_key,
+            "label": month_label,
+            "year": int(year_str),
+            "month": month_number,
+            "games": months_map[month_key],
+        })
 
     return {
-        "recent": completed[-10:][::-1],
-        "upcoming": upcoming[:10],
+        "months": months,
+        "default_month": _default_schedule_month(months, games),
     }
 
 
-def _fetch_team_schedule(team_id: str) -> dict[str, list[dict[str, Any]]]:
+def _fetch_team_schedule(team_id: str) -> dict[str, Any]:
     response = requests.get(
         ESPN_TEAM_SCHEDULE_URL.format(team_id=team_id),
         timeout=20,
@@ -956,7 +1050,7 @@ def fetch_team_stat_panels(
     team_detail: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     year = season_year or date.today().year
-    cache_key = f"{team_id}:{year}:panels:v12"
+    cache_key = f"{team_id}:{year}:panels:v15"
     cached = _team_panels_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
@@ -1024,13 +1118,13 @@ def fetch_team_stat_panels(
             })
 
         schedule = _fetch_team_schedule(team_id)
-        if schedule.get("recent") or schedule.get("upcoming"):
+        if schedule.get("months"):
             panels.append({
                 "id": "schedule",
                 "label": "Schedule",
-                "panel_kind": "schedule_list",
-                "recent": schedule.get("recent") or [],
-                "upcoming": schedule.get("upcoming") or [],
+                "panel_kind": "schedule_calendar",
+                "default_month": schedule.get("default_month"),
+                "months": schedule.get("months") or [],
             })
     except Exception:
         panels = []
