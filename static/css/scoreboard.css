@@ -5169,27 +5169,10 @@ a.team-link:hover {
 }
 
 .team-stats-summary-section,
-.team-stats-loading,
 .team-stats-error,
 .team-stats-summary,
 .team-stats-tabs {
   margin-top: 1rem;
-}
-
-.team-stats-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 2rem 1rem;
-}
-
-.team-stats-loading__ball {
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 50%;
-  background: #c9a227;
-  animation: player-stats-bounce 0.8s ease-in-out infinite alternate;
 }
 
 .team-stat-table {
@@ -5506,6 +5489,174 @@ a.team-link:hover {
 
 .team-leader-card__row--first .team-leader-card__value {
   color: #1a4d7a;
+}
+
+.team-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.team-roster__sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.team-roster-section__title {
+  margin: 0 0 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5c6778;
+}
+
+.team-roster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 0.65rem;
+}
+
+.team-roster-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 8.5rem;
+  padding: 0.65rem 0.55rem 0.55rem;
+  border: 1px solid #eef1f5;
+  border-radius: 0.65rem;
+  background: #fafbfc;
+  color: inherit;
+  text-decoration: none;
+  text-align: center;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.team-roster-card:hover,
+.team-roster-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: #d5dce6;
+  box-shadow: 0 4px 12px rgba(26, 35, 50, 0.08);
+  outline: none;
+}
+
+.team-roster-card__jersey {
+  position: absolute;
+  top: 0.45rem;
+  left: 0.5rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #8a96a8;
+  font-variant-numeric: tabular-nums;
+}
+
+.team-roster-card__avatar-wrap {
+  display: block;
+  line-height: 0;
+}
+
+.team-roster-card__avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #dde3eb;
+}
+
+.team-roster-card__avatar--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #1a2332;
+}
+
+.team-roster-card__avatar--sp { background: #d9ecfb; }
+.team-roster-card__avatar--rp { background: #e8dff8; }
+.team-roster-card__avatar--c { background: #fde8df; }
+.team-roster-card__avatar--if { background: #dff3e5; }
+.team-roster-card__avatar--of { background: #f7ead2; }
+.team-roster-card__avatar--other { background: #eef1f5; }
+
+.team-roster-card__name {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #1a2332;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-roster-card__pos {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 0.25rem;
+  background: #fff;
+  border: 1px solid #dde3eb;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #1a2332;
+}
+
+.team-roster-card__meta {
+  margin-top: auto;
+  max-width: 100%;
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #8a96a8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.team-roster-card__status {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: #22a06b;
+}
+
+.team-roster-card--status-injured .team-roster-card__status {
+  background: #e67e22;
+}
+
+.team-roster-card--status-out .team-roster-card__status {
+  background: #d4183d;
+}
+
+.team-roster-card--status-inactive .team-roster-card__status,
+.team-roster-card--status-unknown .team-roster-card__status {
+  background: #8a96a8;
+}
+
+.team-roster-card--status-active .team-roster-card__status {
+  background: #22a06b;
+}
+
+.team-roster-section[hidden] {
+  display: none;
+}
+
+.team-roster-card[hidden] {
+  display: none;
 }
 
 .team-roster-group + .team-roster-group {
@@ -5980,8 +6131,9 @@ a.team-schedule-calendar__game-card:focus-visible {
 @media (max-width: 767px) {
   .team-leaders-grid,
   .team-info-grid,
-  .team-vitals {
-    grid-template-columns: 1fr;
+  .team-vitals,
+  .team-roster-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .team-schedule-calendar__day,

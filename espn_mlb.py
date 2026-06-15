@@ -1383,9 +1383,15 @@ def _parse_standing_team(
     }
 
 
+def _normalize_division_label(text: str) -> str:
+    if not text:
+        return ""
+    return re.sub(r"\bCent\b", "Central", text)
+
+
 def _division_short_name(division: dict[str, Any]) -> str:
     short_name = division.get("shortName") or division.get("name", "")
-    return short_name.replace(" Cent", " Central")
+    return _normalize_division_label(short_name)
 
 
 def parse_standings(
@@ -1404,7 +1410,7 @@ def parse_standings(
             ]
             divisions.append({
                 "abbr": division.get("abbreviation", ""),
-                "name": division.get("name", ""),
+                "name": _normalize_division_label(division.get("name", "")),
                 "short_name": _division_short_name(division),
                 "teams": teams,
             })
@@ -1751,7 +1757,7 @@ def parse_team_detail(payload: dict[str, Any]) -> dict[str, Any]:
         "alternate_color": _team_alternate_color(team),
         "record": record or team.get("recordSummary"),
         "pct": pct,
-        "standing_summary": team.get("standingSummary") or "",
+        "standing_summary": _normalize_division_label(team.get("standingSummary") or ""),
         "venue": venue.get("fullName") or venue.get("shortName"),
         "home_record": home_record,
         "road_record": road_record,
@@ -1787,7 +1793,6 @@ def fetch_team_extra_stat_panels(
     team_id: str,
     *,
     season_year: str | int | None = None,
-    team_detail: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     try:
         from team_stats import fetch_team_stat_panels
@@ -1803,10 +1808,60 @@ def fetch_team_extra_stat_panels(
         return fetch_team_stat_panels(
             team_id,
             season_year=year,
-            team_detail=team_detail,
         )
     except Exception:
         return []
+
+
+def fetch_team_core_stat_panels(
+    team_id: str,
+    *,
+    season_year: str | int | None = None,
+) -> list[dict[str, Any]]:
+    try:
+        from team_stats import fetch_team_core_stat_panels as _fetch_core
+
+        year = _coerce_season_year(season_year)
+        return _fetch_core(team_id, season_year=year)
+    except Exception:
+        return []
+
+
+def fetch_team_roster_stat_panel(
+    team_id: str,
+    *,
+    season_year: str | int | None = None,
+) -> dict[str, Any] | None:
+    try:
+        from team_stats import fetch_team_roster_stat_panel as _fetch_roster
+
+        year = _coerce_season_year(season_year)
+        return _fetch_roster(team_id, season_year=year)
+    except Exception:
+        return None
+
+
+def fetch_team_leaders_stat_panel(
+    team_id: str,
+    *,
+    season_year: str | int | None = None,
+) -> dict[str, Any] | None:
+    try:
+        from team_stats import fetch_team_leaders_stat_panel as _fetch_leaders
+
+        year = _coerce_season_year(season_year)
+        return _fetch_leaders(team_id, season_year=year)
+    except Exception:
+        return None
+
+
+def _coerce_season_year(season_year: str | int | None) -> int:
+    if season_year is not None:
+        try:
+            return int(season_year)
+        except (TypeError, ValueError):
+            pass
+    return date.today().year
 
 
 def fetch_team(

@@ -14,8 +14,11 @@ import requests
 ESPN_TEAM_STATISTICS_URL = (
     "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{team_id}/statistics"
 )
-ESPN_TEAM_ROSTER_URL = (
-    "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{team_id}/roster"
+ESPN_TEAM_ATHLETES_CORE_URL = (
+    "https://sports.core.api.espn.com/v2/sports/baseball/leagues/mlb/seasons/{season}/teams/{team_id}/athletes"
+)
+ESPN_TEAM_INJURIES_URL = (
+    "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries?team={team_id}"
 )
 ESPN_TEAM_SCHEDULE_URL = (
     "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{team_id}/schedule"
@@ -29,6 +32,10 @@ ESPN_ATHLETE_STATS_URL = (
 
 _CACHE_TTL_SECONDS = 300
 _team_panels_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_team_core_panels_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_team_roster_panel_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
+_team_leaders_panel_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
+_team_roster_data_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _team_summary_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _athlete_season_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _fangraphs_batting_cache: dict[int, tuple[float, dict[str, dict[str, Any]]]] = {}
@@ -427,33 +434,285 @@ def _build_stat_rows(
     return rows
 
 
-def _fetch_team_roster(team_id: str) -> list[dict[str, Any]]:
-    response = requests.get(
-        ESPN_TEAM_ROSTER_URL.format(team_id=team_id),
-        timeout=20,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    groups: list[dict[str, Any]] = []
-    for group in payload.get("athletes") or []:
-        players: list[dict[str, Any]] = []
-        for athlete in group.get("items") or []:
-            player_id = athlete.get("id")
-            if not player_id:
+_PITCHER_RP_ABBRS = frozenset({"RP", "CP", "CL", "P", "SU", "LR", "MR"})
+
+_ROSTER_FILTERS = (
+    ("all", "All"),
+    ("sp", "SP"),
+    ("rp", "RP"),
+    ("c", "C"),
+    ("if", "Infield"),
+    ("of", "Outfield"),
+)
+_FORTY_MAN_EXCLUDE_STATUSES = frozenset({"minors", "non-roster-invite"})
+_IL_STATUS_LABELS = {
+    "injured7": "10-Day IL",
+    "15-day-il": "15-Day IL",
+    "10-day-il": "10-Day IL",
+    "injured15": "15-Day IL",
+    "injured60": "60-Day IL",
+    "60-day-il": "60-Day IL",
+}
+
+
+def _player_id_from_athlete(athlete: dict[str, Any]) -> str:
+    if athlete.get("id"):
+        return str(athlete["id"])
+    for link in athlete.get("links") or []:
+        href = str(link.get("href") or "")
+        match = re.search(r"/id/(\d+)", href)
+        if match:
+            return match.group(1)
+    return ""
+
+
+def _roster_filter_key(pos_abbr: str) -> str:
+    pos = (pos_abbr or "").upper()
+    if pos == "SP":
+        return "sp"
+    if pos in _PITCHER_RP_ABBRS:
+        return "rp"
+    if pos == "C":
+        return "c"
+    if pos in {"1B", "2B", "3B", "SS", "IF"}:
+        return "if"
+    if pos in {"LF", "CF", "RF", "OF", "DH"}:
+        return "of"
+    return "other"
+
+
+def _roster_status_variant(status_type: str, injuries: list[dict[str, Any]]) -> str:
+    status = (status_type or "active").lower()
+    if status in _IL_STATUS_LABELS or "il" in status or status.startswith("injured"):
+        return "out" if "60" in status else "injured"
+    if injuries:
+        injury_status = str(injuries[0].get("status") or "").lower()
+        if any(token in injury_status for token in ("out", "surgery", "60", "il", "long")):
+            return "out"
+        return "injured"
+    if status == "active":
+        return "active"
+    if status in {"inactive", "minors", "rehab", "suspended"}:
+        return "inactive"
+    return "unknown"
+
+
+def _roster_il_label(status_type: str, status_label: str) -> str:
+    status_key = (status_type or "").lower()
+    if status_key in _IL_STATUS_LABELS:
+        return _IL_STATUS_LABELS[status_key]
+    label = (status_label or "").strip()
+    if label and label not in {"Active", "Minors"}:
+        return label
+    return ""
+
+
+def _roster_meta_line(
+    athlete: dict[str, Any],
+    *,
+    injury_note: str,
+    status_label: str,
+    status_type: str = "",
+) -> str:
+    il_label = _roster_il_label(status_type, status_label)
+    if il_label:
+        return il_label
+    if injury_note:
+        return injury_note
+    debut_year = athlete.get("debutYear")
+    current_year = date.today().year
+    if debut_year:
+        try:
+            if int(debut_year) == current_year:
+                return f"MLB debut {debut_year}"
+        except (TypeError, ValueError):
+            pass
+    experience = athlete.get("experience") or {}
+    years = experience.get("years")
+    if years == 0:
+        return "Rookie"
+    if status_label and status_label not in {"Active"}:
+        return status_label
+    return ""
+
+
+def _parse_roster_player(
+    athlete: dict[str, Any],
+    *,
+    injury_lookup: dict[str, dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    position = athlete.get("position") or {}
+    pos_abbr = position.get("abbreviation") or ""
+    headshot = athlete.get("headshot") or {}
+    headshot_href = headshot.get("href") if isinstance(headshot, dict) else headshot
+    status = athlete.get("status") or {}
+    status_type = str(status.get("type") or "active")
+    status_label = str(status.get("name") or status.get("abbreviation") or "")
+    injuries = athlete.get("injuries") or []
+    player_id = _player_id_from_athlete(athlete)
+    injury_note = ""
+    if injury_lookup and player_id in injury_lookup:
+        injury_info = injury_lookup[player_id]
+        status_label = injury_info.get("status") or status_label
+        injury_note = injury_info.get("short_comment") or injury_info.get("long_comment") or ""
+    elif injuries:
+        injury = injuries[0]
+        injury_note = (
+            injury.get("shortComment")
+            or injury.get("longComment")
+            or injury.get("status")
+            or ""
+        )
+
+    return {
+        "id": player_id,
+        "name": athlete.get("displayName") or athlete.get("fullName") or "",
+        "jersey": athlete.get("jersey"),
+        "position": pos_abbr,
+        "position_name": position.get("name") or "",
+        "headshot": headshot_href,
+        "filter": _roster_filter_key(pos_abbr),
+        "status_variant": _roster_status_variant(status_type, injuries),
+        "meta": _roster_meta_line(
+            athlete,
+            injury_note=str(injury_note),
+            status_label=status_label,
+            status_type=status_type,
+        ),
+    }
+
+
+def _roster_sort_key(player: dict[str, Any]) -> tuple[int, str]:
+    variant = player.get("status_variant") or "active"
+    if variant == "active":
+        order = 0
+    elif variant == "injured":
+        order = 1
+    else:
+        order = 2
+    return (order, str(player.get("name") or "").lower())
+
+
+def _classify_roster_player(player: dict[str, Any]) -> str:
+    pos = (player.get("position") or "").upper()
+    if pos == "SP":
+        return "rotation"
+    if pos in _PITCHER_RP_ABBRS:
+        return "bullpen"
+    if pos == "C":
+        return "catchers"
+    if pos in {"1B", "2B", "3B", "SS", "IF"}:
+        return "infield"
+    if pos in {"LF", "CF", "RF", "OF", "DH"}:
+        return "outfield"
+    return "outfield"
+
+
+def _fetch_team_injury_lookup(team_id: str) -> dict[str, dict[str, str]]:
+    try:
+        response = requests.get(
+            ESPN_TEAM_INJURIES_URL.format(team_id=team_id),
+            timeout=20,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.RequestException:
+        return {}
+
+    lookup: dict[str, dict[str, str]] = {}
+    for injury in payload.get("injuries") or []:
+        athlete = injury.get("athlete") or {}
+        player_id = _player_id_from_athlete(athlete)
+        if not player_id:
+            continue
+        lookup[player_id] = {
+            "status": str(injury.get("status") or ""),
+            "short_comment": str(injury.get("shortComment") or ""),
+            "long_comment": str(injury.get("longComment") or ""),
+        }
+    return lookup
+
+
+def _fetch_forty_man_athletes(team_id: str, season_year: int) -> list[dict[str, Any]]:
+    refs: list[str] = []
+    page = 1
+    while True:
+        response = requests.get(
+            ESPN_TEAM_ATHLETES_CORE_URL.format(season=season_year, team_id=team_id),
+            params={"limit": 200, "page": page},
+            timeout=20,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        for item in payload.get("items") or []:
+            ref = item.get("$ref")
+            if ref:
+                refs.append(str(ref))
+        page_count = int(payload.get("pageCount") or 1)
+        if page >= page_count:
+            break
+        page += 1
+
+    athletes: list[dict[str, Any]] = []
+
+    def fetch_athlete(ref: str) -> dict[str, Any] | None:
+        try:
+            athlete_response = requests.get(ref, timeout=15)
+            athlete_response.raise_for_status()
+            return athlete_response.json()
+        except requests.RequestException:
+            return None
+
+    with ThreadPoolExecutor(max_workers=24) as executor:
+        futures = [executor.submit(fetch_athlete, ref) for ref in refs]
+        for future in as_completed(futures):
+            athlete = future.result()
+            if not athlete or not athlete.get("id"):
                 continue
-            position = athlete.get("position") or {}
-            players.append({
-                "id": str(player_id),
-                "name": athlete.get("displayName") or athlete.get("fullName") or "",
-                "jersey": athlete.get("jersey"),
-                "position": position.get("abbreviation") or position.get("name") or "",
-            })
+            status_type = str((athlete.get("status") or {}).get("type") or "")
+            if status_type in _FORTY_MAN_EXCLUDE_STATUSES:
+                continue
+            athletes.append(athlete)
+
+    return athletes
+
+
+def _fetch_team_roster(team_id: str, *, season_year: int | None = None) -> dict[str, Any]:
+    year = season_year or date.today().year
+    injury_lookup = _fetch_team_injury_lookup(team_id)
+    athletes = _fetch_forty_man_athletes(team_id, year)
+
+    grouped: dict[str, list[dict[str, Any]]] = {
+        "rotation": [],
+        "bullpen": [],
+        "catchers": [],
+        "infield": [],
+        "outfield": [],
+    }
+    for athlete in athletes:
+        player = _parse_roster_player(athlete, injury_lookup=injury_lookup)
+        if not player.get("id"):
+            continue
+        section_key = _classify_roster_player(player)
+        grouped[section_key].append(player)
+
+    section_titles = {
+        "rotation": "Starting Rotation",
+        "bullpen": "Bullpen",
+        "catchers": "Catchers",
+        "infield": "Infield",
+        "outfield": "Outfield",
+    }
+    sections: list[dict[str, Any]] = []
+    for section_id, title in section_titles.items():
+        players = sorted(grouped[section_id], key=_roster_sort_key)
         if players:
-            groups.append({
-                "title": group.get("position") or "Players",
-                "players": players,
-            })
-    return groups
+            sections.append({"id": section_id, "title": title, "players": players})
+
+    return {
+        "filters": [{"id": filter_id, "label": label} for filter_id, label in _ROSTER_FILTERS],
+        "sections": sections,
+    }
 
 
 def _normalize_player_name(name: str) -> str:
@@ -781,13 +1040,13 @@ def _build_leader_categories(
 
 
 def _build_leader_views(
-    roster_groups: list[dict[str, Any]],
+    roster_sections: list[dict[str, Any]],
     *,
     season_year: int,
 ) -> list[dict[str, Any]]:
     player_ids: list[str] = []
-    for group in roster_groups:
-        for player in group.get("players") or []:
+    for section in roster_sections:
+        for player in section.get("players") or []:
             if player.get("id"):
                 player_ids.append(player["id"])
 
@@ -1004,27 +1263,6 @@ def _fetch_team_schedule(team_id: str) -> dict[str, Any]:
     return _parse_schedule_games(team_id, response.json())
 
 
-def _build_history_panel(team_detail: dict[str, Any]) -> dict[str, Any]:
-    cards: list[dict[str, str]] = []
-    for label, key in (
-        ("Standing", "standing_summary"),
-        ("Ballpark", "venue"),
-        ("Home Record", "home_record"),
-        ("Road Record", "road_record"),
-        ("Division GB", "division_gb"),
-        ("Streak", "streak"),
-    ):
-        value = team_detail.get(key)
-        if value:
-            cards.append({"label": label, "value": str(value)})
-    return {
-        "id": "history",
-        "label": "Team Info",
-        "panel_kind": "info_cards",
-        "cards": cards,
-    }
-
-
 def fetch_team_stats_table(team_id: str, *, season_year: int | None = None) -> dict[str, Any] | None:
     year = season_year or date.today().year
     cache_key = f"{team_id}:{year}:summary"
@@ -1043,15 +1281,115 @@ def fetch_team_stats_table(team_id: str, *, season_year: int | None = None) -> d
     return result
 
 
-def fetch_team_stat_panels(
+def _get_cached_team_roster(team_id: str, season_year: int) -> dict[str, Any]:
+    cache_key = f"{team_id}:{season_year}:roster:v1"
+    cached = _team_roster_data_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+    roster = _fetch_team_roster(team_id, season_year=season_year)
+    _team_roster_data_cache[cache_key] = (now, roster)
+    return roster
+
+
+def _build_team_stats_panel(
+    stats_by_category: dict[str, dict[str, Any]],
+    *,
+    season_year: int,
+    league_stats: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    batting_metrics = _build_stat_metrics(
+        stats_by_category.get("batting") or {},
+        _BATTING_DETAIL_SPECS,
+        category="batting",
+        league_stats=league_stats.get("batting") or {},
+    )
+    pitching_metrics = _build_stat_metrics(
+        stats_by_category.get("pitching") or {},
+        _PITCHING_DETAIL_SPECS,
+        category="pitching",
+        league_stats=league_stats.get("pitching") or {},
+    )
+    fielding_metrics = _build_stat_metrics(
+        stats_by_category.get("fielding") or {},
+        _FIELDING_DETAIL_SPECS,
+        category="fielding",
+        league_stats=league_stats.get("fielding") or {},
+    )
+
+    stat_views: list[dict[str, Any]] = []
+    if batting_metrics:
+        stat_views.append({"id": "batting", "label": "Batting", "metrics": batting_metrics})
+    if pitching_metrics:
+        stat_views.append({"id": "pitching", "label": "Pitching", "metrics": pitching_metrics})
+    if fielding_metrics:
+        stat_views.append({"id": "fielding", "label": "Fielding", "metrics": fielding_metrics})
+    if not stat_views:
+        return None
+
+    return {
+        "id": "team_stats",
+        "label": "Team Stats",
+        "panel_kind": "toggle_stat_bars",
+        "default_view": stat_views[0]["id"],
+        "season_year": str(season_year),
+        "views": stat_views,
+    }
+
+
+def _build_schedule_panel(team_id: str) -> dict[str, Any] | None:
+    schedule = _fetch_team_schedule(team_id)
+    if not schedule.get("months"):
+        return None
+    return {
+        "id": "schedule",
+        "label": "Schedule",
+        "panel_kind": "schedule_calendar",
+        "default_month": schedule.get("default_month"),
+        "months": schedule.get("months") or [],
+    }
+
+
+def _build_roster_panel(roster: dict[str, Any]) -> dict[str, Any] | None:
+    roster_sections = roster.get("sections") or []
+    if not roster_sections:
+        return None
+    return {
+        "id": "roster",
+        "label": "Roster",
+        "panel_kind": "roster_cards",
+        "default_filter": "all",
+        "filters": roster.get("filters") or [],
+        "sections": roster_sections,
+    }
+
+
+def _build_leaders_panel(
+    roster_sections: list[dict[str, Any]],
+    *,
+    season_year: int,
+) -> dict[str, Any] | None:
+    leader_views = _build_leader_views(roster_sections, season_year=season_year)
+    if not leader_views:
+        return None
+    return {
+        "id": "leaders",
+        "label": "Team Leaders",
+        "panel_kind": "toggle_leaders",
+        "default_view": leader_views[0]["id"],
+        "season_year": str(season_year),
+        "views": leader_views,
+    }
+
+
+def fetch_team_core_stat_panels(
     team_id: str,
     *,
     season_year: int | None = None,
-    team_detail: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     year = season_year or date.today().year
-    cache_key = f"{team_id}:{year}:panels:v15"
-    cached = _team_panels_cache.get(cache_key)
+    cache_key = f"{team_id}:{year}:panels:core:v1"
+    cached = _team_core_panels_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
         return cached[1]
@@ -1060,79 +1398,94 @@ def fetch_team_stat_panels(
     try:
         stats_by_category = _fetch_team_statistics(team_id)
         league_stats = _get_league_stats_by_category(year)
-
-        batting_metrics = _build_stat_metrics(
-            stats_by_category.get("batting") or {},
-            _BATTING_DETAIL_SPECS,
-            category="batting",
-            league_stats=league_stats.get("batting") or {},
+        team_stats_panel = _build_team_stats_panel(
+            stats_by_category,
+            season_year=year,
+            league_stats=league_stats,
         )
-        pitching_metrics = _build_stat_metrics(
-            stats_by_category.get("pitching") or {},
-            _PITCHING_DETAIL_SPECS,
-            category="pitching",
-            league_stats=league_stats.get("pitching") or {},
-        )
-        fielding_metrics = _build_stat_metrics(
-            stats_by_category.get("fielding") or {},
-            _FIELDING_DETAIL_SPECS,
-            category="fielding",
-            league_stats=league_stats.get("fielding") or {},
-        )
+        if team_stats_panel:
+            panels.append(team_stats_panel)
 
-        stat_views: list[dict[str, Any]] = []
-        if batting_metrics:
-            stat_views.append({"id": "batting", "label": "Batting", "metrics": batting_metrics})
-        if pitching_metrics:
-            stat_views.append({"id": "pitching", "label": "Pitching", "metrics": pitching_metrics})
-        if fielding_metrics:
-            stat_views.append({"id": "fielding", "label": "Fielding", "metrics": fielding_metrics})
-        if stat_views:
-            panels.append({
-                "id": "team_stats",
-                "label": "Team Stats",
-                "panel_kind": "toggle_stat_bars",
-                "default_view": stat_views[0]["id"],
-                "season_year": str(year),
-                "views": stat_views,
-            })
-
-        roster_groups = _fetch_team_roster(team_id)
-        leader_views = _build_leader_views(roster_groups, season_year=year)
-        if leader_views:
-            panels.append({
-                "id": "leaders",
-                "label": "Team Leaders",
-                "panel_kind": "toggle_leaders",
-                "default_view": leader_views[0]["id"],
-                "season_year": str(year),
-                "views": leader_views,
-            })
-
-        if roster_groups:
-            panels.append({
-                "id": "roster",
-                "label": "Roster",
-                "panel_kind": "roster_groups",
-                "groups": roster_groups,
-            })
-
-        schedule = _fetch_team_schedule(team_id)
-        if schedule.get("months"):
-            panels.append({
-                "id": "schedule",
-                "label": "Schedule",
-                "panel_kind": "schedule_calendar",
-                "default_month": schedule.get("default_month"),
-                "months": schedule.get("months") or [],
-            })
+        schedule_panel = _build_schedule_panel(team_id)
+        if schedule_panel:
+            panels.append(schedule_panel)
     except Exception:
         panels = []
 
-    if team_detail:
-        history_panel = _build_history_panel(team_detail)
-        if history_panel.get("cards"):
-            panels.append(history_panel)
+    _team_core_panels_cache[cache_key] = (now, panels)
+    return panels
+
+
+def fetch_team_roster_stat_panel(
+    team_id: str,
+    *,
+    season_year: int | None = None,
+) -> dict[str, Any] | None:
+    year = season_year or date.today().year
+    cache_key = f"{team_id}:{year}:panels:roster:v1"
+    cached = _team_roster_panel_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    panel: dict[str, Any] | None = None
+    try:
+        roster = _get_cached_team_roster(team_id, year)
+        panel = _build_roster_panel(roster)
+    except Exception:
+        panel = None
+
+    _team_roster_panel_cache[cache_key] = (now, panel)
+    return panel
+
+
+def fetch_team_leaders_stat_panel(
+    team_id: str,
+    *,
+    season_year: int | None = None,
+) -> dict[str, Any] | None:
+    year = season_year or date.today().year
+    cache_key = f"{team_id}:{year}:panels:leaders:v1"
+    cached = _team_leaders_panel_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    panel: dict[str, Any] | None = None
+    try:
+        roster = _get_cached_team_roster(team_id, year)
+        roster_sections = roster.get("sections") or []
+        panel = _build_leaders_panel(roster_sections, season_year=year)
+    except Exception:
+        panel = None
+
+    _team_leaders_panel_cache[cache_key] = (now, panel)
+    return panel
+
+
+def fetch_team_stat_panels(
+    team_id: str,
+    *,
+    season_year: int | None = None,
+) -> list[dict[str, Any]]:
+    year = season_year or date.today().year
+    cache_key = f"{team_id}:{year}:panels:v20"
+    cached = _team_panels_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    panels: list[dict[str, Any]] = []
+    panels.extend(fetch_team_core_stat_panels(team_id, season_year=year))
+
+    leaders_panel = fetch_team_leaders_stat_panel(team_id, season_year=year)
+    if leaders_panel:
+        panels.insert(1, leaders_panel)
+
+    roster_panel = fetch_team_roster_stat_panel(team_id, season_year=year)
+    if roster_panel:
+        insert_at = 2 if leaders_panel else 1
+        panels.insert(insert_at, roster_panel)
 
     _team_panels_cache[cache_key] = (now, panels)
     return panels
