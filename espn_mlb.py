@@ -402,6 +402,9 @@ def _probable_stat_categories(statistics: Any) -> list[dict[str, Any]]:
     return []
 
 
+_SKIP_PROBABLE_STAT_KEYS = frozenset({"HT", "HEIGHT", "HGT", "H"})
+
+
 def _parse_probable(competitor: dict[str, Any]) -> dict[str, Any] | None:
     for probable in competitor.get("probables") or []:
         if probable.get("name") != "probableStartingPitcher":
@@ -412,8 +415,12 @@ def _parse_probable(competitor: dict[str, Any]) -> dict[str, Any] | None:
             if not isinstance(category, dict):
                 continue
             key = category.get("abbreviation") or category.get("name")
-            if key:
-                stats[str(key)] = category.get("displayValue", "")
+            if not key:
+                continue
+            key_str = str(key).strip().upper()
+            if key_str in _SKIP_PROBABLE_STAT_KEYS or "HEIGHT" in key_str:
+                continue
+            stats[str(key)] = category.get("displayValue", "")
         headshot = athlete.get("headshot") or {}
         headshot_href = headshot if isinstance(headshot, str) else headshot.get("href")
         throws = athlete.get("throws")
@@ -421,6 +428,12 @@ def _parse_probable(competitor: dict[str, Any]) -> dict[str, Any] | None:
             throws if isinstance(throws, str)
             else (throws or {}).get("displayValue")
         )
+        if throws_display and (
+            str(throws_display).strip().upper() in _SKIP_PROBABLE_STAT_KEYS
+            or "HEIGHT" in str(throws_display).upper()
+            or "'" in str(throws_display)
+        ):
+            throws_display = None
         return {
             "id": _athlete_id(athlete),
             "name": athlete.get("displayName", ""),

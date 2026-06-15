@@ -35,6 +35,45 @@
     );
   }
 
+  function playerInitials(name) {
+    if (!name) return '?';
+    return name.split(' ').map(function (part) {
+      return part.charAt(0);
+    }).join('').slice(0, 2).toUpperCase();
+  }
+
+  function leaderHeadshotHtml(leader) {
+    var label = playerInitials(leader.name);
+    if (!leader.headshot) {
+      return (
+        '<span class="team-leader-card__headshot team-leader-card__headshot--placeholder">' +
+          escapeHtml(label) +
+        '</span>'
+      );
+    }
+    return (
+      '<span class="team-leader-card__headshot-wrap">' +
+        '<img class="team-leader-card__headshot" src="' + escapeHtml(leader.headshot) +
+        '" alt="" width="36" height="36" loading="lazy">' +
+        '<span class="team-leader-card__headshot team-leader-card__headshot--placeholder team-leader-card__headshot--fallback" hidden>' +
+          escapeHtml(label) +
+        '</span>' +
+      '</span>'
+    );
+  }
+
+  function wireLeaderHeadshotFallbacks(root) {
+    root.querySelectorAll('.team-leader-card__headshot-wrap img').forEach(function (img) {
+      img.addEventListener('error', function () {
+        var wrap = img.closest('.team-leader-card__headshot-wrap');
+        if (!wrap) return;
+        img.hidden = true;
+        var fallback = wrap.querySelector('.team-leader-card__headshot--fallback');
+        if (fallback) fallback.hidden = false;
+      }, { once: true });
+    });
+  }
+
   function buildSeasonTableHtml(statsTable) {
     var columns = statsTable.columns || [];
     if (!columns.length) return '';
@@ -151,11 +190,19 @@
 
     return (
       '<div class="team-stat-bars">' +
-        '<div class="team-stat-bars__legend">' +
-          '<span class="team-stat-bars__legend-mark" aria-hidden="true"></span>' +
-          '<span>League median</span>' +
-        '</div>' +
         '<div class="team-stat-bars__rows">' + rows + '</div>' +
+        '<div class="team-stat-bars__footer">' +
+          '<p class="team-stat-bars__color-note">' +
+            'Bar color: <span class="team-stat-bars__color-swatch team-stat-bars__color-swatch--better">green</span> ' +
+            'at or above league median, ' +
+            '<span class="team-stat-bars__color-swatch team-stat-bars__color-swatch--worse">red</span> below. ' +
+            'Bar length ranks this team among all 30 teams for that stat.' +
+          '</p>' +
+          '<div class="team-stat-bars__legend">' +
+            '<span class="team-stat-bars__legend-mark" aria-hidden="true"></span>' +
+            '<span>League median</span>' +
+          '</div>' +
+        '</div>' +
       '</div>'
     );
   }
@@ -181,39 +228,40 @@
     );
   }
 
-  function buildLeadersHtml(panel) {
-    var groups = panel.groups || [];
-    if (!groups.length) {
+  function buildLeadersViewHtml(view) {
+    var categories = view.categories || [];
+    if (!categories.length) {
       return '<p class="player-splits-empty">No leaders available.</p>';
     }
 
-    return groups.map(function (group) {
-      var categories = (group.categories || []).map(function (category) {
-        var leaders = (category.leaders || []).map(function (leader, index) {
+    return (
+      '<div class="team-leaders">' +
+        '<div class="team-leaders-grid">' +
+        categories.map(function (category) {
+          var leaders = (category.leaders || []).map(function (leader, index) {
+            var rank = index + 1;
+            return (
+              '<li class="team-leader-card__row' + (rank === 1 ? ' team-leader-card__row--first' : '') + '">' +
+                '<span class="team-leader-card__rank">' + rank + '</span>' +
+                '<div class="team-leader-card__player">' +
+                  leaderHeadshotHtml(leader) +
+                  '<span class="team-leader-card__name">' + playerLink(leader.id, leader.name) + '</span>' +
+                '</div>' +
+                '<span class="team-leader-card__value">' + escapeHtml(leader.value) + '</span>' +
+              '</li>'
+            );
+          }).join('');
+          if (!leaders) return '';
           return (
-            '<li class="team-leader-row">' +
-              '<span class="team-leader-row__rank">' + (index + 1) + '</span>' +
-              '<span class="team-leader-row__name">' + playerLink(leader.id, leader.name) + '</span>' +
-              '<span class="team-leader-row__value">' + escapeHtml(leader.value) + '</span>' +
-            '</li>'
+            '<article class="team-leader-card">' +
+              '<h4 class="team-leader-card__title">' + escapeHtml(category.title) + '</h4>' +
+              '<ol class="team-leader-card__list">' + leaders + '</ol>' +
+            '</article>'
           );
-        }).join('');
-        if (!leaders) return '';
-        return (
-          '<section class="team-leader-category">' +
-            '<h4 class="team-leader-category__title">' + escapeHtml(category.title) + '</h4>' +
-            '<ol class="team-leader-list">' + leaders + '</ol>' +
-          '</section>'
-        );
-      }).join('');
-
-      return (
-        '<section class="team-leaders-group">' +
-          '<h3 class="team-leaders-group__title">' + escapeHtml(group.title) + '</h3>' +
-          '<div class="team-leaders-grid">' + categories + '</div>' +
-        '</section>'
-      );
-    }).join('');
+        }).join('') +
+        '</div>' +
+      '</div>'
+    );
   }
 
   function buildRosterHtml(panel) {
@@ -312,13 +360,18 @@
   }
 
   function buildPanelInnerHtml(panel) {
-    if (panel.panel_kind === 'toggle_stat_bars' || panel.panel_kind === 'toggle_stat_table') {
+    if (panel.panel_kind === 'toggle_stat_bars' || panel.panel_kind === 'toggle_stat_table' || panel.panel_kind === 'toggle_leaders') {
       var defaultView = panel.default_view || (panel.views[0] && panel.views[0].id);
       var toggleHtml = buildToggleHtml(panel.id, panel.views, defaultView);
       var viewsHtml = (panel.views || []).map(function (view) {
-        var bodyHtml = view.metrics
-          ? buildStatBarsHtml(view)
-          : buildStatTableHtml(view);
+        var bodyHtml;
+        if (panel.panel_kind === 'toggle_leaders') {
+          bodyHtml = buildLeadersViewHtml(view);
+        } else if (view.metrics) {
+          bodyHtml = buildStatBarsHtml(view);
+        } else {
+          bodyHtml = buildStatTableHtml(view);
+        }
         return (
           '<div class="player-panel-view" data-panel="' + escapeHtml(panel.id) +
           '" data-view="' + escapeHtml(view.id) + '"' +
@@ -334,9 +387,6 @@
     }
     if (panel.panel_kind === 'stat_table') {
       return '<div class="team-panel-body">' + buildStatTableHtml(panel) + '</div>';
-    }
-    if (panel.panel_kind === 'leaders_table') {
-      return '<div class="team-panel-body">' + buildLeadersHtml(panel) + '</div>';
     }
     if (panel.panel_kind === 'roster_groups') {
       return '<div class="team-panel-body team-panel-body--roster">' + buildRosterHtml(panel) + '</div>';
@@ -379,6 +429,7 @@
 
     tabsEl.hidden = false;
     initPanelToggles(panelsEl);
+    wireLeaderHeadshotFallbacks(panelsEl);
 
     var buttons = tabsEl.querySelectorAll('.game-detail-tab');
     var panels = panelsEl.querySelectorAll('.team-stats-panel');

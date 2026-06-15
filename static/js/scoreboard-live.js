@@ -16,6 +16,11 @@
   var POLL_MS_IDLE = 30000;
   var lastScores = {};
   var lastStatus = {};
+  var lastGamesList = [];
+
+  function isGameEndPinned(card) {
+    return window.gameCardGameEnd && window.gameCardGameEnd.isActive(card);
+  }
 
   if (!pollUrl || !todayGamesGrid) {
     return;
@@ -56,6 +61,31 @@
     var team = battingTeam(game);
     if (!team) return null;
     return team.win_color || team.color || null;
+  }
+
+  function numericScore(value) {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+    var normalized = String(value).trim();
+    if (normalized === '—' || normalized === '–' || normalized === '-' || normalized === '—') {
+      return null;
+    }
+    var parsed = Number(normalized);
+    return isNaN(parsed) ? null : parsed;
+  }
+
+  function shouldFlashScoreChange(oldScore, newScore, options) {
+    options = options || {};
+    if (options.gameStarting) {
+      return false;
+    }
+    var oldNum = numericScore(oldScore);
+    var newNum = numericScore(newScore);
+    if (newNum === null || oldNum === null) {
+      return false;
+    }
+    return newNum > oldNum;
   }
 
   function flashScoreOnCard(card, side, team) {
@@ -186,7 +216,8 @@
 
     var awayScore = scoreForTeam(game, game.away);
     var homeScore = scoreForTeam(game, game.home);
-    var prevScores = lastScores[String(game.id)];
+    var prevScores = lastScores[gameId];
+    var gameStarting = prevStatus === 'pre' && game.status_state === 'in';
 
     var hasWinner = Boolean(game.away && game.away.winner) || Boolean(game.home && game.home.winner);
 
@@ -213,7 +244,7 @@
       var newScore = entry.side === 'away' ? awayScore : homeScore;
       if (prevScores) {
         var oldScore = entry.side === 'away' ? prevScores.away : prevScores.home;
-        if (oldScore !== newScore && newScore !== '—') {
+        if (shouldFlashScoreChange(oldScore, newScore, { gameStarting: gameStarting })) {
           scoreEl.textContent = newScore;
           flashScoreOnCard(card, entry.side, entry.team);
           return;
@@ -249,16 +280,71 @@
     return String(a.start_time || '').localeCompare(String(b.start_time || ''));
   }
 
+  function isGameEndPinned(card) {
+    return window.gameCardGameEnd && window.gameCardGameEnd.isActive(card);
+  }
+
   function reorderGameCards(games) {
-    games.slice().sort(compareGames).forEach(function (game) {
-      var card = todayGamesGrid.querySelector('[data-game-id="' + game.id + '"]');
-      if (card) {
-        todayGamesGrid.appendChild(card);
+    var currentCards = Array.prototype.slice.call(
+      todayGamesGrid.querySelectorAll('.game-card')
+    );
+    var pinnedIds = {};
+    currentCards.forEach(function (card) {
+      if (isGameEndPinned(card)) {
+        pinnedIds[card.getAttribute('data-game-id')] = true;
       }
     });
+
+    var sortableGames = games.filter(function (game) {
+      return !pinnedIds[String(game.id)];
+    }).sort(compareGames);
+
+    var sortableCards = sortableGames.map(function (game) {
+      return todayGamesGrid.querySelector('[data-game-id="' + game.id + '"]');
+    }).filter(Boolean);
+
+    var sortIdx = 0;
+    var fragment = document.createDocumentFragment();
+
+    currentCards.forEach(function (card) {
+      var id = card.getAttribute('data-game-id');
+      if (pinnedIds[id]) {
+        fragment.appendChild(card);
+        return;
+      }
+      if (sortIdx < sortableCards.length) {
+        fragment.appendChild(sortableCards[sortIdx]);
+        sortIdx += 1;
+      }
+    });
+
+    while (sortIdx < sortableCards.length) {
+      fragment.appendChild(sortableCards[sortIdx]);
+      sortIdx += 1;
+    }
+
+    todayGamesGrid.appendChild(fragment);
+  }
+
+  function seedCardStateFromDom(card) {
+    var gameId = card.getAttribute('data-game-id');
+    if (!gameId || lastStatus[gameId] !== undefined) {
+      return;
+    }
+
+    var statusMatch = card.className.match(/game-card--(pre|in|post)/);
+    var awayEl = card.querySelector('.game-card-team--away .game-card-score');
+    var homeEl = card.querySelector('.game-card-team--home .game-card-score');
+
+    lastStatus[gameId] = statusMatch ? statusMatch[1] : 'pre';
+    lastScores[gameId] = {
+      away: awayEl ? awayEl.textContent.trim() : '—',
+      home: homeEl ? homeEl.textContent.trim() : '—'
+    };
   }
 
   function updateGameCards(games) {
+    lastGamesList = games;
     var gamesById = {};
     games.forEach(function (game) {
       gamesById[String(game.id)] = game;
@@ -312,6 +398,16 @@
       }
     }
   };
+
+  if (window.gameCardGameEnd) {
+    window.gameCardGameEnd.setOnComplete(function () {
+      if (lastGamesList.length) {
+        reorderGameCards(lastGamesList);
+      }
+    });
+  }
+
+  todayGamesGrid.querySelectorAll('.game-card').forEach(seedCardStateFromDom);
 
   if (activeDay === 'today') {
     refreshTodayScores();

@@ -317,15 +317,23 @@
       card.style.removeProperty('--game-end-ribbon-delay');
       card.style.removeProperty('--game-end-ribbon-duration');
       endTimers.delete(card);
+      if (typeof onComplete === 'function') {
+        onComplete(card);
+      }
     }, GAME_END_MS);
 
     endTimers.set(card, timer);
   }
 
+  var onComplete = null;
+
   window.gameCardGameEnd = {
     play: playGameEnd,
     isActive: function (card) {
       return Boolean(card && card.classList.contains('game-card--game-end'));
+    },
+    setOnComplete: function (callback) {
+      onComplete = typeof callback === 'function' ? callback : null;
     }
   };
 })();

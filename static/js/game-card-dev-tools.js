@@ -174,7 +174,11 @@
             color: teams.away.color,
             logo: teams.away.logo,
             record: '24-31',
-            probable_pitcher: { name: 'S. Senga', throws: 'Right' }
+            probable_pitcher: {
+              name: 'K. Senga',
+              throws: 'Right',
+              stats: { W: '3', L: '2', ERA: '2.45' }
+            }
           },
           home: {
             abbr: teams.home.abbr,
@@ -183,7 +187,12 @@
             color: teams.home.color,
             logo: teams.home.logo,
             record: '32-23',
-            probable_pitcher: { name: 'Z. Wheeler', throws: 'Right' }
+            probable_pitcher: {
+              name: 'Z. Wheeler',
+              throws: 'Right',
+              headshot: 'https://a.espncdn.com/i/headshots/mlb/players/full/30957.png',
+              stats: { W: '6', L: '1', ERA: '1.89' }
+            }
           }
         });
       }

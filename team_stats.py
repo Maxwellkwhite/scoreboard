@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 import time
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from typing import Any
@@ -21,11 +23,17 @@ ESPN_TEAM_SCHEDULE_URL = (
 ESPN_ATHLETE_URL = (
     "https://site.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{player_id}"
 )
+ESPN_ATHLETE_STATS_URL = (
+    "https://site.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{player_id}/stats"
+)
 
 _CACHE_TTL_SECONDS = 300
 _team_panels_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _team_summary_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _athlete_season_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
+_fangraphs_batting_cache: dict[int, tuple[float, dict[str, dict[str, Any]]]] = {}
+_fangraphs_pitching_cache: dict[int, tuple[float, dict[str, dict[str, Any]]]] = {}
+_bwar_season_cache: dict[tuple[int, bool], tuple[float, dict[str, float]]] = {}
 
 _TEAM_SUMMARY_BATTING = (
     ("avg", "AVG"),
@@ -46,19 +54,44 @@ _TEAM_SUMMARY_PITCHING = (
 )
 
 _BATTING_LEADER_SPECS = (
+    ("WAR", "WAR", True),
     ("homeRuns", "HR", True),
     ("RBIs", "RBI", True),
     ("avg", "AVG", True),
     ("OPS", "OPS", True),
     ("stolenBases", "SB", True),
 )
+_BATTING_ADVANCED_LEADER_SPECS = (
+    ("OPS+", "OPS+", True),
+    ("wOBA", "wOBA", True),
+    ("RC", "RC", True),
+    ("RC/27", "RC/27", True),
+    ("ISOP", "ISO", True),
+)
 _PITCHING_LEADER_SPECS = (
+    ("WAR", "WAR", True),
     ("ERA", "ERA", False),
     ("strikeouts", "SO", True),
     ("wins", "W", True),
     ("saves", "SV", True),
     ("WHIP", "WHIP", False),
 )
+_PITCHING_ADVANCED_LEADER_SPECS = (
+    ("FIP", "FIP", False),
+    ("xFIP", "xFIP", False),
+    ("K/9", "K/9", True),
+    ("QS", "QS", True),
+    ("OOPS", "OPP OPS", False),
+)
+_FIELDING_LEADER_SPECS = (
+    ("fieldingPct", "FLD%", True),
+    ("putouts", "PO", True),
+    ("assists", "A", True),
+    ("errors", "E", False),
+    ("doublePlays", "DP", True),
+)
+
+_LEADER_TOP_N = 5
 
 _BATTING_DETAIL_SPECS = (
     ("avg", "AVG"),
@@ -151,9 +184,16 @@ def _format_stat_value(stat_name: str, value: Any) -> str:
     number = _parse_number(value)
     if number is None:
         return "—"
-    if stat_name in {"avg", "onBasePct", "slugAvg", "OPS", "WHIP", "opponentAvg", "fieldingPct"}:
+    if stat_name in {"avg", "onBasePct", "slugAvg", "OPS", "WHIP", "opponentAvg", "fieldingPct", "wOBA", "ISOP", "OOPS"}:
         return _format_rate(number, 3)
-    if stat_name in {"ERA", "strikeoutsPerNineInnings", "winPct"}:
+    if stat_name in {"ERA", "FIP", "xFIP"}:
+        return f"{number:.2f}"
+    if stat_name in {"WAR", "RC/27"}:
+        rounded = round(number, 1)
+        return str(int(rounded)) if rounded == int(rounded) else f"{rounded:.1f}"
+    if stat_name == "OPS+":
+        return str(round(number))
+    if stat_name in {"strikeoutsPerNineInnings", "winPct", "K/9"}:
         return f"{number:.2f}"
     if stat_name in {"innings", "fullInningsPlayed"}:
         return f"{number:.1f}"
@@ -416,8 +456,240 @@ def _fetch_team_roster(team_id: str) -> list[dict[str, Any]]:
     return groups
 
 
-def _fetch_athlete_season_stats(player_id: str) -> dict[str, Any] | None:
-    cached = _athlete_season_cache.get(player_id)
+def _normalize_player_name(name: str) -> str:
+    text = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    text = text.lower().strip()
+    if "," in text:
+        last, first = (part.strip() for part in text.split(",", 1))
+        if first and last:
+            text = f"{first} {last}"
+    return re.sub(r"[^a-z ]", "", text).strip()
+
+
+def _espn_category_season_row(
+    category: dict[str, Any] | None,
+    season_year: int,
+) -> dict[str, str]:
+    if not category:
+        return {}
+    labels = category.get("labels") or []
+    for stat in category.get("statistics") or []:
+        year = (stat.get("season") or {}).get("year")
+        if str(year) == str(season_year):
+            return dict(zip(labels, stat.get("stats") or []))
+    return {}
+
+
+def _get_fangraphs_batting_lookup(season_year: int) -> dict[str, dict[str, Any]]:
+    cached = _fangraphs_batting_cache.get(season_year)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    lookup: dict[str, dict[str, Any]] = {}
+    try:
+        from pybaseball import batting_stats
+
+        frame = batting_stats(season_year, qual=0)
+        for _, row in frame.iterrows():
+            name = row.get("Name")
+            if not name or not isinstance(name, str):
+                continue
+            key = _normalize_player_name(name)
+            if not key:
+                continue
+            lookup[key] = {
+                "OPS+": row.get("OPS+"),
+                "wOBA": row.get("wOBA"),
+            }
+    except Exception:
+        lookup = {}
+
+    _fangraphs_batting_cache[season_year] = (now, lookup)
+    return lookup
+
+
+def _get_fangraphs_pitching_lookup(season_year: int) -> dict[str, dict[str, Any]]:
+    cached = _fangraphs_pitching_cache.get(season_year)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    lookup: dict[str, dict[str, Any]] = {}
+    try:
+        from pybaseball import pitching_stats
+
+        frame = pitching_stats(season_year, season_year, qual=0)
+        for _, row in frame.iterrows():
+            name = row.get("Name")
+            if not name or not isinstance(name, str):
+                continue
+            key = _normalize_player_name(name)
+            if not key:
+                continue
+            lookup[key] = {
+                "FIP": row.get("FIP"),
+                "xFIP": row.get("xFIP"),
+            }
+    except Exception:
+        lookup = {}
+
+    _fangraphs_pitching_cache[season_year] = (now, lookup)
+    return lookup
+
+
+def _get_bwar_season_lookup(season_year: int, *, pitching: bool = False) -> dict[str, float]:
+    """Total bWAR by player name for a season (same source as player pages)."""
+    cache_key = (season_year, pitching)
+    cached = _bwar_season_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    lookup: dict[str, float] = {}
+    try:
+        from player_stats import _load_bwar_bat, _load_bwar_pitch
+
+        frame = _load_bwar_pitch() if pitching else _load_bwar_bat()
+        season_rows = frame[frame["year_ID"] == season_year]
+        for name, group in season_rows.groupby("name_common"):
+            lookup[str(name)] = float(group["WAR"].sum())
+    except Exception:
+        lookup = {}
+
+    _bwar_season_cache[cache_key] = (now, lookup)
+    return lookup
+
+
+def _bwar_for_player_name(name: str, lookup: dict[str, float]) -> float | None:
+    if name in lookup:
+        return lookup[name]
+
+    try:
+        from player_stats import _parse_player_name
+    except Exception:
+        return None
+
+    last_name, first_name = _parse_player_name(name)
+    if not last_name:
+        return None
+
+    for common_name, war in lookup.items():
+        common_lower = common_name.lower()
+        if last_name.lower() not in common_lower:
+            continue
+        if first_name and first_name.lower() not in common_lower:
+            continue
+        return war
+    return None
+
+
+def _merge_espn_advanced_stats(
+    stats: dict[str, Any],
+    categories: dict[str, dict[str, Any]],
+    *,
+    season_year: int,
+) -> None:
+    advanced_row = _espn_category_season_row(
+        categories.get("advanced-batting"),
+        season_year,
+    )
+
+    for label in ("RC", "RC/27", "ISOP"):
+        value = advanced_row.get(label)
+        if value is not None:
+            stats[label] = value
+
+
+def _merge_espn_pitching_stats(
+    stats: dict[str, Any],
+    categories: dict[str, dict[str, Any]],
+    *,
+    season_year: int,
+) -> None:
+    pitching_row = _espn_category_season_row(
+        categories.get("pitching"),
+        season_year,
+    )
+    expanded_row = _espn_category_season_row(
+        categories.get("expanded-pitching"),
+        season_year,
+    )
+    opponent_row = _espn_category_season_row(
+        categories.get("opponent-batting"),
+        season_year,
+    )
+
+    pitching_map = {
+        "ERA": "ERA",
+        "WHIP": "WHIP",
+        "W": "wins",
+        "SV": "saves",
+        "K": "strikeouts",
+        "IP": "innings",
+    }
+    for espn_label, stat_key in pitching_map.items():
+        value = pitching_row.get(espn_label)
+        if value is not None:
+            stats[stat_key] = value
+
+    for label in ("K/9", "QS"):
+        value = expanded_row.get(label)
+        if value is not None:
+            stats[label] = value
+
+    oops = opponent_row.get("OOPS")
+    if oops is not None:
+        stats["OOPS"] = oops
+
+
+def _enrich_athlete_batting_advanced(
+    athlete: dict[str, Any],
+    fangraphs_lookup: dict[str, dict[str, Any]],
+    *,
+    bwar_lookup: dict[str, float],
+) -> None:
+    stats = athlete.get("stats") or {}
+    player_name = athlete.get("name") or ""
+    key = _normalize_player_name(player_name)
+    fg_stats = fangraphs_lookup.get(key) or {}
+    for stat_name in ("OPS+", "wOBA"):
+        value = fg_stats.get(stat_name)
+        if value is not None:
+            stats[stat_name] = value
+
+    war = _bwar_for_player_name(player_name, bwar_lookup)
+    if war is not None:
+        stats["WAR"] = war
+
+    athlete["stats"] = stats
+
+
+def _enrich_athlete_pitching_advanced(
+    athlete: dict[str, Any],
+    fangraphs_lookup: dict[str, dict[str, Any]],
+    *,
+    bwar_lookup: dict[str, float],
+) -> None:
+    stats = athlete.get("stats") or {}
+    player_name = athlete.get("name") or ""
+    key = _normalize_player_name(player_name)
+    fg_stats = fangraphs_lookup.get(key) or {}
+    for stat_name in ("FIP", "xFIP"):
+        value = fg_stats.get(stat_name)
+        if value is not None:
+            stats[stat_name] = value
+
+    war = _bwar_for_player_name(player_name, bwar_lookup)
+    if war is not None:
+        stats["WAR"] = war
+
+    athlete["stats"] = stats
+
+
+def _fetch_athlete_season_stats(player_id: str, *, season_year: int) -> dict[str, Any] | None:
+    cache_key = f"{player_id}:{season_year}"
+    cached = _athlete_season_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
         return cached[1]
@@ -430,23 +702,48 @@ def _fetch_athlete_season_stats(player_id: str) -> dict[str, Any] | None:
         response.raise_for_status()
         athlete = (response.json().get("athlete") or {})
         position = ((athlete.get("position") or {}).get("abbreviation") or "").upper()
+        headshot = athlete.get("headshot") or {}
+        headshot_href = headshot if isinstance(headshot, str) else headshot.get("href")
         stats_summary = athlete.get("statsSummary") or {}
         stats: dict[str, Any] = {}
         for stat in stats_summary.get("statistics") or []:
             name = stat.get("name") or ""
             if name:
                 stats[name] = stat.get("value")
+
+        categories: dict[str, dict[str, Any]] = {}
+        try:
+            stats_response = requests.get(
+                ESPN_ATHLETE_STATS_URL.format(player_id=player_id),
+                timeout=15,
+            )
+            stats_response.raise_for_status()
+            categories = {
+                category.get("name"): category
+                for category in stats_response.json().get("categories") or []
+                if category.get("name")
+            }
+        except Exception:
+            categories = {}
+
+        is_pitcher = position in {"P", "SP", "RP", "CP", "CL", "LR", "MR", "SU"}
+        if is_pitcher:
+            _merge_espn_pitching_stats(stats, categories, season_year=season_year)
+        else:
+            _merge_espn_advanced_stats(stats, categories, season_year=season_year)
+
         result = {
             "id": str(player_id),
             "name": athlete.get("displayName") or "",
             "position": position,
+            "headshot": headshot_href,
             "stats": stats,
-            "pitching": position in {"P", "SP", "RP", "CP", "CL", "LR", "MR", "SU"},
+            "pitching": is_pitcher,
         }
     except Exception:
         result = None
 
-    _athlete_season_cache[player_id] = (now, result)
+    _athlete_season_cache[cache_key] = (now, result)
     return result
 
 
@@ -454,7 +751,36 @@ def _leader_value(stats: dict[str, Any], stat_name: str) -> float | None:
     return _parse_number(stats.get(stat_name))
 
 
-def _build_leader_groups(
+def _build_leader_categories(
+    players: list[dict[str, Any]],
+    specs: tuple[tuple[str, str, bool], ...],
+    *,
+    top_n: int = _LEADER_TOP_N,
+) -> list[dict[str, Any]]:
+    categories: list[dict[str, Any]] = []
+    for stat_name, label, higher_is_better in specs:
+        ranked = []
+        for athlete in players:
+            value = _leader_value(athlete["stats"], stat_name)
+            if value is None:
+                continue
+            ranked.append({
+                "id": athlete["id"],
+                "name": athlete["name"],
+                "headshot": athlete.get("headshot"),
+                "value": _format_stat_value(stat_name, value),
+                "sort_value": value,
+            })
+        ranked.sort(key=lambda row: row["sort_value"], reverse=higher_is_better)
+        top = ranked[:top_n]
+        if top:
+            for row in top:
+                row.pop("sort_value", None)
+            categories.append({"title": label, "leaders": top})
+    return categories
+
+
+def _build_leader_views(
     roster_groups: list[dict[str, Any]],
     *,
     season_year: int,
@@ -469,7 +795,11 @@ def _build_leader_groups(
     if player_ids:
         with ThreadPoolExecutor(max_workers=8) as executor:
             futures = {
-                executor.submit(_fetch_athlete_season_stats, player_id): player_id
+                executor.submit(
+                    _fetch_athlete_season_stats,
+                    player_id,
+                    season_year=season_year,
+                ): player_id
                 for player_id in player_ids
             }
             for future in as_completed(futures):
@@ -477,61 +807,43 @@ def _build_leader_groups(
                 if athlete and athlete.get("stats"):
                     athletes.append(athlete)
 
-    leader_groups: list[dict[str, Any]] = []
+    fangraphs_batting_lookup = _get_fangraphs_batting_lookup(season_year)
+    fangraphs_pitching_lookup = _get_fangraphs_pitching_lookup(season_year)
+    bwar_bat_lookup = _get_bwar_season_lookup(season_year, pitching=False)
+    bwar_pitch_lookup = _get_bwar_season_lookup(season_year, pitching=True)
+    for athlete in athletes:
+        if athlete.get("pitching"):
+            _enrich_athlete_pitching_advanced(
+                athlete,
+                fangraphs_pitching_lookup,
+                bwar_lookup=bwar_pitch_lookup,
+            )
+        else:
+            _enrich_athlete_batting_advanced(
+                athlete,
+                fangraphs_batting_lookup,
+                bwar_lookup=bwar_bat_lookup,
+            )
 
-    batting_players = [a for a in athletes if not a.get("pitching")]
-    batting_leaders: list[dict[str, Any]] = []
-    for stat_name, label, higher_is_better in _BATTING_LEADER_SPECS:
-        ranked = []
-        for athlete in batting_players:
-            value = _leader_value(athlete["stats"], stat_name)
-            if value is None:
-                continue
-            ranked.append({
-                "id": athlete["id"],
-                "name": athlete["name"],
-                "value": _format_stat_value(stat_name, value),
-                "sort_value": value,
-            })
-        ranked.sort(key=lambda row: row["sort_value"], reverse=higher_is_better)
-        top = ranked[:3]
-        if top:
-            for row in top:
-                row.pop("sort_value", None)
-            batting_leaders.append({"title": label, "leaders": top})
-    if batting_leaders:
-        leader_groups.append({
-            "title": "Batting Leaders",
-            "categories": batting_leaders,
-        })
+    views: list[dict[str, Any]] = []
+
+    position_players = [a for a in athletes if not a.get("pitching")]
+    batting_specs = _BATTING_LEADER_SPECS + _BATTING_ADVANCED_LEADER_SPECS
+    batting_categories = _build_leader_categories(position_players, batting_specs)
+    if batting_categories:
+        views.append({"id": "batting", "label": "Batting", "categories": batting_categories})
 
     pitching_players = [a for a in athletes if a.get("pitching")]
-    pitching_categories: list[dict[str, Any]] = []
-    for stat_name, label, higher_is_better in _PITCHING_LEADER_SPECS:
-        ranked = []
-        for athlete in pitching_players:
-            value = _leader_value(athlete["stats"], stat_name)
-            if value is None:
-                continue
-            ranked.append({
-                "id": athlete["id"],
-                "name": athlete["name"],
-                "value": _format_stat_value(stat_name, value),
-                "sort_value": value,
-            })
-        ranked.sort(key=lambda row: row["sort_value"], reverse=higher_is_better)
-        top = ranked[:3]
-        if top:
-            for row in top:
-                row.pop("sort_value", None)
-            pitching_categories.append({"title": label, "leaders": top})
+    pitching_specs = _PITCHING_LEADER_SPECS + _PITCHING_ADVANCED_LEADER_SPECS
+    pitching_categories = _build_leader_categories(pitching_players, pitching_specs)
     if pitching_categories:
-        leader_groups.append({
-            "title": "Pitching Leaders",
-            "categories": pitching_categories,
-        })
+        views.append({"id": "pitching", "label": "Pitching", "categories": pitching_categories})
 
-    return leader_groups
+    fielding_categories = _build_leader_categories(position_players, _FIELDING_LEADER_SPECS)
+    if fielding_categories:
+        views.append({"id": "fielding", "label": "Fielding", "categories": fielding_categories})
+
+    return views
 
 
 def _parse_schedule_games(team_id: str, payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -644,7 +956,7 @@ def fetch_team_stat_panels(
     team_detail: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     year = season_year or date.today().year
-    cache_key = f"{team_id}:{year}:panels:v6"
+    cache_key = f"{team_id}:{year}:panels:v12"
     cached = _team_panels_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
@@ -692,14 +1004,15 @@ def fetch_team_stat_panels(
             })
 
         roster_groups = _fetch_team_roster(team_id)
-        leader_groups = _build_leader_groups(roster_groups, season_year=year)
-        if leader_groups:
+        leader_views = _build_leader_views(roster_groups, season_year=year)
+        if leader_views:
             panels.append({
                 "id": "leaders",
                 "label": "Team Leaders",
-                "panel_kind": "leaders_table",
+                "panel_kind": "toggle_leaders",
+                "default_view": leader_views[0]["id"],
                 "season_year": str(year),
-                "groups": leader_groups,
+                "views": leader_views,
             })
 
         if roster_groups:

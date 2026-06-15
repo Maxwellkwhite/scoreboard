@@ -7,34 +7,104 @@
     return (team && (team.win_color || team.color)) || '#1a2332';
   }
 
-  function pitcherLabel(pitcher) {
+  function isHeightValue(value) {
+    if (!value) {
+      return false;
+    }
+    var text = String(value).trim();
+    return /^\d+['-]/.test(text) || /\d'\s*\d/.test(text) || /\d+\s*ft/i.test(text);
+  }
+
+  function isThrowHand(value) {
+    if (!value || isHeightValue(value)) {
+      return false;
+    }
+    return /^(right|left|switch|r|l|s)$/i.test(String(value).trim());
+  }
+
+  function pitcherMetaLine(pitcher) {
     if (!pitcher || !pitcher.name) {
       return 'TBD';
     }
-    var hand = pitcher.throws ? ' (' + pitcher.throws.charAt(0) + ')' : '';
-    return pitcher.name + hand;
+    var parts = [];
+    if (isThrowHand(pitcher.throws)) {
+      parts.push(pitcher.throws);
+    }
+    var stats = pitcher.stats || {};
+    if (stats.W && stats.L) {
+      parts.push(stats.W + '-' + stats.L);
+    }
+    if (stats.ERA) {
+      parts.push(stats.ERA + ' ERA');
+    }
+    return parts.length ? parts.join(' · ') : '';
+  }
+
+  function pitcherInitials(pitcher, team) {
+    if (pitcher && pitcher.name) {
+      return pitcher.name.split(' ').map(function (part) {
+        return part.charAt(0);
+      }).join('').slice(0, 2).toUpperCase();
+    }
+    return team && team.abbr ? team.abbr.slice(0, 2).toUpperCase() : '?';
+  }
+
+  function pitcherPlaceholderHtml(label) {
+    return (
+      '<span class="game-card-pack__fan-headshot game-card-pack__fan-headshot--placeholder">' +
+        escapeHtml(label) +
+      '</span>'
+    );
+  }
+
+  function pitcherHeadshotHtml(pitcher, team) {
+    var label = pitcherInitials(pitcher, team);
+    if (!pitcher || !pitcher.headshot) {
+      return pitcherPlaceholderHtml(label);
+    }
+    return (
+      '<span class="game-card-pack__fan-headshot-wrap">' +
+        '<img class="game-card-pack__fan-headshot" src="' + escapeHtml(pitcher.headshot) +
+        '" alt="" width="40" height="40" loading="lazy">' +
+        '<span class="game-card-pack__fan-headshot game-card-pack__fan-headshot--placeholder game-card-pack__fan-headshot--fallback" hidden>' +
+          escapeHtml(label) +
+        '</span>' +
+      '</span>'
+    );
+  }
+
+  function buildPitcherFanCard(side, team, pitcher) {
+    var name = pitcher && pitcher.name ? pitcher.name : 'TBD';
+    var meta = pitcherMetaLine(pitcher);
+    return (
+      '<div class="game-card-pack__fan-card game-card-pack__fan-card--' + side + '-pitcher" style="--fan-color:' +
+        escapeHtml(team.color) + '">' +
+        pitcherHeadshotHtml(pitcher, team) +
+        '<span class="game-card-pack__fan-abbr">' + escapeHtml(team.abbr) + '</span>' +
+        '<span class="game-card-pack__fan-name">' + escapeHtml(name) + '</span>' +
+        (meta ? '<span class="game-card-pack__fan-detail">' + escapeHtml(meta) + '</span>' : '') +
+      '</div>'
+    );
   }
 
   function buildMetaFromGame(game) {
     var away = (game && game.away) || {};
     var home = (game && game.home) || {};
-    var awayRecord = away.record || '—';
-    var homeRecord = home.record || '—';
     return {
       away: {
         abbr: away.abbr || 'AWY',
         name: away.short_name || away.name || 'Away',
         logo: away.logo || '',
-        color: teamColor(away)
+        color: teamColor(away),
+        probable_pitcher: away.probable_pitcher || null
       },
       home: {
         abbr: home.abbr || 'HME',
         name: home.short_name || home.name || 'Home',
         logo: home.logo || '',
-        color: teamColor(home)
-      },
-      records: away.abbr + ' ' + awayRecord + ' · ' + home.abbr + ' ' + homeRecord,
-      pitchers: pitcherLabel(away.probable_pitcher) + ' vs ' + pitcherLabel(home.probable_pitcher)
+        color: teamColor(home),
+        probable_pitcher: home.probable_pitcher || null
+      }
     };
   }
 
@@ -58,10 +128,8 @@
     var away = readTeam('away');
     var home = readTeam('home');
     return {
-      away: away,
-      home: home,
-      records: away.abbr + ' — · ' + home.abbr + ' —',
-      pitchers: 'Pitchers TBD'
+      away: Object.assign({}, away, { probable_pitcher: null }),
+      home: Object.assign({}, home, { probable_pitcher: null })
     };
   }
 
@@ -128,14 +196,8 @@
           '<span class="game-card-pack__fan-abbr">' + escapeHtml(meta.home.abbr) + '</span>' +
           '<span class="game-card-pack__fan-name">' + escapeHtml(meta.home.name) + '</span>' +
         '</div>' +
-        '<div class="game-card-pack__fan-card game-card-pack__fan-card--records">' +
-          '<span class="game-card-pack__fan-kicker">Records</span>' +
-          '<span class="game-card-pack__fan-detail">' + escapeHtml(meta.records) + '</span>' +
-        '</div>' +
-        '<div class="game-card-pack__fan-card game-card-pack__fan-card--pitchers">' +
-          '<span class="game-card-pack__fan-kicker">Pitchers</span>' +
-          '<span class="game-card-pack__fan-detail">' + escapeHtml(meta.pitchers) + '</span>' +
-        '</div>' +
+        buildPitcherFanCard('away', meta.away, meta.away.probable_pitcher) +
+        buildPitcherFanCard('home', meta.home, meta.home.probable_pitcher) +
       '</div>'
     );
   }
@@ -176,6 +238,26 @@
     );
   }
 
+  function wireHeadshotFallbacks(layer) {
+    layer.querySelectorAll('.game-card-pack__fan-headshot-wrap img').forEach(function (img) {
+      img.addEventListener('error', function onHeadshotError() {
+        img.removeEventListener('error', onHeadshotError);
+        var wrap = img.parentNode;
+        if (!wrap) {
+          return;
+        }
+        var fallback = wrap.querySelector('.game-card-pack__fan-headshot--fallback');
+        if (!fallback) {
+          return;
+        }
+        var placeholder = fallback.cloneNode(true);
+        placeholder.removeAttribute('hidden');
+        img.remove();
+        wrap.appendChild(placeholder);
+      });
+    });
+  }
+
   function ensurePackLayer(card, meta) {
     var layer = card.querySelector('.game-card-pack-layer');
     if (layer) {
@@ -185,6 +267,7 @@
     layer.className = 'game-card-pack-layer';
     layer.setAttribute('aria-hidden', 'true');
     layer.innerHTML = buildPackLayerHtml(meta);
+    wireHeadshotFallbacks(layer);
     card.insertBefore(layer, card.firstChild);
     return layer;
   }
