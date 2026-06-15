@@ -83,6 +83,7 @@
       class="game-detail-section player-stats-summary-section"
       id="player-stats-section"
       data-player-id="{{ player.id }}"
+      data-is-pitcher="{{ 'true' if is_pitcher else 'false' }}"
       aria-busy="true"
     >
       <div class="player-stats-loading" id="player-stats-loading">

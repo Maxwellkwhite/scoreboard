@@ -8,7 +8,7 @@ Individual Game page:
 - Connection to ticket sales for upcoming games would be cool
 
 Player pages
--
+- Really slow loading of player summary part
 
 Team pages:
 - Better metrics

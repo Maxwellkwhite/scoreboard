@@ -210,6 +210,12 @@ _bwar_pitch_loaded_at: float = 0.0
 _player_lookup_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _stats_table_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _stat_panels_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_espn_categories_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_player_core_panels_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_player_visual_panel_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
+_player_percentile_panel_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
+_player_splits_panel_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
+_bbref_splits_cache: dict[str, tuple[float, pd.DataFrame | None]] = {}
 _batter_percentile_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
 _pitcher_percentile_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
 _discipline_table_cache: dict[tuple[int, str], tuple[float, pd.DataFrame | None]] = {}
@@ -307,6 +313,33 @@ def _normalize_splits_df(result: Any) -> pd.DataFrame | None:
     if result is None or not isinstance(result, pd.DataFrame) or result.empty:
         return None
     return result
+
+
+def _cached_get_splits(
+    bbref_id: str,
+    *,
+    year: int | None = None,
+    pitching_splits: bool = False,
+) -> pd.DataFrame | None:
+    kind = "pitch" if pitching_splits else "bat"
+    cache_key = f"{bbref_id}:{kind}:{year if year is not None else 'career'}"
+    cached = _bbref_splits_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    try:
+        if year is None:
+            result = get_splits(bbref_id, pitching_splits=pitching_splits)
+        else:
+            result = get_splits(bbref_id, year, pitching_splits=pitching_splits)
+    except Exception:
+        frame = None
+    else:
+        frame = _normalize_splits_df(result)
+
+    _bbref_splits_cache[cache_key] = (now, frame)
+    return frame
 
 
 def _get_pitching_bref_season(year: int) -> pd.DataFrame:
@@ -626,15 +659,11 @@ def _fetch_batting_stats_table(
     bbref_id: str,
     year: int,
 ) -> dict[str, Any] | None:
-    batting_splits = _normalize_splits_df(get_splits(bbref_id))
+    batting_splits = _cached_get_splits(bbref_id)
     if batting_splits is None:
         return None
 
-    season_splits = None
-    try:
-        season_splits = _normalize_splits_df(get_splits(bbref_id, year=year))
-    except Exception:
-        season_splits = None
+    season_splits = _cached_get_splits(bbref_id, year=year)
     season_row = (
         _split_row(season_splits, season_year=year, career=False)
         if season_splits is not None
@@ -730,7 +759,7 @@ def fetch_player_stats_table(
         year = date.today().year
 
     pitching = is_pitcher_position(position)
-    cache_key = f"{player_name.lower()}:{year}:{'pitch' if pitching else 'bat'}:v2"
+    cache_key = f"{player_name.lower()}:{year}:{'pitch' if pitching else 'bat'}:v4"
     cached = _stats_table_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
@@ -1990,29 +2019,17 @@ def _fetch_splits_panels(
     }
 
 
-def fetch_player_stat_panels(
-    player_id: str,
-    *,
-    player_name: str,
-    position: str | None,
-    season_year: str | int | None = None,
-) -> list[dict[str, Any]]:
-    if not player_id:
-        return []
-
-    year = None
+def _resolve_panel_year(season_year: str | int | None) -> int:
     if season_year is not None:
         try:
-            year = int(season_year)
+            return int(season_year)
         except (TypeError, ValueError):
-            year = date.today().year
-    if year is None:
-        year = date.today().year
+            pass
+    return date.today().year
 
-    kind = "pitching" if is_pitcher_position(position) else "batting"
-    pitching = kind == "pitching"
-    cache_key = f"{player_id}:{year}:{kind}:v13"
-    cached = _stat_panels_cache.get(cache_key)
+
+def _fetch_espn_stat_categories(player_id: str) -> dict[str, Any]:
+    cached = _espn_categories_cache.get(player_id)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
         return cached[1]
@@ -2033,20 +2050,17 @@ def fetch_player_stat_panels(
     except requests.RequestException:
         pass
 
-    player_record = _lookup_player_record(player_name) if player_name else None
-    bbref_id = (player_record or {}).get("bbref_id")
-    mlbam_id = (player_record or {}).get("mlbam_id")
+    _espn_categories_cache[player_id] = (now, categories)
+    return categories
 
-    player_stats_panel = _build_player_stats_panel(
-        categories,
-        pitching=pitching,
-        season_year=year,
-    ) or {
+
+def _empty_player_stats_panel(*, pitching: bool, season_year: int) -> dict[str, Any]:
+    return {
         "id": "player_stats",
         "label": "Player Stats",
         "panel_kind": "toggle_stat_bars",
         "default_view": "pitching" if pitching else "batting",
-        "season_year": str(year),
+        "season_year": str(season_year),
         "views": [{
             "id": "pitching" if pitching else "batting",
             "label": "Pitching" if pitching else "Batting",
@@ -2054,34 +2068,194 @@ def fetch_player_stat_panels(
         }],
     }
 
-    splits_panel = (
-        _fetch_splits_panels(bbref_id, pitching=pitching, season_year=year)
-        if bbref_id
-        else {
-            "id": "splits",
-            "label": "Splits",
-            "panel_kind": "toggle_splits",
-            "default_view": "regular",
-            "views": [
-                {"id": "regular", "label": "Regular", "groups": []},
-                {"id": "advanced", "label": "Advanced", "groups": []},
-            ],
-        }
-    )
 
+def _empty_splits_panel() -> dict[str, Any]:
+    return {
+        "id": "splits",
+        "label": "Splits",
+        "panel_kind": "toggle_splits",
+        "default_view": "regular",
+        "views": [
+            {"id": "regular", "label": "Regular", "groups": []},
+            {"id": "advanced", "label": "Advanced", "groups": []},
+        ],
+    }
+
+
+def fetch_player_core_stat_panels(
+    player_id: str,
+    *,
+    player_name: str,
+    position: str | None,
+    season_year: str | int | None = None,
+) -> list[dict[str, Any]]:
+    if not player_id:
+        return []
+
+    year = _resolve_panel_year(season_year)
+    pitching = is_pitcher_position(position)
+    kind = "pitching" if pitching else "batting"
+    cache_key = f"{player_id}:{year}:{kind}:core:v1"
+    cached = _player_core_panels_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    categories = _fetch_espn_stat_categories(player_id)
+    player_stats_panel = _build_player_stats_panel(
+        categories,
+        pitching=pitching,
+        season_year=year,
+    ) or _empty_player_stats_panel(pitching=pitching, season_year=year)
+    panels = [player_stats_panel]
+    _player_core_panels_cache[cache_key] = (now, panels)
+    return panels
+
+
+def fetch_player_visual_stat_panel(
+    player_id: str,
+    *,
+    player_name: str,
+    position: str | None,
+    season_year: str | int | None = None,
+) -> dict[str, Any] | None:
+    if not player_id:
+        return None
+
+    year = _resolve_panel_year(season_year)
+    pitching = is_pitcher_position(position)
+    kind = "pitching" if pitching else "batting"
+    cache_key = f"{player_id}:{year}:{kind}:visual:v1"
+    cached = _player_visual_panel_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    player_record = _lookup_player_record(player_name) if player_name else None
+    mlbam_id = (player_record or {}).get("mlbam_id")
+    panel = (
+        _fetch_pitch_mix_panel(mlbam_id=mlbam_id, season_year=year)
+        if pitching
+        else _fetch_spray_chart_panel(mlbam_id=mlbam_id, season_year=year)
+    )
+    _player_visual_panel_cache[cache_key] = (now, panel)
+    return panel
+
+
+def fetch_player_percentile_stat_panel(
+    player_id: str,
+    *,
+    player_name: str,
+    position: str | None,
+    season_year: str | int | None = None,
+) -> dict[str, Any] | None:
+    if not player_id:
+        return None
+
+    year = _resolve_panel_year(season_year)
+    pitching = is_pitcher_position(position)
+    kind = "pitching" if pitching else "batting"
+    cache_key = f"{player_id}:{year}:{kind}:percentile:v1"
+    cached = _player_percentile_panel_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    player_record = _lookup_player_record(player_name) if player_name else None
+    mlbam_id = (player_record or {}).get("mlbam_id")
     if pitching:
-        visual_panel = _fetch_pitch_mix_panel(mlbam_id=mlbam_id, season_year=year)
-        percentile_panel = _attach_percentile_year_options(
+        panel = _attach_percentile_year_options(
             _fetch_pitcher_percentile_panel(mlbam_id=mlbam_id, season_year=year),
             debut_year=(player_record or {}).get("debut_year"),
         )
-        panels = [player_stats_panel, visual_panel, percentile_panel, splits_panel]
     else:
-        visual_panel = _fetch_spray_chart_panel(mlbam_id=mlbam_id, season_year=year)
-        percentile_panel = _attach_percentile_year_options(
+        panel = _attach_percentile_year_options(
             _fetch_batter_percentile_panel(mlbam_id=mlbam_id, season_year=year),
             debut_year=(player_record or {}).get("debut_year"),
         )
-        panels = [player_stats_panel, visual_panel, percentile_panel, splits_panel]
+    _player_percentile_panel_cache[cache_key] = (now, panel)
+    return panel
+
+
+def fetch_player_splits_stat_panel(
+    player_id: str,
+    *,
+    player_name: str,
+    position: str | None,
+    season_year: str | int | None = None,
+) -> dict[str, Any] | None:
+    if not player_id:
+        return None
+
+    year = _resolve_panel_year(season_year)
+    pitching = is_pitcher_position(position)
+    kind = "pitching" if pitching else "batting"
+    cache_key = f"{player_id}:{year}:{kind}:splits:v1"
+    cached = _player_splits_panel_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    player_record = _lookup_player_record(player_name) if player_name else None
+    bbref_id = (player_record or {}).get("bbref_id")
+    panel = (
+        _fetch_splits_panels(bbref_id, pitching=pitching, season_year=year)
+        if bbref_id
+        else _empty_splits_panel()
+    )
+    _player_splits_panel_cache[cache_key] = (now, panel)
+    return panel
+
+
+def fetch_player_stat_panels(
+    player_id: str,
+    *,
+    player_name: str,
+    position: str | None,
+    season_year: str | int | None = None,
+) -> list[dict[str, Any]]:
+    if not player_id:
+        return []
+
+    year = _resolve_panel_year(season_year)
+    pitching = is_pitcher_position(position)
+    kind = "pitching" if pitching else "batting"
+    cache_key = f"{player_id}:{year}:{kind}:all:v17"
+    cached = _stat_panels_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    panels: list[dict[str, Any]] = []
+    panels.extend(fetch_player_core_stat_panels(
+        player_id,
+        player_name=player_name,
+        position=position,
+        season_year=year,
+    ))
+    visual_panel = fetch_player_visual_stat_panel(
+        player_id,
+        player_name=player_name,
+        position=position,
+        season_year=year,
+    )
+    if visual_panel:
+        panels.append(visual_panel)
+    percentile_panel = fetch_player_percentile_stat_panel(
+        player_id,
+        player_name=player_name,
+        position=position,
+        season_year=year,
+    )
+    if percentile_panel:
+        panels.append(percentile_panel)
+    splits_panel = fetch_player_splits_stat_panel(
+        player_id,
+        player_name=player_name,
+        position=position,
+        season_year=year,
+    )
+    if splits_panel:
+        panels.append(splits_panel)
     _stat_panels_cache[cache_key] = (now, panels)
     return panels

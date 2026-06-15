@@ -1593,9 +1593,9 @@ def fetch_player_extra_stat_panels(
     season_year: str | None = None,
 ) -> list[dict[str, Any]]:
     try:
-        from player_stats import fetch_player_stat_panels
+        from player_stats import fetch_player_core_stat_panels
 
-        return fetch_player_stat_panels(
+        return fetch_player_core_stat_panels(
             player_id,
             player_name=player_name or "",
             position=position,
@@ -1603,6 +1603,66 @@ def fetch_player_extra_stat_panels(
         )
     except Exception:
         return []
+
+
+def fetch_player_visual_stat_panel(
+    player_id: str,
+    *,
+    player_name: str | None = None,
+    position: str | None = None,
+    season_year: str | None = None,
+) -> dict[str, Any] | None:
+    try:
+        from player_stats import fetch_player_visual_stat_panel as _fetch_visual
+
+        return _fetch_visual(
+            player_id,
+            player_name=player_name or "",
+            position=position,
+            season_year=season_year,
+        )
+    except Exception:
+        return None
+
+
+def fetch_player_percentile_stat_panel(
+    player_id: str,
+    *,
+    player_name: str | None = None,
+    position: str | None = None,
+    season_year: str | None = None,
+) -> dict[str, Any] | None:
+    try:
+        from player_stats import fetch_player_percentile_stat_panel as _fetch_percentile
+
+        return _fetch_percentile(
+            player_id,
+            player_name=player_name or "",
+            position=position,
+            season_year=season_year,
+        )
+    except Exception:
+        return None
+
+
+def fetch_player_splits_stat_panel(
+    player_id: str,
+    *,
+    player_name: str | None = None,
+    position: str | None = None,
+    season_year: str | None = None,
+) -> dict[str, Any] | None:
+    try:
+        from player_stats import fetch_player_splits_stat_panel as _fetch_splits
+
+        return _fetch_splits(
+            player_id,
+            player_name=player_name or "",
+            position=position,
+            season_year=season_year,
+        )
+    except Exception:
+        return None
 
 
 def fetch_player_percentile_ranks(

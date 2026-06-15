@@ -71,6 +71,27 @@ ckeditor = CKEditor(app)
 Bootstrap5(app)
 
 
+def _start_league_cache_warmup() -> None:
+    import threading
+
+    def _warm() -> None:
+        try:
+            from league_player_averages import warm_league_cache_for_today
+
+            warm_league_cache_for_today()
+        except Exception:
+            logging.getLogger(__name__).exception("League cache warm-up failed")
+
+    threading.Thread(
+        target=_warm,
+        name="league-cache-warmup",
+        daemon=True,
+    ).start()
+
+
+_start_league_cache_warmup()
+
+
 @app.template_filter('linkify_players')
 def linkify_players_filter(text, player_map=None):
     from espn_mlb import linkify_player_names
@@ -1141,18 +1162,48 @@ def api_mlb_team(team_id):
 @app.route('/player/<player_id>', methods=['GET'], endpoint='mlb_player_page')
 def mlb_player_page(player_id):
     from espn_mlb import fetch_player
+    from player_stats import is_pitcher_position
 
     try:
         player = fetch_player(str(player_id), include_stats=False)
     except (requests.RequestException, ValueError):
         abort(404)
 
-    return render_template('player.html', player=player)
+    return render_template(
+        'player.html',
+        player=player,
+        is_pitcher=is_pitcher_position(player.get('position')),
+    )
 
 
 @app.route('/api/mlb/player/<player_id>/stats', methods=['GET'], endpoint='api_mlb_player_stats')
 def api_mlb_player_stats(player_id):
-    from espn_mlb import fetch_player, fetch_player_extra_stat_panels, fetch_player_stats
+    from espn_mlb import fetch_player, fetch_player_extra_stat_panels
+
+    try:
+        player = fetch_player(str(player_id), include_stats=False)
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Player not found'}), 404
+
+    stat_panels = fetch_player_extra_stat_panels(
+        str(player_id),
+        player_name=player.get('name') or '',
+        position=player.get('position'),
+        season_year=player.get('season_year'),
+    )
+    if not stat_panels:
+        return jsonify({'error': 'Stats unavailable'}), 404
+
+    return jsonify({'stat_panels': stat_panels})
+
+
+@app.route(
+    '/api/mlb/player/<player_id>/stats/summary',
+    methods=['GET'],
+    endpoint='api_mlb_player_stats_summary',
+)
+def api_mlb_player_stats_summary(player_id):
+    from espn_mlb import fetch_player, fetch_player_stats
 
     try:
         player = fetch_player(str(player_id), include_stats=False)
@@ -1164,19 +1215,85 @@ def api_mlb_player_stats(player_id):
         player.get('season_year'),
         position=player.get('position'),
     )
-    stat_panels = fetch_player_extra_stat_panels(
+    if not stats_table:
+        return jsonify({'error': 'Summary unavailable'}), 404
+
+    return jsonify({'stats_table': stats_table})
+
+
+@app.route(
+    '/api/mlb/player/<player_id>/stats/visual',
+    methods=['GET'],
+    endpoint='api_mlb_player_stats_visual',
+)
+def api_mlb_player_stats_visual(player_id):
+    from espn_mlb import fetch_player, fetch_player_visual_stat_panel
+
+    try:
+        player = fetch_player(str(player_id), include_stats=False)
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Player not found'}), 404
+
+    stat_panel = fetch_player_visual_stat_panel(
         str(player_id),
         player_name=player.get('name') or '',
         position=player.get('position'),
         season_year=player.get('season_year'),
     )
-    if not stats_table and not stat_panels:
-        return jsonify({'error': 'Stats unavailable'}), 404
+    if not stat_panel:
+        return jsonify({'error': 'Visual stats unavailable'}), 404
 
-    return jsonify({
-        'stats_table': stats_table,
-        'stat_panels': stat_panels,
-    })
+    return jsonify({'stat_panel': stat_panel})
+
+
+@app.route(
+    '/api/mlb/player/<player_id>/stats/percentiles',
+    methods=['GET'],
+    endpoint='api_mlb_player_stats_percentiles',
+)
+def api_mlb_player_stats_percentiles(player_id):
+    from espn_mlb import fetch_player, fetch_player_percentile_stat_panel
+
+    try:
+        player = fetch_player(str(player_id), include_stats=False)
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Player not found'}), 404
+
+    stat_panel = fetch_player_percentile_stat_panel(
+        str(player_id),
+        player_name=player.get('name') or '',
+        position=player.get('position'),
+        season_year=player.get('season_year'),
+    )
+    if not stat_panel:
+        return jsonify({'error': 'Percentiles unavailable'}), 404
+
+    return jsonify({'stat_panel': stat_panel})
+
+
+@app.route(
+    '/api/mlb/player/<player_id>/stats/splits',
+    methods=['GET'],
+    endpoint='api_mlb_player_stats_splits',
+)
+def api_mlb_player_stats_splits(player_id):
+    from espn_mlb import fetch_player, fetch_player_splits_stat_panel
+
+    try:
+        player = fetch_player(str(player_id), include_stats=False)
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Player not found'}), 404
+
+    stat_panel = fetch_player_splits_stat_panel(
+        str(player_id),
+        player_name=player.get('name') or '',
+        position=player.get('position'),
+        season_year=player.get('season_year'),
+    )
+    if not stat_panel:
+        return jsonify({'error': 'Splits unavailable'}), 404
+
+    return jsonify({'stat_panel': stat_panel})
 
 
 @app.route(

@@ -3,6 +3,9 @@
   if (!section) return;
 
   var playerId = section.getAttribute('data-player-id');
+  var isPitcher = section.getAttribute('data-is-pitcher') === 'true';
+  var visualPanelId = isPitcher ? 'pitch_mix' : 'spray_chart';
+  var visualPanelLabel = isPitcher ? 'Pitch Mix' : 'Batting Metrics';
   var loadingEl = document.getElementById('player-stats-loading');
   var errorEl = document.getElementById('player-stats-error');
   var summaryEl = document.getElementById('player-stats-summary');
@@ -1169,6 +1172,10 @@
       );
     }
 
+    if (panel.panel_kind === 'loading') {
+      return buildPanelLoadingHtml();
+    }
+
     if (panel.stats_table) {
       return '<div class="player-panel-body">' + buildSeasonCareerTableHtml(panel.stats_table) + '</div>';
     }
@@ -1197,77 +1204,233 @@
     });
   }
 
+  function panelClassFor(panel) {
+    var panelClass = 'game-detail-section game-detail-panel player-stats-panel';
+    if (panel.panel_kind === 'percentile_ranks') {
+      panelClass += ' player-stats-panel--percentile';
+    }
+    if (panel.panel_kind === 'toggle_stat_bars') {
+      panelClass += ' team-stats-panel';
+    }
+    return panelClass;
+  }
+
+  var PANEL_ORDER = ['player_stats', visualPanelId, 'percentile_ranks', 'splits'];
+  var activePanelId = null;
+  var tabNavigationBound = false;
+
+  function panelSortIndex(panelId) {
+    var idx = PANEL_ORDER.indexOf(panelId);
+    return idx === -1 ? PANEL_ORDER.length : idx;
+  }
+
+  function buildPanelLoadingHtml() {
+    return (
+      '<div class="team-panel-body team-panel-body--loading">' +
+        '<div class="player-stats-loading">' +
+          '<div class="player-stats-loading__ball" aria-hidden="true"></div>' +
+          '<p class="player-stats-loading__text">Loading…</p>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function buildTabHtml(panel, isActive) {
+    return (
+      '<button type="button" class="game-detail-tab' +
+      (isActive ? ' is-active' : '') +
+      '" data-panel="' + escapeHtml(panel.id) + '"' +
+      ' aria-selected="' + (isActive ? 'true' : 'false') + '">' +
+      escapeHtml(panel.label) +
+      '</button>'
+    );
+  }
+
+  function buildPanelSectionHtml(panel, isActive) {
+    return (
+      '<section class="' + panelClassFor(panel) + '"' +
+      ' data-panel="' + escapeHtml(panel.id) + '"' +
+      (isActive ? '' : ' hidden') + '>' +
+      buildPanelInnerHtml(panel) +
+      '</section>'
+    );
+  }
+
+  function findPanelInsertBefore(panelId, container, selector) {
+    var items = container.querySelectorAll(selector);
+    for (var i = 0; i < items.length; i++) {
+      if (panelSortIndex(items[i].getAttribute('data-panel')) > panelSortIndex(panelId)) {
+        return items[i];
+      }
+    }
+    return null;
+  }
+
+  function insertTab(panel, isActive) {
+    var insertBefore = findPanelInsertBefore(panel.id, tabsEl, '.game-detail-tab');
+    var tabHtml = buildTabHtml(panel, isActive);
+    if (insertBefore) {
+      insertBefore.insertAdjacentHTML('beforebegin', tabHtml);
+    } else {
+      tabsEl.insertAdjacentHTML('beforeend', tabHtml);
+    }
+  }
+
+  function insertPanelSection(panel, isActive) {
+    var insertBefore = findPanelInsertBefore(panel.id, panelsEl, '.player-stats-panel');
+    var sectionHtml = buildPanelSectionHtml(panel, isActive);
+    if (insertBefore) {
+      insertBefore.insertAdjacentHTML('beforebegin', sectionHtml);
+    } else {
+      panelsEl.insertAdjacentHTML('beforeend', sectionHtml);
+    }
+    return panelsEl.querySelector('.player-stats-panel[data-panel="' + panel.id + '"]');
+  }
+
+  function wirePanelElement(panelEl) {
+    if (!panelEl) return;
+    initPanelToggles(panelEl);
+    initPercentileYearSelects();
+  }
+
+  function setActivePanel(panelId) {
+    activePanelId = panelId;
+    if (!tabsEl || !panelsEl) return;
+
+    tabsEl.querySelectorAll('.game-detail-tab').forEach(function (tab) {
+      var isActive = tab.getAttribute('data-panel') === panelId;
+      tab.classList.toggle('is-active', isActive);
+      tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+    panelsEl.querySelectorAll('.player-stats-panel').forEach(function (panel) {
+      panel.hidden = panel.getAttribute('data-panel') !== panelId;
+    });
+  }
+
+  function bindTabNavigation() {
+    if (tabNavigationBound || !tabsEl) return;
+    tabNavigationBound = true;
+
+    tabsEl.addEventListener('click', function (event) {
+      var btn = event.target.closest('.game-detail-tab');
+      if (!btn || !tabsEl.contains(btn)) return;
+      var panelId = btn.getAttribute('data-panel');
+      if (!panelId) return;
+
+      setActivePanel(panelId);
+      requestAnimationFrame(function () {
+        var panel = panelsEl.querySelector('.player-stats-panel[data-panel="' + panelId + '"]');
+        if (panel && !panel.hidden) {
+          panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+  }
+
+  function upsertPanel(panel) {
+    if (!tabsEl || !panelsEl || !panel || !panel.id) return;
+
+    var existingTab = tabsEl.querySelector('.game-detail-tab[data-panel="' + panel.id + '"]');
+    var existingPanel = panelsEl.querySelector('.player-stats-panel[data-panel="' + panel.id + '"]');
+    var shouldActivate = activePanelId === panel.id;
+
+    if (!existingTab) {
+      insertTab(panel, shouldActivate);
+    } else {
+      existingTab.textContent = panel.label;
+    }
+
+    if (existingPanel) {
+      existingPanel.className = panelClassFor(panel);
+      existingPanel.innerHTML = buildPanelInnerHtml(panel);
+      wirePanelElement(existingPanel);
+    } else {
+      wirePanelElement(insertPanelSection(panel, shouldActivate));
+    }
+
+    tabsEl.hidden = false;
+    bindTabNavigation();
+  }
+
+  function initCorePanels(statPanels) {
+    if (!tabsEl || !panelsEl) return;
+
+    var panels = (statPanels || []).slice().sort(function (a, b) {
+      return panelSortIndex(a.id) - panelSortIndex(b.id);
+    });
+
+    tabsEl.innerHTML = '';
+    panelsEl.innerHTML = '';
+    activePanelId = panels[0] ? panels[0].id : null;
+
+    panels.forEach(function (panel, index) {
+      insertTab(panel, index === 0);
+      wirePanelElement(insertPanelSection(panel, index === 0));
+    });
+
+    upsertPanel({ id: visualPanelId, label: visualPanelLabel, panel_kind: 'loading' });
+    upsertPanel({ id: 'percentile_ranks', label: 'Percentile Rankings', panel_kind: 'loading' });
+    upsertPanel({ id: 'splits', label: 'Splits', panel_kind: 'loading' });
+
+    if (activePanelId) {
+      setActivePanel(activePanelId);
+    }
+
+    tabsEl.hidden = false;
+    bindTabNavigation();
+  }
+
+  function fulfillStagedPanel(panelId, panel) {
+    if (panel) {
+      upsertPanel(panel);
+      return;
+    }
+
+    var existingPanel = panelsEl.querySelector('.player-stats-panel[data-panel="' + panelId + '"]');
+    if (existingPanel) {
+      existingPanel.innerHTML =
+        '<div class="team-panel-body"><p class="player-splits-empty">Unavailable right now.</p></div>';
+    }
+  }
+
+  function fetchPlayerStats(path) {
+    return fetch('/api/mlb/player/' + encodeURIComponent(playerId) + path).then(function (response) {
+      if (!response.ok) throw new Error('Stats unavailable');
+      return response.json();
+    });
+  }
+
+  function loadStagedPanels() {
+    fetchPlayerStats('/stats/visual')
+      .then(function (payload) {
+        fulfillStagedPanel(visualPanelId, payload.stat_panel);
+      })
+      .catch(function () {
+        fulfillStagedPanel(visualPanelId, null);
+      });
+
+    fetchPlayerStats('/stats/percentiles')
+      .then(function (payload) {
+        fulfillStagedPanel('percentile_ranks', payload.stat_panel);
+      })
+      .catch(function () {
+        fulfillStagedPanel('percentile_ranks', null);
+      });
+
+    fetchPlayerStats('/stats/splits')
+      .then(function (payload) {
+        fulfillStagedPanel('splits', payload.stat_panel);
+      })
+      .catch(function () {
+        fulfillStagedPanel('splits', null);
+      });
+  }
+
   function renderSummary(statsTable) {
     var html = buildSeasonCareerTableHtml(statsTable);
     if (!html) return false;
     summaryEl.innerHTML = html;
     return true;
-  }
-
-  function initStatPanels(statPanels) {
-    if (!tabsEl || !panelsEl || !statPanels.length) return;
-
-    tabsEl.innerHTML = statPanels.map(function (panel, index) {
-      return (
-        '<button type="button" class="game-detail-tab' +
-        (index === 0 ? ' is-active' : '') +
-        '" data-panel="' + escapeHtml(panel.id) + '"' +
-        ' aria-selected="' + (index === 0 ? 'true' : 'false') + '">' +
-        escapeHtml(panel.label) +
-        '</button>'
-      );
-    }).join('');
-
-    panelsEl.innerHTML = statPanels.map(function (panel, index) {
-      var panelClass = 'game-detail-section game-detail-panel player-stats-panel';
-      if (panel.panel_kind === 'percentile_ranks') {
-        panelClass += ' player-stats-panel--percentile';
-      }
-      if (panel.panel_kind === 'toggle_stat_bars') {
-        panelClass += ' team-stats-panel';
-      }
-      return (
-        '<section class="' + panelClass + '"' +
-        ' data-panel="' + escapeHtml(panel.id) + '"' +
-        (index === 0 ? '' : ' hidden') + '>' +
-        buildPanelInnerHtml(panel) +
-        '</section>'
-      );
-    }).join('');
-
-    tabsEl.hidden = false;
-    initPanelToggles(panelsEl);
-    initPercentileYearSelects();
-
-    var buttons = tabsEl.querySelectorAll('.game-detail-tab');
-    var panels = panelsEl.querySelectorAll('.player-stats-panel');
-
-    function showPanel(panelId) {
-      buttons.forEach(function (btn) {
-        var isActive = btn.getAttribute('data-panel') === panelId;
-        btn.classList.toggle('is-active', isActive);
-        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-      });
-      panels.forEach(function (panel) {
-        panel.hidden = panel.getAttribute('data-panel') !== panelId;
-      });
-    }
-
-    function scrollToPanel(panelId) {
-      var panel = panelsEl.querySelector('.player-stats-panel[data-panel="' + panelId + '"]');
-      if (!panel || panel.hidden) return;
-      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    buttons.forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var panelId = btn.getAttribute('data-panel');
-        showPanel(panelId);
-        requestAnimationFrame(function () {
-          scrollToPanel(panelId);
-        });
-      });
-    });
   }
 
   function finishLoading() {
@@ -1288,11 +1451,27 @@
     summaryEl.hidden = false;
   }
 
-  function showStats(payload) {
-    var hasSummary = payload.stats_table && renderSummary(payload.stats_table);
+  function loadSummary() {
+    summaryEl.hidden = false;
+    summaryEl.innerHTML = buildPanelLoadingHtml();
+
+    fetchPlayerStats('/stats/summary')
+      .then(function (payload) {
+        if (payload.stats_table && renderSummary(payload.stats_table)) {
+          summaryEl.hidden = false;
+          return;
+        }
+        showSummaryUnavailable();
+      })
+      .catch(function () {
+        showSummaryUnavailable();
+      });
+  }
+
+  function showCoreStats(payload) {
     var hasPanels = payload.stat_panels && payload.stat_panels.length;
 
-    if (!hasSummary && !hasPanels) {
+    if (!hasPanels) {
       showError();
       return;
     }
@@ -1300,21 +1479,13 @@
     loadingEl.hidden = true;
     if (errorEl) errorEl.hidden = true;
 
-    if (hasSummary) {
-      summaryEl.hidden = false;
-    } else {
-      showSummaryUnavailable();
-    }
-
-    initStatPanels(payload.stat_panels || []);
+    initCorePanels(payload.stat_panels);
     finishLoading();
+    loadSummary();
+    loadStagedPanels();
   }
 
-  fetch('/api/mlb/player/' + encodeURIComponent(playerId) + '/stats')
-    .then(function (response) {
-      if (!response.ok) throw new Error('Stats unavailable');
-      return response.json();
-    })
-    .then(showStats)
+  fetchPlayerStats('/stats')
+    .then(showCoreStats)
     .catch(showError);
 })();
