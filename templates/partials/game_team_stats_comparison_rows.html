@@ -1,0 +1,43 @@
+{% for row in rows %}
+{% if row.away_raw or row.home_raw %}
+{% set away_raw = row.away_raw %}
+{% set home_raw = row.home_raw %}
+{% set away_num = row.away_num %}
+{% set home_num = row.home_num %}
+{% set lower_is_better = row.lower_is_better %}
+{% if away_num is not none and home_num is not none %}
+  {% if lower_is_better %}
+    {% set away_bar = home_num %}
+    {% set home_bar = away_num %}
+  {% else %}
+    {% set away_bar = away_num %}
+    {% set home_bar = home_num %}
+  {% endif %}
+  {% set stat_total = away_bar + home_bar %}
+{% else %}
+  {% set stat_total = 0 %}
+{% endif %}
+<div class="team-stats__row">
+  <div class="team-stats__values">
+    <div class="team-stats__cell team-stats__cell--away">
+      <span class="team-stats__value">{{ away_raw if away_raw is not none else '—' }}</span>
+    </div>
+    <div class="team-stats__label">{{ row.label }}</div>
+    <div class="team-stats__cell team-stats__cell--home">
+      <span class="team-stats__value">{{ home_raw if home_raw is not none else '—' }}</span>
+    </div>
+  </div>
+  {% if stat_total > 0 %}
+  <div class="team-stats__bar" role="presentation">
+    <span class="team-stats__bar-away" style="width: {{ (away_bar / stat_total * 100) | round(1) }}%;"></span>
+    <span class="team-stats__bar-home" style="width: {{ (home_bar / stat_total * 100) | round(1) }}%;"></span>
+  </div>
+  {% elif away_num is not none and home_num is not none %}
+  <div class="team-stats__bar team-stats__bar--even" role="presentation">
+    <span class="team-stats__bar-away" style="width: 50%;"></span>
+    <span class="team-stats__bar-home" style="width: 50%;"></span>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endfor %}

@@ -538,6 +538,9 @@ def _parse_team_box(boxscore_teams: list[dict[str, Any]] | None) -> list[dict[st
             "batting_runs": _stat_display(batting, "runs"),
             "batting_strikeouts": _stat_display(batting, "strikeouts"),
             "batting_walks": _stat_display(batting, "walks"),
+            "batting_home_runs": _stat_display(batting, "homeRuns"),
+            "batting_doubles": _stat_display(batting, "doubles"),
+            "batting_rbi": _stat_display(batting, "RBIs"),
             "pitching_hits": _stat_display(pitching, "hits"),
             "pitching_strikeouts": _stat_display(pitching, "strikeouts"),
             "pitching_walks": _stat_display(pitching, "walks"),
@@ -1310,7 +1313,7 @@ def parse_game_detail(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def attach_preview_team_panels(game: dict[str, Any]) -> None:
-    """Attach roster and leader panels for pre-game pages (not used on live poll API)."""
+    """Attach roster and leader panels for pre-game preview API."""
     if game.get("status_state") != "pre":
         return
 
@@ -1321,31 +1324,156 @@ def attach_preview_team_panels(game: dict[str, Any]) -> None:
 
     try:
         from team_stats import (
-            fetch_team_leaders_stat_panel,
+            build_matchup_leaders_panel,
             fetch_team_roster_stat_panel,
         )
     except ImportError:
         return
 
+    matchup_leaders = build_matchup_leaders_panel(
+        away_id,
+        home_id,
+        away_team=game.get("away"),
+        home_team=game.get("home"),
+    )
+
     team_panels: dict[str, Any] = {}
     for side, team_id in (("away", away_id), ("home", home_id)):
-        leaders = fetch_team_leaders_stat_panel(team_id)
         roster = fetch_team_roster_stat_panel(team_id)
-        if not leaders and not roster:
+        if not roster:
             continue
         team_panels[side] = {
-            "leaders": leaders,
             "roster": roster,
         }
 
+    preview = game.setdefault("preview", {})
+    if matchup_leaders:
+        preview["matchup_leaders"] = matchup_leaders
     if team_panels:
-        preview = game.setdefault("preview", {})
         preview["team_panels"] = team_panels
 
+    return None
+
+
+def attach_preview_probable_pitchers(game: dict[str, Any]) -> None:
+    """Enrich probable pitcher season stats from ESPN (preview pitchers API only)."""
+    if game.get("status_state") != "pre":
+        return
     _enrich_probable_pitchers(game)
 
 
-    return None
+def build_season_team_matchup(game: dict[str, Any]) -> dict[str, Any] | None:
+    """Build batting/pitching/fielding comparison rows from ESPN team statistics."""
+    away_id = str((game.get("away") or {}).get("id") or "")
+    home_id = str((game.get("home") or {}).get("id") or "")
+    if not away_id or not home_id:
+        return None
+
+    try:
+        from concurrent.futures import ThreadPoolExecutor
+
+        from team_stats import (
+            _BATTING_DETAIL_SPECS,
+            _FIELDING_DETAIL_SPECS,
+            _PITCHING_DETAIL_SPECS,
+            _fetch_team_statistics,
+            _format_stat_value,
+            _parse_number,
+            _stat_lower_is_better,
+        )
+    except ImportError:
+        return None
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            away_future = executor.submit(_fetch_team_statistics, away_id)
+            home_future = executor.submit(_fetch_team_statistics, home_id)
+            away_stats = away_future.result()
+            home_stats = home_future.result()
+    except Exception:
+        return None
+
+    def build_rows(
+        specs: tuple[tuple[str, str], ...],
+        category: str,
+        away_category: dict[str, Any],
+        home_category: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for stat_name, label in specs:
+            away_value = away_category.get(stat_name)
+            home_value = home_category.get(stat_name)
+            away_num = _parse_number(away_value)
+            home_num = _parse_number(home_value)
+            if away_num is None and home_num is None:
+                continue
+            rows.append({
+                "label": label,
+                "away_raw": (
+                    _format_stat_value(stat_name, away_value)
+                    if away_value is not None
+                    else None
+                ),
+                "home_raw": (
+                    _format_stat_value(stat_name, home_value)
+                    if home_value is not None
+                    else None
+                ),
+                "away_num": away_num,
+                "home_num": home_num,
+                "lower_is_better": _stat_lower_is_better(category, stat_name),
+            })
+        return rows
+
+    views: list[dict[str, Any]] = []
+
+    batting_rows = build_rows(
+        _BATTING_DETAIL_SPECS,
+        "batting",
+        away_stats.get("batting") or {},
+        home_stats.get("batting") or {},
+    )
+    if batting_rows:
+        views.append({"id": "batting", "label": "Batting", "rows": batting_rows})
+
+    pitching_specs = tuple(
+        spec for spec in _PITCHING_DETAIL_SPECS
+        if spec[0] not in {"wins", "losses"}
+    )
+    pitching_rows = build_rows(
+        pitching_specs,
+        "pitching",
+        away_stats.get("pitching") or {},
+        home_stats.get("pitching") or {},
+    )
+    if pitching_rows:
+        views.append({"id": "pitching", "label": "Pitching", "rows": pitching_rows})
+
+    fielding_rows = build_rows(
+        _FIELDING_DETAIL_SPECS,
+        "fielding",
+        away_stats.get("fielding") or {},
+        home_stats.get("fielding") or {},
+    )
+    if fielding_rows:
+        views.append({"id": "fielding", "label": "Fielding", "rows": fielding_rows})
+
+    if not views:
+        return None
+
+    return {
+        "default_view": views[0]["id"],
+        "views": views,
+    }
+
+
+def attach_preview_season_team_stats(game: dict[str, Any]) -> None:
+    if game.get("status_state") != "pre":
+        return
+    matchup = build_season_team_matchup(game)
+    if matchup:
+        preview = game.setdefault("preview", {})
+        preview["season_team_matchup"] = matchup
 
 
 def _normalize_probable_pitcher_stats(stats: dict[str, str]) -> dict[str, str]:
@@ -1390,6 +1518,7 @@ def _probable_pitcher_cells_from_espn_categories(
         "L": "L",
         "ERA": "ERA",
         "WHIP": "WHIP",
+        "HR": "HR",
     }
     for source, target in mapping.items():
         value = row.get(source)
@@ -1434,44 +1563,13 @@ def parse_innings_stat_value(value: Any) -> float | None:
 
 def _enrich_probable_pitcher_season_stats(pitcher: dict[str, Any]) -> None:
     player_id = pitcher.get("id")
-    player_name = pitcher.get("name")
-    if not player_id or not player_name:
+    if not player_id:
         return
 
-    try:
-        from datetime import date
-
-        from player_stats import fetch_player_stats_table
-    except ImportError:
-        return
+    from datetime import date
 
     year = date.today().year
-    cells: dict[str, str] = {}
-    table = fetch_player_stats_table(
-        player_name,
-        year,
-        position="P",
-        espn_player_id=str(player_id),
-    )
-    if table:
-        season_row = next(
-            (row for row in table.get("rows") or [] if row.get("row_kind") == "season"),
-            None,
-        )
-        if season_row is None and table.get("rows"):
-            season_row = table["rows"][0]
-        if season_row:
-            cells = {
-                str(key): str(value)
-                for key, value in (season_row.get("cells") or {}).items()
-                if value not in (None, "", "—")
-            }
-
-    espn_cells = _probable_pitcher_cells_from_espn_categories(str(player_id), year)
-    for key, value in espn_cells.items():
-        if cells.get(key) in (None, "", "—"):
-            cells[key] = value
-
+    cells = _probable_pitcher_cells_from_espn_categories(str(player_id), year)
     cells = _merge_probable_pitcher_cells(cells, pitcher.get("stats") or {})
     if not cells:
         return
@@ -1483,14 +1581,19 @@ def _enrich_probable_pitcher_season_stats(pitcher: dict[str, Any]) -> None:
 
 
 def _enrich_probable_pitchers(game: dict[str, Any]) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    pitchers: list[dict[str, Any]] = []
     for side in ("away", "home"):
         pitcher = (game.get(side) or {}).get("probable_pitcher")
-        if not pitcher:
-            continue
-        try:
-            _enrich_probable_pitcher_season_stats(pitcher)
-        except Exception:
-            continue
+        if pitcher:
+            pitchers.append(pitcher)
+
+    if not pitchers:
+        return
+
+    with ThreadPoolExecutor(max_workers=len(pitchers)) as executor:
+        list(executor.map(_enrich_probable_pitcher_season_stats, pitchers))
 
 
 def _standing_stat(entry: dict[str, Any], name: str) -> str | None:

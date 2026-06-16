@@ -35,6 +35,7 @@ _team_panels_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _team_core_panels_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _team_roster_panel_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _team_leaders_panel_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
+_matchup_leaders_panel_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _team_roster_data_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _team_summary_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _athlete_season_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
@@ -1030,6 +1031,13 @@ def _build_leader_categories(
                 "value": _format_stat_value(stat_name, value),
                 "sort_value": value,
             })
+            if athlete.get("team_side"):
+                ranked[-1].update({
+                    "team_side": athlete["team_side"],
+                    "team_id": athlete.get("team_id"),
+                    "team_abbr": athlete.get("team_abbr"),
+                    "team_color": athlete.get("team_color"),
+                })
         ranked.sort(key=lambda row: row["sort_value"], reverse=higher_is_better)
         top = ranked[:top_n]
         if top:
@@ -1039,32 +1047,38 @@ def _build_leader_categories(
     return categories
 
 
-def _build_leader_views(
-    roster_sections: list[dict[str, Any]],
+def _leader_team_meta(team: dict[str, Any] | None, side: str) -> dict[str, str]:
+    team = team or {}
+    return {
+        "team_side": side,
+        "team_id": str(team.get("id") or ""),
+        "team_abbr": str(team.get("abbr") or ""),
+        "team_color": str(team.get("win_color") or team.get("color") or "#1a2332"),
+    }
+
+
+def _fetch_and_enrich_leader_athletes(
+    player_ids: list[str],
     *,
     season_year: int,
 ) -> list[dict[str, Any]]:
-    player_ids: list[str] = []
-    for section in roster_sections:
-        for player in section.get("players") or []:
-            if player.get("id"):
-                player_ids.append(player["id"])
-
     athletes: list[dict[str, Any]] = []
-    if player_ids:
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            futures = {
-                executor.submit(
-                    _fetch_athlete_season_stats,
-                    player_id,
-                    season_year=season_year,
-                ): player_id
-                for player_id in player_ids
-            }
-            for future in as_completed(futures):
-                athlete = future.result()
-                if athlete and athlete.get("stats"):
-                    athletes.append(athlete)
+    if not player_ids:
+        return athletes
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {
+            executor.submit(
+                _fetch_athlete_season_stats,
+                player_id,
+                season_year=season_year,
+            ): player_id
+            for player_id in player_ids
+        }
+        for future in as_completed(futures):
+            athlete = future.result()
+            if athlete and athlete.get("stats"):
+                athletes.append(athlete)
 
     fangraphs_batting_lookup = _get_fangraphs_batting_lookup(season_year)
     fangraphs_pitching_lookup = _get_fangraphs_pitching_lookup(season_year)
@@ -1083,7 +1097,12 @@ def _build_leader_views(
                 fangraphs_batting_lookup,
                 bwar_lookup=bwar_bat_lookup,
             )
+    return athletes
 
+
+def _leader_views_from_athletes(
+    athletes: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     views: list[dict[str, Any]] = []
 
     position_players = [a for a in athletes if not a.get("pitching")]
@@ -1103,6 +1122,21 @@ def _build_leader_views(
         views.append({"id": "fielding", "label": "Fielding", "categories": fielding_categories})
 
     return views
+
+
+def _build_leader_views(
+    roster_sections: list[dict[str, Any]],
+    *,
+    season_year: int,
+) -> list[dict[str, Any]]:
+    player_ids: list[str] = []
+    for section in roster_sections:
+        for player in section.get("players") or []:
+            if player.get("id"):
+                player_ids.append(player["id"])
+
+    athletes = _fetch_and_enrich_leader_athletes(player_ids, season_year=season_year)
+    return _leader_views_from_athletes(athletes)
 
 
 def _game_month_key(iso_date: str | None) -> str | None:
@@ -1460,6 +1494,65 @@ def fetch_team_leaders_stat_panel(
         panel = None
 
     _team_leaders_panel_cache[cache_key] = (now, panel)
+    return panel
+
+
+def build_matchup_leaders_panel(
+    away_id: str,
+    home_id: str,
+    *,
+    away_team: dict[str, Any] | None = None,
+    home_team: dict[str, Any] | None = None,
+    season_year: int | None = None,
+) -> dict[str, Any] | None:
+    year = season_year or date.today().year
+    cache_key = f"{away_id}:{home_id}:{year}:matchup-leaders:v1"
+    cached = _matchup_leaders_panel_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    panel: dict[str, Any] | None = None
+    try:
+        away_roster = _get_cached_team_roster(away_id, year)
+        home_roster = _get_cached_team_roster(home_id, year)
+        player_ids: list[str] = []
+        team_meta_by_id: dict[str, dict[str, str]] = {}
+        for side, team, roster in (
+            ("away", away_team, away_roster),
+            ("home", home_team, home_roster),
+        ):
+            meta = _leader_team_meta(team, side)
+            for section in roster.get("sections") or []:
+                for player in section.get("players") or []:
+                    player_id = player.get("id")
+                    if not player_id:
+                        continue
+                    player_id = str(player_id)
+                    if player_id not in team_meta_by_id:
+                        player_ids.append(player_id)
+                        team_meta_by_id[player_id] = meta
+
+        athletes = _fetch_and_enrich_leader_athletes(player_ids, season_year=year)
+        for athlete in athletes:
+            meta = team_meta_by_id.get(str(athlete.get("id") or ""))
+            if meta:
+                athlete.update(meta)
+
+        leader_views = _leader_views_from_athletes(athletes)
+        if leader_views:
+            panel = {
+                "id": "matchup_leaders",
+                "label": "Team Leaders",
+                "panel_kind": "toggle_leaders",
+                "default_view": leader_views[0]["id"],
+                "season_year": str(year),
+                "views": leader_views,
+            }
+    except Exception:
+        panel = None
+
+    _matchup_leaders_panel_cache[cache_key] = (now, panel)
     return panel
 
 

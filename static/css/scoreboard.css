@@ -3066,6 +3066,83 @@ html[data-scoreboard-view="standings"] #tab-standings {
   margin-top: 1.25rem;
 }
 
+.game-preview-rosters-view__head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.game-preview-rosters-view__logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.game-preview-rosters-view__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #1a2332;
+}
+
+.game-preview-rosters-toggle__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.game-preview-rosters-toggle__btn.is-active {
+  color: color-mix(in srgb, var(--roster-team-color) 70%, #1a2332);
+  border-color: color-mix(in srgb, var(--roster-team-color) 45%, #d7dee8);
+  background: color-mix(in srgb, var(--roster-team-color) 10%, #fff);
+}
+
+.game-preview-rosters-toggle__logo {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.team-roster-status-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem 1.1rem;
+  margin-bottom: 1rem;
+  padding: 0.55rem 0.15rem 0;
+}
+
+.team-roster-status-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #6b7789;
+}
+
+.team-roster-status-legend__dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.team-roster-status-legend__dot--active {
+  background: #22a06b;
+}
+
+.team-roster-status-legend__dot--injured {
+  background: #e67e22;
+}
+
+.team-roster-status-legend__dot--out {
+  background: #d4183d;
+}
+
 .game-preview-roster-section__title {
   margin: 0 0 0.65rem;
   font-size: 0.72rem;
@@ -3085,6 +3162,26 @@ html[data-scoreboard-view="standings"] #tab-standings {
 
 .game-preview-page .game-detail-hero {
   border-color: #e8edf3;
+}
+
+.pitcher-card--team-only {
+  min-height: 0;
+}
+
+.pitcher-card--team-only .pitcher-card__team {
+  margin: 0;
+}
+
+.team-season-matchup {
+  margin-top: 0.15rem;
+}
+
+.team-season-matchup-view + .team-season-matchup-view {
+  margin-top: 0;
+}
+
+.game-preview-page #game-team-box-section .game-preview-panel-mount {
+  min-height: 12rem;
 }
 
 .game-preview-page .game-card-score {
@@ -5939,6 +6036,50 @@ a.team-link:hover {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.85rem;
+}
+
+.team-leaders-grid--matchup {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 900px) {
+  .team-leaders-grid--matchup {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.game-preview-leaders-matchup .team-leader-card__row {
+  border-left: 3px solid var(--leader-team-color, #dde3ea);
+}
+
+.game-preview-leaders-matchup .team-leader-card__row--home {
+  border-left: none;
+  border-right: 3px solid var(--leader-team-color, #dde3ea);
+}
+
+.game-preview-leaders-matchup .team-leader-card__team-abbr {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.85rem;
+  margin-right: 0.35rem;
+  padding: 0.08rem 0.3rem;
+  border-radius: 0.25rem;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: color-mix(in srgb, var(--leader-team-color) 70%, #1a2332);
+  background: color-mix(in srgb, var(--leader-team-color) 12%, #fff);
+}
+
+.game-preview-leaders-matchup .team-leader-card__name .player-link {
+  color: color-mix(in srgb, var(--leader-team-color) 62%, #1a2332);
+  font-weight: 700;
+}
+
+.game-preview-leaders-matchup .team-leader-card__value {
+  color: color-mix(in srgb, var(--leader-team-color) 55%, #5c6778);
+  font-weight: 800;
 }
 
 .team-leader-card {

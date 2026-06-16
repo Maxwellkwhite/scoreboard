@@ -11,6 +11,12 @@
     return;
   }
 
+  var currentGameId = '';
+  var currentGameMatch = apiUrl.match(/\/game\/([^/]+)\/?$/);
+  if (currentGameMatch) {
+    currentGameId = currentGameMatch[1];
+  }
+
   function outsLabel(outs) {
     return outs + ' out' + (outs === 1 ? '' : 's');
   }
@@ -411,11 +417,32 @@
       '</div>';
   }
 
-  var TEAM_BOX_STATS = [
-    ['batting_hits', 'Hits'],
-    ['batting_runs', 'Runs'],
-    ['batting_strikeouts', 'Strikeouts'],
-    ['batting_walks', 'Walks']
+  var TEAM_BOX_VIEWS = [
+    {
+      id: 'batting',
+      label: 'Batting',
+      title: 'Game Batting',
+      rows: [
+        ['batting_hits', 'Hits', false],
+        ['batting_runs', 'Runs', false],
+        ['batting_strikeouts', 'Strikeouts', true],
+        ['batting_walks', 'Walks', false],
+        ['batting_home_runs', 'Home Runs', false],
+        ['batting_doubles', 'Doubles', false],
+        ['batting_rbi', 'RBI', false]
+      ]
+    },
+    {
+      id: 'pitching',
+      label: 'Pitching',
+      title: 'Game Pitching',
+      rows: [
+        ['pitching_earned_runs', 'Earned Runs', true],
+        ['pitching_hits', 'Hits Allowed', true],
+        ['pitching_strikeouts', 'Strikeouts', false],
+        ['pitching_walks', 'Walks', true]
+      ]
+    }
   ];
 
   function teamBoxEntry(teamBox, side) {
@@ -426,10 +453,66 @@
     return side === 'away' ? teamBox[0] : teamBox[1];
   }
 
+  function teamMatchupTeamCard(side, team, abbr) {
+    var logoHtml = teamStatsLogo(team);
+    return '<article class="pitcher-card pitcher-card--preview pitcher-card--matchup pitcher-card--' + side + ' pitcher-card--team-only">' +
+      '<header class="pitcher-card__team pitcher-card__team--' + side + '">' +
+      logoHtml +
+      '<span class="pitcher-card__team-abbr">' + teamLink(team && team.id, abbr) + '</span>' +
+      '</header>' +
+      '</article>';
+  }
+
+  function teamMatchupComparisonRow(awayRaw, homeRaw, label, lowerIsBetter) {
+    if ((awayRaw == null || awayRaw === '') && (homeRaw == null || homeRaw === '')) {
+      return '';
+    }
+
+    var awayNum = awayRaw != null && awayRaw !== '' ? parseFloat(String(awayRaw).replace(/[^\d.-]/g, '')) : null;
+    var homeNum = homeRaw != null && homeRaw !== '' ? parseFloat(String(homeRaw).replace(/[^\d.-]/g, '')) : null;
+    if (awayNum != null && isNaN(awayNum)) awayNum = null;
+    if (homeNum != null && isNaN(homeNum)) homeNum = null;
+
+    var awayBar = awayNum;
+    var homeBar = homeNum;
+    var statTotal = 0;
+    if (awayNum != null && homeNum != null) {
+      if (lowerIsBetter) {
+        awayBar = homeNum;
+        homeBar = awayNum;
+      }
+      statTotal = awayBar + homeBar;
+    }
+
+    var barHtml = '';
+    if (statTotal > 0) {
+      barHtml = '<div class="team-stats__bar" role="presentation">' +
+        '<span class="team-stats__bar-away" style="width:' + (awayBar / statTotal * 100).toFixed(1) + '%;"></span>' +
+        '<span class="team-stats__bar-home" style="width:' + (homeBar / statTotal * 100).toFixed(1) + '%;"></span>' +
+        '</div>';
+    } else if (awayNum != null && homeNum != null) {
+      barHtml = '<div class="team-stats__bar team-stats__bar--even" role="presentation">' +
+        '<span class="team-stats__bar-away" style="width:50%;"></span>' +
+        '<span class="team-stats__bar-home" style="width:50%;"></span>' +
+        '</div>';
+    }
+
+    return '<div class="team-stats__row">' +
+      '<div class="team-stats__values">' +
+      '<div class="team-stats__cell team-stats__cell--away"><span class="team-stats__value">' + escapeHtml(displayStatValue(awayRaw)) + '</span></div>' +
+      '<div class="team-stats__label">' + escapeHtml(label) + '</div>' +
+      '<div class="team-stats__cell team-stats__cell--home"><span class="team-stats__value">' + escapeHtml(displayStatValue(homeRaw)) + '</span></div>' +
+      '</div>' + barHtml + '</div>';
+  }
+
+  function displayStatValue(value) {
+    return value != null && value !== '' ? value : '—';
+  }
+
   function teamBoxStatValue(team, key) {
     if (!team) return '—';
     var value = team[key];
-    return value != null && value !== '' ? value : '—';
+    return displayStatValue(value);
   }
 
   function teamBoxNumericValue(team, key) {
@@ -441,9 +524,9 @@
   function teamStatsLogo(team) {
     if (!team) return '';
     if (team.logo) {
-      return '<img class="team-stats__logo" src="' + team.logo + '" alt="" width="32" height="32" loading="lazy">';
+      return '<img class="pitcher-card__team-logo" src="' + team.logo + '" alt="" width="32" height="32" loading="lazy">';
     }
-    return '<span class="team-stats__logo-fallback">' + (team.abbr || '') + '</span>';
+    return '<span class="pitcher-card__team-logo-fallback">' + (team.abbr || '') + '</span>';
   }
 
   function teamStatsBar(awayNum, homeNum) {
@@ -473,39 +556,41 @@
     var awayAbbr = (awayBox && awayBox.abbr) || (awayTeam && awayTeam.abbr) || '';
     var homeAbbr = (homeBox && homeBox.abbr) || (homeTeam && homeTeam.abbr) || '';
 
-    var rows = TEAM_BOX_STATS.filter(function (item) {
-      var key = item[0];
-      return (awayBox && awayBox[key] != null) || (homeBox && homeBox[key] != null);
-    }).map(function (item) {
-      var key = item[0];
-      var awayNum = teamBoxNumericValue(awayBox, key);
-      var homeNum = teamBoxNumericValue(homeBox, key);
-      var comparable = awayNum != null && homeNum != null;
-      var awayLead = comparable && awayNum >= homeNum;
-      var homeLead = comparable && homeNum >= awayNum;
-      return '<div class="team-stats__row">' +
-        '<div class="team-stats__values">' +
-        '<div class="team-stats__cell team-stats__cell--away' + (awayLead ? ' team-stats__cell--lead' : '') + '">' +
-        '<span class="team-stats__value">' + teamBoxStatValue(awayBox, key) + '</span></div>' +
-        '<div class="team-stats__label">' + item[1] + '</div>' +
-        '<div class="team-stats__cell team-stats__cell--home' + (homeLead ? ' team-stats__cell--lead' : '') + '">' +
-        '<span class="team-stats__value">' + teamBoxStatValue(homeBox, key) + '</span></div>' +
-        '</div>' +
-        teamStatsBar(awayNum, homeNum) +
+    var toggleHtml = TEAM_BOX_VIEWS.map(function (view, index) {
+      return '<button type="button" class="player-panel-toggle__btn' + (index === 0 ? ' is-active' : '') +
+        '" data-team-stats-view="' + view.id + '" aria-pressed="' + (index === 0 ? 'true' : 'false') + '">' +
+        escapeHtml(view.label) + '</button>';
+    }).join('');
+
+    var viewsHtml = TEAM_BOX_VIEWS.map(function (view, index) {
+      var rowsHtml = view.rows.map(function (item) {
+        var key = item[0];
+        var awayRaw = awayBox ? awayBox[key] : null;
+        var homeRaw = homeBox ? homeBox[key] : null;
+        return teamMatchupComparisonRow(awayRaw, homeRaw, item[1], item[2]);
+      }).join('');
+      return '<div class="team-season-matchup-view" data-team-stats-view="' + view.id + '"' +
+        (index === 0 ? '' : ' hidden') + '>' +
+        '<p class="probable-pitchers-matchup__label">' + escapeHtml(view.title) + '</p>' +
+        '<div class="team-stats__rows">' + rowsHtml + '</div>' +
         '</div>';
     }).join('');
 
-    container.className = 'team-stats';
+    container.className = 'team-stats probable-pitchers-matchup team-season-matchup';
     container.style.setProperty('--away-team-color', awayColor);
     container.style.setProperty('--home-team-color', homeColor);
     container.innerHTML =
-      '<div class="team-stats__head">' +
-      '<div class="team-stats__team team-stats__team--away">' +
-      teamStatsLogo(awayTeam) + '<span class="team-stats__abbr">' + teamLink(awayTeam && awayTeam.id, awayAbbr) + '</span></div>' +
-      '<div class="team-stats__team team-stats__team--home">' +
-      teamStatsLogo(homeTeam) + '<span class="team-stats__abbr">' + teamLink(homeTeam && homeTeam.id, homeAbbr) + '</span></div>' +
+      '<div class="probable-pitchers-matchup__pitchers">' +
+      teamMatchupTeamCard('away', awayTeam, awayAbbr) +
+      teamMatchupTeamCard('home', homeTeam, homeAbbr) +
       '</div>' +
-      '<div class="team-stats__rows">' + rows + '</div>';
+      '<div class="game-preview-panel__toolbar">' +
+      '<div class="player-panel-toggle game-live-team-stats-toggle" role="group" aria-label="Team stat category">' +
+      toggleHtml +
+      '</div></div>' +
+      viewsHtml;
+
+    initTeamStatsToggle(container);
   }
 
   function lineupTeamLogo(team) {
@@ -840,7 +925,7 @@
   }
 
   function applyMiniCard(card, game) {
-    var isLink = card.tagName === 'A';
+    var isCurrent = String(game.id) === String(currentGameId);
     var team = battingTeam(game);
     var borderColor = battingTeamColor(game);
 
@@ -859,7 +944,19 @@
     }
 
     card.className = 'game-mini-card game-mini-card--' + game.status_state +
-      (isLink ? ' game-mini-card--link' : ' game-mini-card--active');
+      (isCurrent ? ' game-mini-card--active' : ' game-mini-card--link');
+
+    if (isCurrent) {
+      card.setAttribute('aria-current', 'page');
+      card.removeAttribute('role');
+      card.removeAttribute('tabindex');
+      card.removeAttribute('data-game-href');
+    } else {
+      card.removeAttribute('aria-current');
+      card.setAttribute('role', 'link');
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('data-game-href', '/game/' + game.id);
+    }
 
     var pill = card.querySelector('.status-pill');
     if (pill) {
@@ -1190,6 +1287,8 @@
     if (!container) return;
 
     container.querySelectorAll('.game-preview-leaders-toggle .player-panel-toggle__btn').forEach(function (btn) {
+      if (btn.getAttribute('data-preview-leaders-bound') === 'true') return;
+      btn.setAttribute('data-preview-leaders-bound', 'true');
       btn.addEventListener('click', function () {
         var viewId = btn.getAttribute('data-leaders-view');
         if (!viewId) return;
@@ -1207,13 +1306,176 @@
     });
   }
 
+  function initPreviewRostersToggle() {
+    var container = document.getElementById('game-preview-rosters');
+    if (!container) return;
+
+    container.querySelectorAll('.game-preview-rosters-toggle .player-panel-toggle__btn').forEach(function (btn) {
+      if (btn.getAttribute('data-preview-rosters-bound') === 'true') return;
+      btn.setAttribute('data-preview-rosters-bound', 'true');
+      btn.addEventListener('click', function () {
+        var side = btn.getAttribute('data-roster-side');
+        if (!side) return;
+
+        container.querySelectorAll('.game-preview-rosters-toggle .player-panel-toggle__btn').forEach(function (toggleBtn) {
+          var isActive = toggleBtn.getAttribute('data-roster-side') === side;
+          toggleBtn.classList.toggle('is-active', isActive);
+          toggleBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+
+        container.querySelectorAll('.game-preview-rosters-view').forEach(function (panel) {
+          panel.hidden = panel.getAttribute('data-roster-side') !== side;
+        });
+      });
+    });
+  }
+
+  function initTeamStatsToggle(root) {
+    var container = root || document.getElementById('game-preview-team-stats') || document.getElementById('game-team-box');
+    if (!container) return;
+
+    container.querySelectorAll('.player-panel-toggle__btn[data-team-stats-view]').forEach(function (btn) {
+      if (btn.getAttribute('data-team-stats-bound') === 'true') return;
+      btn.setAttribute('data-team-stats-bound', 'true');
+      btn.addEventListener('click', function () {
+        var viewId = btn.getAttribute('data-team-stats-view');
+        if (!viewId) return;
+
+        container.querySelectorAll('.player-panel-toggle__btn[data-team-stats-view]').forEach(function (toggleBtn) {
+          var isActive = toggleBtn.getAttribute('data-team-stats-view') === viewId;
+          toggleBtn.classList.toggle('is-active', isActive);
+          toggleBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+
+        container.querySelectorAll('.team-season-matchup-view').forEach(function (panel) {
+          panel.hidden = panel.getAttribute('data-team-stats-view') !== viewId;
+        });
+      });
+    });
+  }
+
+  function previewUnavailableHtml(label) {
+    return '<p class="player-splits-empty">' + escapeHtml(label) + ' unavailable right now.</p>';
+  }
+
+  function fulfillPreviewMount(mountId, html, unavailableLabel) {
+    var mount = document.getElementById(mountId);
+    if (!mount) return;
+    mount.setAttribute('aria-busy', 'false');
+    if (html && String(html).trim()) {
+      mount.innerHTML = html;
+      return;
+    }
+    mount.innerHTML = previewUnavailableHtml(unavailableLabel);
+  }
+
+  function loadPreviewPanels() {
+    if (initialStatus !== 'pre') return;
+
+    fetch(apiUrl + '/preview/pitchers')
+      .then(function (response) {
+        if (!response.ok) throw new Error('Pitcher preview unavailable');
+        return response.json();
+      })
+      .then(function (data) {
+        fulfillPreviewMount(
+          'game-probable-pitchers-stats-mount',
+          data.probable_stats_html,
+          'Season stats'
+        );
+      })
+      .catch(function () {
+        fulfillPreviewMount('game-probable-pitchers-stats-mount', '', 'Season stats');
+      });
+
+    fetch(apiUrl + '/preview/team-stats')
+      .then(function (response) {
+        if (!response.ok) throw new Error('Team stats preview unavailable');
+        return response.json();
+      })
+      .then(function (data) {
+        fulfillPreviewMount(
+          'game-preview-team-stats-mount',
+          data.team_stats_html,
+          'Season team stats'
+        );
+        initTeamStatsToggle();
+      })
+      .catch(function () {
+        fulfillPreviewMount('game-preview-team-stats-mount', '', 'Season team stats');
+      });
+
+    fetch(apiUrl + '/preview')
+      .then(function (response) {
+        if (!response.ok) throw new Error('Preview unavailable');
+        return response.json();
+      })
+      .then(function (data) {
+        fulfillPreviewMount(
+          'game-preview-leaders-mount',
+          data.leaders_html,
+          'Team leaders'
+        );
+        initPreviewLeadersToggle();
+
+        fulfillPreviewMount(
+          'game-preview-rosters-mount',
+          data.rosters_html,
+          'Rosters'
+        );
+        initPreviewRostersToggle();
+      })
+      .catch(function () {
+        fulfillPreviewMount('game-preview-leaders-mount', '', 'Team leaders');
+        fulfillPreviewMount('game-preview-rosters-mount', '', 'Rosters');
+      });
+  }
+
+  function initStripCardNavigation() {
+    function navigateStripCard(card) {
+      var href = card.getAttribute('data-game-href');
+      if (href) {
+        window.location.href = href;
+      }
+    }
+
+    document.addEventListener('click', function (event) {
+      if (event.target.closest('.team-link')) {
+        return;
+      }
+      var card = event.target.closest('.game-mini-card--link');
+      if (card) {
+        navigateStripCard(card);
+      }
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' && event.key !== ' ') {
+        return;
+      }
+      if (event.target.closest('.team-link')) {
+        return;
+      }
+      var card = event.target.closest('.game-mini-card--link');
+      if (!card) {
+        return;
+      }
+      if (event.key === ' ') {
+        event.preventDefault();
+      }
+      navigateStripCard(card);
+    });
+  }
+
   initDetailTabs();
   initLineupStatToggle();
-  initPreviewLeadersToggle();
+  initStripCardNavigation();
+  initTeamStatsToggle();
 
   if (initialStatus === 'pre') {
     var statusPill = document.getElementById('game-status-pill');
     if (statusPill) formatPreGameDateTime(statusPill);
+    loadPreviewPanels();
   }
 
   refreshGame();

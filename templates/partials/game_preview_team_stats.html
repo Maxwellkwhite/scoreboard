@@ -1,0 +1,40 @@
+{% from 'macros/teams.html' import team_link %}
+{% set matchup = game.preview.season_team_matchup %}
+{% if matchup and matchup.views %}
+<div class="team-stats probable-pitchers-matchup team-season-matchup" id="game-preview-team-stats" data-default-view="{{ matchup.default_view }}" style="--away-team-color: {{ game.away.win_color or game.away.color or '#1a2332' }}; --home-team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};">
+  <div class="probable-pitchers-matchup__pitchers">
+    {% for side in [('away', game.away), ('home', game.home)] %}
+    {% set team = side[1] %}
+    <article class="pitcher-card pitcher-card--preview pitcher-card--matchup pitcher-card--{{ side[0] }} pitcher-card--team-only">
+      <header class="pitcher-card__team pitcher-card__team--{{ side[0] }}">
+        {% if team.logo %}
+        <img class="pitcher-card__team-logo" src="{{ team.logo }}" alt="" width="32" height="32" loading="lazy">
+        {% else %}
+        <span class="pitcher-card__team-logo-fallback">{{ team.abbr }}</span>
+        {% endif %}
+        <span class="pitcher-card__team-abbr">{{ team_link(team.id, team.abbr) }}</span>
+      </header>
+    </article>
+    {% endfor %}
+  </div>
+
+  <div class="game-preview-panel__toolbar">
+    <div class="player-panel-toggle game-preview-team-stats-toggle" role="group" aria-label="Team stat category">
+      {% for view in matchup.views %}
+      <button type="button" class="player-panel-toggle__btn{% if loop.first %} is-active{% endif %}" data-team-stats-view="{{ view.id }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ view.label }}</button>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% for view in matchup.views %}
+  <div class="team-season-matchup-view" data-team-stats-view="{{ view.id }}"{% if not loop.first %} hidden{% endif %}>
+    <p class="probable-pitchers-matchup__label">Season {{ view.label }}</p>
+    <div class="team-stats__rows">
+      {% with rows=view.rows %}
+        {% include 'partials/game_team_stats_comparison_rows.html' %}
+      {% endwith %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

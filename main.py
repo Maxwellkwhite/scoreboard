@@ -1050,11 +1050,6 @@ def mlb_game_page(game_id):
     except (requests.RequestException, ValueError):
         abort(404)
 
-    if game.get("status_state") == "pre":
-        from espn_mlb import attach_preview_team_panels
-
-        attach_preview_team_panels(game)
-
     strip_games = fetch_scoreboard(date.today())
 
     template = "game_live.html"
@@ -1078,6 +1073,98 @@ def api_mlb_game(game_id):
 
     strip_games = fetch_scoreboard(date.today(), force_refresh=True)
     return jsonify({'game': game, 'strip_games': strip_games})
+
+
+@app.route('/api/mlb/game/<game_id>/preview', methods=['GET'], endpoint='api_mlb_game_preview')
+def api_mlb_game_preview(game_id):
+    from espn_mlb import attach_preview_team_panels, fetch_game_summary
+
+    try:
+        game = fetch_game_summary(str(game_id))
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Game not found'}), 404
+
+    if game.get('status_state') != 'pre':
+        return jsonify({'error': 'Not a preview game'}), 404
+
+    game.setdefault('preview', {})
+    attach_preview_team_panels(game)
+
+    matchup_leaders = game.get('preview', {}).get('matchup_leaders')
+    team_panels = game.get('preview', {}).get('team_panels')
+
+    return jsonify({
+        'leaders_html': (
+            render_template('partials/game_preview_team_leaders.html', game=game)
+            if matchup_leaders
+            else ''
+        ),
+        'rosters_html': (
+            render_template('partials/game_preview_team_rosters.html', game=game)
+            if team_panels
+            else ''
+        ),
+    })
+
+
+@app.route(
+    '/api/mlb/game/<game_id>/preview/pitchers',
+    methods=['GET'],
+    endpoint='api_mlb_game_preview_pitchers',
+)
+def api_mlb_game_preview_pitchers(game_id):
+    from espn_mlb import attach_preview_probable_pitchers, fetch_game_summary
+
+    try:
+        game = fetch_game_summary(str(game_id))
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Game not found'}), 404
+
+    if game.get('status_state') != 'pre':
+        return jsonify({'error': 'Not a preview game'}), 404
+
+    has_probables = (game.get('away') or {}).get('probable_pitcher') or (
+        game.get('home') or {}
+    ).get('probable_pitcher')
+    if has_probables:
+        attach_preview_probable_pitchers(game)
+
+    return jsonify({
+        'probable_stats_html': (
+            render_template('partials/game_probable_pitchers_stats.html', game=game)
+            if has_probables
+            else ''
+        ),
+    })
+
+
+@app.route(
+    '/api/mlb/game/<game_id>/preview/team-stats',
+    methods=['GET'],
+    endpoint='api_mlb_game_preview_team_stats',
+)
+def api_mlb_game_preview_team_stats(game_id):
+    from espn_mlb import attach_preview_season_team_stats, fetch_game_summary
+
+    try:
+        game = fetch_game_summary(str(game_id))
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Game not found'}), 404
+
+    if game.get('status_state') != 'pre':
+        return jsonify({'error': 'Not a preview game'}), 404
+
+    game.setdefault('preview', {})
+    attach_preview_season_team_stats(game)
+
+    matchup = game.get('preview', {}).get('season_team_matchup')
+    return jsonify({
+        'team_stats_html': (
+            render_template('partials/game_preview_team_stats.html', game=game)
+            if matchup
+            else ''
+        ),
+    })
 
 
 @app.route('/team/<team_id>', methods=['GET'], endpoint='mlb_team_page')
