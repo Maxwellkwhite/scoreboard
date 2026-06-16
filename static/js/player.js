@@ -1,18 +1,15 @@
 (function () {
-  var section = document.getElementById('player-stats-section');
-  if (!section) return;
+  var rootEl = document.querySelector('.player-page .game-detail-main');
+  if (!rootEl) return;
 
-  var playerId = section.getAttribute('data-player-id');
-  var isPitcher = section.getAttribute('data-is-pitcher') === 'true';
+  var playerId = rootEl.getAttribute('data-player-id');
+  var isPitcher = rootEl.getAttribute('data-is-pitcher') === 'true';
   var visualPanelId = isPitcher ? 'pitch_mix' : 'spray_chart';
   var visualPanelLabel = isPitcher ? 'Pitch Mix' : 'Batting Metrics';
-  var loadingEl = document.getElementById('player-stats-loading');
-  var errorEl = document.getElementById('player-stats-error');
-  var summaryEl = document.getElementById('player-stats-summary');
   var tabsEl = document.getElementById('player-stats-tabs');
   var panelsEl = document.getElementById('player-stats-panels');
 
-  if (!playerId || !loadingEl || !summaryEl) return;
+  if (!playerId || !panelsEl) return;
 
   function escapeHtml(value) {
     return String(value)
@@ -22,16 +19,538 @@
       .replace(/"/g, '&quot;');
   }
 
-  function buildSeasonCareerTableHtml(statsTable) {
-    var columns = statsTable.columns || [];
-    if (!columns.length) return '';
+  function careerLogColumnLabel(log, column) {
+    var labels = log.header_labels || {};
+    return labels[column] || column;
+  }
 
-    var seasonLabel = statsTable.season_year || 'Season';
-    var headerCells = '<th scope="col" class="player-stats-table__corner"></th>' +
-      columns.map(function (col) {
-        return '<th scope="col">' + escapeHtml(col.label) + '</th>';
+  function buildSeasonLogTableHtml(statsTable) {
+    var log = statsTable.career_log;
+    if (!log || !(log.seasons || []).length) {
+      return buildSeasonCareerTableHtml(statsTable);
+    }
+
+    var columns = log.table_columns || [];
+    var headerCells =
+      '<th scope="col">Year</th>' +
+      '<th scope="col">Team</th>' +
+      columns.map(function (column) {
+        return '<th scope="col">' + escapeHtml(careerLogColumnLabel(log, column)) + '</th>';
       }).join('');
 
+    var seasonRows = (log.seasons || []).map(function (season) {
+      var rowClass = 'player-stats-table__season';
+      if (String(season.year) === String(log.season_year || statsTable.season_year)) {
+        rowClass += ' player-stats-table__season--current';
+      }
+      var cells = columns.map(function (column) {
+        var value = (season.cells || {})[column];
+        return '<td>' + escapeHtml(value != null && value !== '' ? value : '—') + '</td>';
+      }).join('');
+      return (
+        '<tr class="' + rowClass + '">' +
+          '<th scope="row">' + escapeHtml(String(season.year)) + '</th>' +
+          '<td>' + escapeHtml(season.team || '—') + '</td>' +
+          cells +
+        '</tr>'
+      );
+    }).join('');
+
+    var careerCells = columns.map(function (column) {
+      var value = (log.career && log.career.cells || {})[column];
+      return '<td>' + escapeHtml(value != null && value !== '' ? value : '—') + '</td>';
+    }).join('');
+
+    return (
+      '<div class="player-stats-table-wrap">' +
+        '<table class="player-stats-table player-stats-table--season-log">' +
+          '<thead><tr>' + headerCells + '</tr></thead>' +
+          '<tbody>' +
+            seasonRows +
+            '<tr class="player-stats-table__career">' +
+              '<th scope="row">Career</th>' +
+              '<td>—</td>' +
+              careerCells +
+            '</tr>' +
+          '</tbody>' +
+        '</table>' +
+      '</div>'
+    );
+  }
+
+  var TIMELINE_META_COLUMNS = { Season: true, Tm: true, LG: true, Age: true };
+  var TIMELINE_STAT_LABELS = {
+    BF: 'Batters Faced',
+    W: 'Wins',
+    L: 'Losses',
+    ERA: 'Earned Run Average',
+    G: 'Games',
+    GS: 'Games Started',
+    SV: 'Saves',
+    IP: 'Innings Pitched',
+    H: 'Hits',
+    R: 'Runs',
+    ER: 'Earned Runs',
+    HR: 'Home Runs',
+    BB: 'Walks',
+    SO: 'Strikeouts',
+    WHIP: 'Walks + Hits per Inning',
+    PA: 'Plate Appearances',
+    AB: 'At Bats',
+    '2B': 'Doubles',
+    '3B': 'Triples',
+    RBI: 'Runs Batted In',
+    SB: 'Stolen Bases',
+    CS: 'Caught Stealing',
+    HBP: 'Hit By Pitch',
+    AVG: 'Batting Average',
+    OBP: 'On-Base Percentage',
+    SLG: 'Slugging Percentage',
+    OPS: 'On-Base Plus Slugging',
+    Age: 'Age',
+    Pitches: 'Pitches',
+    BattedBalls: 'Batted Balls',
+    Barrels: 'Barrels',
+    'Barrel %': 'Barrel %',
+    'Barrel/PA': 'Barrel per PA',
+    ExitVelocity: 'Avg Exit Velocity',
+    'Max EV': 'Max Exit Velocity',
+    LaunchAngle: 'Launch Angle',
+    'LA Sweet-Spot %': 'LA Sweet-Spot %',
+    xBA: 'xBA',
+    xSLG: 'xSLG',
+    wOBA: 'wOBA',
+    xwOBA: 'xwOBA',
+    xwOBAcon: 'xwOBAcon',
+    'HardHit%': 'Hard Hit %',
+    'K%': 'K %',
+    'BB%': 'BB %',
+    xERA: 'xERA',
+    TB: 'Total Bases',
+    LOB: 'Left on Base',
+    SAC: 'Sacrifices',
+    SF: 'Sacrifice Flies',
+    BABIP: 'BABIP',
+    XBH: 'Extra-Base Hits',
+    GIDP: 'Grounded Into DP',
+    GIDPO: 'GIDP Opportunities',
+    NP: 'Pitches Seen',
+    'P/PA': 'Pitches per PA',
+    'K/PA': 'K per PA',
+    'HR/PA': 'HR per PA',
+    'BB/K': 'BB per K',
+    ISO: 'Isolated Power',
+    ROE: 'Reached on Error',
+    WO: 'Waste Opportunities',
+  };
+  var TIMELINE_ADVANCED_TICK_LABELS = {
+    Pitches: 'Pit',
+    BattedBalls: 'BBE',
+    Barrels: 'BR',
+    'Barrel %': 'BR%',
+    'Barrel/PA': 'BR/PA',
+    ExitVelocity: 'EV',
+    'Max EV': 'Max EV',
+    LaunchAngle: 'LA',
+    'LA Sweet-Spot %': 'LA SS%',
+    xwOBAcon: 'xwOBACON',
+    'HardHit%': 'HH%',
+    GIDPO: 'GIDPO',
+    'P/PA': 'P/PA',
+    'K/PA': 'K/PA',
+    'HR/PA': 'HR/PA',
+    'BB/K': 'BB/K',
+  };
+
+  function timelineTickLabel(column, abbreviate) {
+    if (abbreviate && TIMELINE_ADVANCED_TICK_LABELS[column]) {
+      return TIMELINE_ADVANCED_TICK_LABELS[column];
+    }
+    return column;
+  }
+
+  function parseSavantTimelineValue(value, column) {
+    if (value == null || value === '' || value === '—') return null;
+    var text = String(value).trim();
+    if (text.indexOf('%') !== -1) {
+      var pct = Number(text.replace('%', '').trim());
+      return Number.isNaN(pct) ? null : pct;
+    }
+    if (text.startsWith('.')) text = '0' + text;
+    if (column === 'IP' && text.indexOf('.') !== -1) {
+      var parts = text.split('.');
+      var whole = parseInt(parts[0], 10) || 0;
+      var partial = parseInt(parts[1], 10) || 0;
+      return whole + partial / 3;
+    }
+    var num = Number(text.replace(/[^\d.-]/g, ''));
+    return Number.isNaN(num) ? null : num;
+  }
+
+  function formatSavantTimelineDisplay(value, column) {
+    if (value == null || value === '' || value === '—') return '—';
+    return String(value);
+  }
+
+  function timelineStatLabel(column) {
+    return TIMELINE_STAT_LABELS[column] || column;
+  }
+
+  function buildSavantCareerTableHtml(statsTable) {
+    var columns = statsTable.columns || [];
+    var rows = statsTable.rows || [];
+    if (!columns.length || !rows.length) {
+      return '';
+    }
+
+    var headerCells = columns.map(function (column) {
+      return '<th scope="col">' + escapeHtml(column) + '</th>';
+    }).join('');
+
+    var bodyRows = rows.map(function (row) {
+      var rowClass = 'player-stats-table__season';
+      var season = (row.cells || {}).Season || row.label;
+      if (String(season) === String(statsTable.season_year)) {
+        rowClass += ' player-stats-table__season--current';
+      }
+      var cells = columns.map(function (column) {
+        var value = (row.cells || {})[column];
+        return '<td>' + escapeHtml(value != null && value !== '' ? value : '—') + '</td>';
+      }).join('');
+      return '<tr class="' + rowClass + '">' + cells + '</tr>';
+    }).join('');
+
+    return (
+      '<div class="player-stats-table-wrap player-stats-table-wrap--savant">' +
+        '<table class="player-stats-table player-stats-table--savant">' +
+          '<thead><tr>' + headerCells + '</tr></thead>' +
+          '<tbody>' + bodyRows + '</tbody>' +
+        '</table>' +
+      '</div>'
+    );
+  }
+
+  function isSavantTimelineCareerRow(row) {
+    var season = String((row && row.season) || '');
+    return season === 'Career' || !/^\d{4}$/.test(season);
+  }
+
+  function sortSavantTimelineRows(a, b) {
+    var aSeason = String((a.cells || {}).Season || a.label || '');
+    var bSeason = String((b.cells || {}).Season || b.label || '');
+    var aCareer = isSavantTimelineCareerRow({ season: aSeason });
+    var bCareer = isSavantTimelineCareerRow({ season: bSeason });
+    if (aCareer && !bCareer) return 1;
+    if (!aCareer && bCareer) return -1;
+    return Number(bSeason) - Number(aSeason);
+  }
+
+  function buildSavantTimelineHtml(statsTable, options) {
+    options = options || {};
+    var abbreviateTicks = !!options.abbreviateTicks;
+    var columns = (statsTable.columns || []).filter(function (column) {
+      return !TIMELINE_META_COLUMNS[column];
+    });
+    var rows = (statsTable.rows || []).slice().sort(sortSavantTimelineRows);
+    if (!columns.length || !rows.length) {
+      return '';
+    }
+
+    var payload = {
+      columns: columns,
+      rows: rows.map(function (row) {
+        return {
+          season: (row.cells || {}).Season || row.label,
+          team: (row.cells || {}).Tm || '—',
+          league: (row.cells || {}).LG || '',
+          cells: row.cells || {},
+        };
+      }),
+      season_year: statsTable.season_year,
+      league_bounds: statsTable.league_bounds || {},
+      abbreviate_ticks: abbreviateTicks,
+    };
+
+    var statTicks = columns.map(function (column, index) {
+      return (
+        '<span class="season-timeline__tick' + (index === 0 ? ' is-active' : '') +
+        '" data-index="' + index + '" style="left:' +
+        ((index / Math.max(columns.length - 1, 1)) * 100).toFixed(1) + '%">' +
+        '<span class="season-timeline__tick-dot"></span>' +
+        '<span class="season-timeline__tick-label">' +
+        escapeHtml(timelineTickLabel(column, abbreviateTicks)) +
+        '</span>' +
+        '</span>'
+      );
+    }).join('');
+
+    return (
+      '<div class="season-timeline">' +
+        '<script type="application/json" class="season-timeline__data">' +
+        JSON.stringify(payload).replace(/</g, '\\u003c') +
+        '</script>' +
+        '<div class="season-timeline__scrub">' +
+          '<div class="season-timeline__scrub-head">' +
+            '<span class="season-timeline__active-stat">' + escapeHtml(timelineStatLabel(columns[0])) + '</span>' +
+            '<span class="season-timeline__scrub-hint">drag to scrub stats</span>' +
+          '</div>' +
+          '<input type="range" class="season-timeline__range" min="0" max="' +
+          (columns.length - 1) + '" value="0" step="1" aria-label="Scrub through season stats" />' +
+          '<div class="season-timeline__ticks" aria-hidden="true">' + statTicks + '</div>' +
+        '</div>' +
+        '<div class="season-timeline__lanes" aria-live="polite"></div>' +
+      '</div>'
+    );
+  }
+
+  function renderSeasonTimelineLanes(timelineEl, statIndex) {
+    var dataEl = timelineEl.querySelector('.season-timeline__data');
+    if (!dataEl) return;
+
+    var payload;
+    try {
+      payload = JSON.parse(dataEl.textContent || '{}');
+    } catch (error) {
+      return;
+    }
+
+    var columns = payload.columns || [];
+    var rows = payload.rows || [];
+    var column = columns[statIndex];
+    if (!column) return;
+
+    var values = rows.filter(function (row) {
+      return !isSavantTimelineCareerRow(row);
+    }).map(function (row) {
+      return parseSavantTimelineValue(row.cells[column], column);
+    }).filter(function (value) { return value != null; });
+
+    var minValue = values.length ? Math.min.apply(null, values) : 0;
+    var maxValue = values.length ? Math.max.apply(null, values) : 1;
+
+    var lanesEl = timelineEl.querySelector('.season-timeline__lanes');
+    if (!lanesEl) return;
+
+    var lanesHtml = rows.map(function (row) {
+      var rawValue = row.cells[column];
+      var numeric = parseSavantTimelineValue(rawValue, column);
+      var rowMin = minValue;
+      var rowMax = maxValue;
+      var seasonBounds = ((payload.league_bounds || {})[String(row.season)] || {})[column];
+      if (
+        seasonBounds &&
+        seasonBounds.min != null &&
+        seasonBounds.max != null &&
+        seasonBounds.max > seasonBounds.min
+      ) {
+        rowMin = seasonBounds.min;
+        rowMax = seasonBounds.max;
+      } else if (rowMin === rowMax) {
+        rowMin -= 1;
+        rowMax += 1;
+      }
+
+      var ratio = 0.12;
+      if (numeric != null) {
+        ratio = (numeric - rowMin) / (rowMax - rowMin);
+        ratio = Math.max(0.08, Math.min(0.96, ratio));
+      }
+      var widthPct = (ratio * 100).toFixed(1);
+      var laneClass = 'season-timeline__lane';
+      if (String(row.season) === String(payload.season_year)) {
+        laneClass += ' season-timeline__lane--current';
+      }
+      var teamLabel = row.team || '';
+      if (isSavantTimelineCareerRow(row)) {
+        teamLabel = teamLabel && teamLabel !== '—' ? teamLabel : '';
+      } else {
+        teamLabel = teamLabel || '—';
+      }
+      var teamHtml = teamLabel
+        ? '<span class="season-timeline__team">' + escapeHtml(teamLabel) + '</span>'
+        : '';
+      var ageHtml = row.cells && row.cells.Age && row.cells.Age !== '—'
+        ? '<span class="season-timeline__age">Age ' + escapeHtml(String(row.cells.Age)) + '</span>'
+        : '';
+      return (
+        '<div class="' + laneClass + '">' +
+          '<div class="season-timeline__meta">' +
+            '<span class="season-timeline__year">' + escapeHtml(String(row.season)) + '</span>' +
+            teamHtml +
+            ageHtml +
+            (row.league
+              ? '<span class="season-timeline__lg">' + escapeHtml(row.league) + '</span>'
+              : '') +
+          '</div>' +
+          '<div class="season-timeline__track" aria-hidden="true">' +
+            '<span class="season-timeline__grid"></span>' +
+            '<span class="season-timeline__bar" style="width:' + widthPct + '%"></span>' +
+            '<span class="season-timeline__dot" style="left:' + widthPct + '%"></span>' +
+          '</div>' +
+          '<div class="season-timeline__value">' +
+            escapeHtml(formatSavantTimelineDisplay(rawValue, column)) +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+
+    lanesEl.innerHTML = lanesHtml;
+
+    var activeStatEl = timelineEl.querySelector('.season-timeline__active-stat');
+    if (activeStatEl) activeStatEl.textContent = timelineStatLabel(column);
+
+    timelineEl.querySelectorAll('.season-timeline__tick').forEach(function (tick) {
+      var isActive = Number(tick.getAttribute('data-index')) === statIndex;
+      tick.classList.toggle('is-active', isActive);
+    });
+  }
+
+  function initSeasonTimelines(root) {
+    if (!root) return;
+    root.querySelectorAll('.season-timeline').forEach(function (timelineEl) {
+      if (timelineEl.dataset.bound === 'true') return;
+      timelineEl.dataset.bound = 'true';
+
+      var rangeEl = timelineEl.querySelector('.season-timeline__range');
+      renderSeasonTimelineLanes(timelineEl, 0);
+
+      if (!rangeEl) return;
+
+      rangeEl.addEventListener('input', function () {
+        renderSeasonTimelineLanes(timelineEl, Number(rangeEl.value) || 0);
+      });
+
+      timelineEl.querySelectorAll('.season-timeline__tick').forEach(function (tick) {
+        tick.addEventListener('click', function () {
+          var index = Number(tick.getAttribute('data-index'));
+          if (Number.isNaN(index)) return;
+          rangeEl.value = String(index);
+          renderSeasonTimelineLanes(timelineEl, index);
+        });
+      });
+    });
+  }
+
+  function initSeasonStatsPanels(root) {
+    if (!root) return;
+    root.querySelectorAll('.player-season-stats').forEach(function (container) {
+      if (container.dataset.bound === 'true') return;
+      container.dataset.bound = 'true';
+
+      var select = container.querySelector('.player-season-stats__view-select');
+      if (!select) return;
+
+      select.addEventListener('change', function () {
+        var viewId = select.value;
+        container.querySelectorAll('.player-season-stats__panel').forEach(function (panel) {
+          panel.hidden = panel.getAttribute('data-view') !== viewId;
+        });
+      });
+    });
+    initSeasonTimelines(root);
+  }
+
+  function buildStatsTableHtml(statsTable) {
+    if (!statsTable) return '';
+    if (statsTable.layout === 'savant_career') {
+      return buildSavantCareerTableHtml(statsTable);
+    }
+    if (statsTable.career_log && (statsTable.career_log.seasons || []).length) {
+      return buildSeasonLogTableHtml(statsTable);
+    }
+    return buildSeasonCareerTableHtml(statsTable);
+  }
+
+  function buildSeasonStatsNestedHtml(nestedPanel) {
+    var views = nestedPanel.views || [];
+    var defaultView = nestedPanel.default_view || (views[0] && views[0].id) || 'standard';
+    var optionsHtml = views.map(function (view) {
+      return (
+        '<option value="' + escapeHtml(view.id) + '"' +
+        (view.id === defaultView ? ' selected' : '') + '>' +
+        escapeHtml(view.label || '') +
+        '</option>'
+      );
+    }).join('');
+
+    var panelsHtml = views.map(function (view) {
+      var content = '';
+      if (view.stats_table && view.stats_table.layout === 'savant_career') {
+        content = buildSavantTimelineHtml(view.stats_table, {
+          abbreviateTicks: view.id === 'advanced',
+        });
+      }
+      if (!content) {
+        content = buildStatsTableHtml(view.stats_table);
+      }
+      if (!content) {
+        content = '<p class="player-splits-empty">Season stats unavailable.</p>';
+      }
+      return (
+        '<div class="player-season-stats__panel" data-view="' + escapeHtml(view.id) + '"' +
+        (view.id === defaultView ? '' : ' hidden') + '>' +
+        content +
+        '</div>'
+      );
+    }).join('');
+
+    return (
+      '<div class="player-season-stats">' +
+        '<div class="player-season-stats__header">' +
+          '<select class="player-season-stats__view-select" aria-label="Season stats view">' +
+          optionsHtml +
+          '</select>' +
+        '</div>' +
+        panelsHtml +
+      '</div>'
+    );
+  }
+
+  function buildSeasonCareerTableHtml(statsTable) {
+    var columns = statsTable.columns || [];
+    var rows = statsTable.rows || [];
+    if (!columns.length && !rows.length) return '';
+
+    var labels = columns.map(function (col) {
+      return col.label;
+    });
+    if (!labels.length && rows[0] && rows[0].cells) {
+      labels = Object.keys(rows[0].cells);
+    }
+
+    var headerCells = '<th scope="col" class="player-stats-table__corner"></th>' +
+      labels.map(function (col) {
+        return '<th scope="col">' + escapeHtml(col) + '</th>';
+      }).join('');
+
+    if (rows.length) {
+      var bodyRows = rows.map(function (row) {
+        var rowClass = row.row_kind === 'career'
+          ? 'player-stats-table__career'
+          : 'player-stats-table__season';
+        var cells = labels.map(function (label) {
+          var value = (row.cells || {})[label];
+          return '<td>' + escapeHtml(value != null && value !== '' ? value : '—') + '</td>';
+        }).join('');
+        return (
+          '<tr class="' + rowClass + '">' +
+            '<th scope="row">' + escapeHtml(row.label) + '</th>' +
+            cells +
+          '</tr>'
+        );
+      }).join('');
+
+      return (
+        '<div class="player-stats-table-wrap">' +
+          '<table class="player-stats-table">' +
+            '<thead><tr>' + headerCells + '</tr></thead>' +
+            '<tbody>' + bodyRows + '</tbody>' +
+          '</table>' +
+        '</div>'
+      );
+    }
+
+    var seasonLabel = statsTable.season_year || 'Season';
     var seasonCells = '<th scope="row">' + escapeHtml(seasonLabel) + '</th>' +
       columns.map(function (col) {
         return '<td>' + escapeHtml(col.season) + '</td>';
@@ -1098,11 +1617,24 @@
         ? buildToggleHtml(panel.id, statViews, statDefaultView)
         : '';
       var statViewsHtml = statViews.map(function (view) {
+        var viewContent;
+        if (view.loading) {
+          viewContent = buildPanelLoadingHtml();
+        } else if (view.nested_panel) {
+          viewContent = buildSeasonStatsNestedHtml(view.nested_panel);
+        } else if (view.stats_table) {
+          viewContent = buildStatsTableHtml(view.stats_table);
+          if (!viewContent) {
+            viewContent = '<p class="player-splits-empty">Season summary unavailable.</p>';
+          }
+        } else {
+          viewContent = buildStatBarsHtml(view);
+        }
         return (
           '<div class="player-panel-view" data-panel="' + escapeHtml(panel.id) +
           '" data-view="' + escapeHtml(view.id) + '"' +
           (view.id === statDefaultView ? '' : ' hidden') + '>' +
-          buildStatBarsHtml(view) +
+          viewContent +
           '</div>'
         );
       }).join('');
@@ -1184,20 +1716,27 @@
   }
 
   function initPanelToggles(root) {
-    root.querySelectorAll('.player-panel-toggle__btn').forEach(function (btn) {
+    root.querySelectorAll('.player-panel-toggle__btn[data-view]').forEach(function (btn) {
+      if (btn.dataset.toggleBound === 'true') return;
+      btn.dataset.toggleBound = 'true';
       btn.addEventListener('click', function () {
         var panelId = btn.getAttribute('data-panel');
         var viewId = btn.getAttribute('data-view');
+        if (!viewId) return;
+
         var panel = btn.closest('.player-stats-panel');
-        if (!panel) return;
+        if (!panel || !panelId) return;
 
-        panel.querySelectorAll('.player-panel-toggle__btn').forEach(function (toggleBtn) {
-          var isActive = toggleBtn.getAttribute('data-view') === viewId;
-          toggleBtn.classList.toggle('is-active', isActive);
-          toggleBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-        });
+        var toggleGroup = btn.closest('.player-panel-toggle');
+        if (toggleGroup) {
+          toggleGroup.querySelectorAll('.player-panel-toggle__btn').forEach(function (toggleBtn) {
+            var isActive = toggleBtn.getAttribute('data-view') === viewId;
+            toggleBtn.classList.toggle('is-active', isActive);
+            toggleBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+          });
+        }
 
-        panel.querySelectorAll('.player-panel-view').forEach(function (viewEl) {
+        panel.querySelectorAll('.player-panel-view[data-panel="' + panelId + '"]').forEach(function (viewEl) {
           viewEl.hidden = viewEl.getAttribute('data-view') !== viewId;
         });
       });
@@ -1218,6 +1757,7 @@
   var PANEL_ORDER = ['player_stats', visualPanelId, 'percentile_ranks', 'splits'];
   var activePanelId = null;
   var tabNavigationBound = false;
+  var playerStatsPanel = null;
 
   function panelSortIndex(panelId) {
     var idx = PANEL_ORDER.indexOf(panelId);
@@ -1291,6 +1831,7 @@
     if (!panelEl) return;
     initPanelToggles(panelEl);
     initPercentileYearSelects();
+    initSeasonStatsPanels(panelEl);
   }
 
   function setActivePanel(panelId) {
@@ -1400,6 +1941,31 @@
     });
   }
 
+  function loadDeferredPanels() {
+    fetchPlayerStats('/stats/season')
+      .then(function (payload) {
+        if (!payload.view || !playerStatsPanel) return;
+        playerStatsPanel.views = playerStatsPanel.views.map(function (view) {
+          return view.id === 'season_stats' ? payload.view : view;
+        });
+        upsertPanel(playerStatsPanel);
+      })
+      .catch(function () {
+        if (!playerStatsPanel) return;
+        playerStatsPanel.views = playerStatsPanel.views.map(function (view) {
+          if (view.id !== 'season_stats') return view;
+          return {
+            id: 'season_stats',
+            label: 'Season Stats',
+            stats_table: { columns: [], rows: [] },
+          };
+        });
+        upsertPanel(playerStatsPanel);
+      });
+
+    loadStagedPanels();
+  }
+
   function loadStagedPanels() {
     fetchPlayerStats('/stats/visual')
       .then(function (payload) {
@@ -1426,66 +1992,31 @@
       });
   }
 
-  function renderSummary(statsTable) {
-    var html = buildSeasonCareerTableHtml(statsTable);
-    if (!html) return false;
-    summaryEl.innerHTML = html;
-    return true;
-  }
-
   function finishLoading() {
-    section.setAttribute('aria-busy', 'false');
+    rootEl.setAttribute('aria-busy', 'false');
   }
 
   function showError() {
-    loadingEl.hidden = true;
-    summaryEl.hidden = true;
     if (tabsEl) tabsEl.hidden = true;
-    if (panelsEl) panelsEl.innerHTML = '';
-    if (errorEl) errorEl.hidden = false;
+    panelsEl.innerHTML = '<p class="player-stats-error">Stats unavailable right now.</p>';
     finishLoading();
   }
 
-  function showSummaryUnavailable() {
-    summaryEl.innerHTML = '<p class="player-stats-error player-stats-error--inline">Season summary unavailable right now.</p>';
-    summaryEl.hidden = false;
-  }
-
-  function loadSummary() {
-    summaryEl.hidden = false;
-    summaryEl.innerHTML = buildPanelLoadingHtml();
-
-    fetchPlayerStats('/stats/summary')
-      .then(function (payload) {
-        if (payload.stats_table && renderSummary(payload.stats_table)) {
-          summaryEl.hidden = false;
-          return;
-        }
-        showSummaryUnavailable();
-      })
-      .catch(function () {
-        showSummaryUnavailable();
-      });
-  }
-
-  function showCoreStats(payload) {
-    var hasPanels = payload.stat_panels && payload.stat_panels.length;
-
-    if (!hasPanels) {
+  function showLeagueStats(payload) {
+    if (!payload.stat_panel) {
       showError();
       return;
     }
 
-    loadingEl.hidden = true;
-    if (errorEl) errorEl.hidden = true;
-
-    initCorePanels(payload.stat_panels);
+    playerStatsPanel = payload.stat_panel;
+    initCorePanels([playerStatsPanel]);
     finishLoading();
-    loadSummary();
-    loadStagedPanels();
+    loadDeferredPanels();
   }
 
-  fetchPlayerStats('/stats')
-    .then(showCoreStats)
+  panelsEl.innerHTML = buildPanelLoadingHtml();
+
+  fetchPlayerStats('/stats/league')
+    .then(showLeagueStats)
     .catch(showError);
 })();

@@ -1576,11 +1576,17 @@ def fetch_player_stats(
     season_year: str | None = None,
     *,
     position: str | None = None,
+    espn_player_id: str | None = None,
 ) -> dict[str, Any] | None:
     try:
         from player_stats import fetch_player_stats_table
 
-        return fetch_player_stats_table(player_name, season_year, position=position)
+        return fetch_player_stats_table(
+            player_name,
+            season_year,
+            position=position,
+            espn_player_id=espn_player_id,
+        )
     except Exception:
         return None
 
@@ -1603,6 +1609,46 @@ def fetch_player_extra_stat_panels(
         )
     except Exception:
         return []
+
+
+def fetch_player_league_stat_panel(
+    player_id: str,
+    *,
+    player_name: str | None = None,
+    position: str | None = None,
+    season_year: str | None = None,
+) -> dict[str, Any] | None:
+    try:
+        from player_stats import fetch_player_league_stat_panel as _fetch_league
+
+        return _fetch_league(
+            player_id,
+            player_name=player_name or "",
+            position=position,
+            season_year=season_year,
+        )
+    except Exception:
+        return None
+
+
+def fetch_player_season_stats_view(
+    player_id: str,
+    *,
+    player_name: str | None = None,
+    position: str | None = None,
+    season_year: str | None = None,
+) -> dict[str, Any] | None:
+    try:
+        from player_stats import fetch_player_season_stats_view as _fetch_season
+
+        return _fetch_season(
+            player_id,
+            player_name=player_name or "",
+            position=position,
+            season_year=season_year,
+        )
+    except Exception:
+        return None
 
 
 def fetch_player_visual_stat_panel(

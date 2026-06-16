@@ -1198,6 +1198,56 @@ def api_mlb_player_stats(player_id):
 
 
 @app.route(
+    '/api/mlb/player/<player_id>/stats/league',
+    methods=['GET'],
+    endpoint='api_mlb_player_stats_league',
+)
+def api_mlb_player_stats_league(player_id):
+    from espn_mlb import fetch_player, fetch_player_league_stat_panel
+
+    try:
+        player = fetch_player(str(player_id), include_stats=False)
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Player not found'}), 404
+
+    stat_panel = fetch_player_league_stat_panel(
+        str(player_id),
+        player_name=player.get('name') or '',
+        position=player.get('position'),
+        season_year=player.get('season_year'),
+    )
+    if not stat_panel:
+        return jsonify({'error': 'Stats unavailable'}), 404
+
+    return jsonify({'stat_panel': stat_panel})
+
+
+@app.route(
+    '/api/mlb/player/<player_id>/stats/season',
+    methods=['GET'],
+    endpoint='api_mlb_player_stats_season',
+)
+def api_mlb_player_stats_season(player_id):
+    from espn_mlb import fetch_player, fetch_player_season_stats_view
+
+    try:
+        player = fetch_player(str(player_id), include_stats=False)
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Player not found'}), 404
+
+    view = fetch_player_season_stats_view(
+        str(player_id),
+        player_name=player.get('name') or '',
+        position=player.get('position'),
+        season_year=player.get('season_year'),
+    )
+    if not view:
+        return jsonify({'error': 'Season stats unavailable'}), 404
+
+    return jsonify({'view': view})
+
+
+@app.route(
     '/api/mlb/player/<player_id>/stats/summary',
     methods=['GET'],
     endpoint='api_mlb_player_stats_summary',
@@ -1214,6 +1264,7 @@ def api_mlb_player_stats_summary(player_id):
         player.get('name') or '',
         player.get('season_year'),
         position=player.get('position'),
+        espn_player_id=str(player_id),
     )
     if not stats_table:
         return jsonify({'error': 'Summary unavailable'}), 404

@@ -18,7 +18,12 @@
     </div>
   </nav>
 
-  <main class="scoreboard-main game-detail-main">
+  <main
+    class="scoreboard-main game-detail-main"
+    data-player-id="{{ player.id }}"
+    data-is-pitcher="{{ 'true' if is_pitcher else 'false' }}"
+    aria-busy="true"
+  >
     <header class="game-detail-header">
       <h1>{{ player.name }}</h1>
     </header>
@@ -77,21 +82,6 @@
         </dl>
         {% endif %}
       </div>
-    </section>
-
-    <section
-      class="game-detail-section player-stats-summary-section"
-      id="player-stats-section"
-      data-player-id="{{ player.id }}"
-      data-is-pitcher="{{ 'true' if is_pitcher else 'false' }}"
-      aria-busy="true"
-    >
-      <div class="player-stats-loading" id="player-stats-loading">
-        <div class="player-stats-loading__ball" aria-hidden="true"></div>
-        <p class="player-stats-loading__text">Loading stats…</p>
-      </div>
-      <p class="player-stats-error" id="player-stats-error" hidden>Stats unavailable right now.</p>
-      <div class="player-stats-summary" id="player-stats-summary" hidden></div>
     </section>
 
     <nav class="game-detail-tabs player-stats-tabs" id="player-stats-tabs" aria-label="Player stats views" hidden></nav>

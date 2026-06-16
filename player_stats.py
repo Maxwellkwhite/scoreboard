@@ -1,4 +1,4 @@
-"""Player season/career stats via pybaseball (Baseball Reference)."""
+"""Player season/career stats via pybaseball with source fallbacks."""
 
 from __future__ import annotations
 
@@ -160,6 +160,11 @@ _SAVANT_DISCIPLINE_URL = (
     "&selections=player_id%2Ck_percent%2Cbb_percent%2Cwhiff_percent%2Cchase_percent"
     "&csv=true"
 )
+_SAVANT_PLAYER_PAGE_URL = (
+    "https://baseballsavant.mlb.com/savant-player/{player_id}"
+    "?stats=statcast-r-{kind}-mlb"
+)
+_savant_career_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _BATTING_SPLIT_REGULAR = (
     ("Platoon Splits", ("vs RHP", "vs LHP")),
     ("Home or Away", ("Home", "Away")),
@@ -222,6 +227,55 @@ _discipline_table_cache: dict[tuple[int, str], tuple[float, pd.DataFrame | None]
 _bat_tracking_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
 _sprint_speed_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
 _pitching_bref_season_cache: dict[int, pd.DataFrame] = {}
+_ESPN_SEASON_PITCHING_CATEGORY = "pitching"
+_ESPN_SEASON_BATTING_CATEGORY = "career-batting"
+_ESPN_TO_PITCHING_COLUMN = {
+    "G": "GP",
+    "SO": "K",
+}
+_ESPN_TO_BATTING_COLUMN = {
+    "BA": "AVG",
+    "G": "GP",
+}
+_CAREER_LOG_BATTING_TABLE_COLUMNS = (
+    "G", "AB", "BA", "OBP", "SLG", "OPS", "HR", "RBI", "SB", "OPS+",
+)
+_CAREER_LOG_PITCHING_TABLE_COLUMNS = (
+    "G", "GS", "W", "L", "ERA", "IP", "SO", "WHIP", "WAR",
+)
+_CAREER_LOG_HEADER_LABELS = {
+    "BA": "AVG",
+}
+_SAVANT_BATTING_LEAGUE_KEYS = {
+    "AVG": "avg",
+    "OBP": "onBasePct",
+    "SLG": "slugAvg",
+    "OPS": "OPS",
+    "R": "runs",
+    "H": "hits",
+    "2B": "doubles",
+    "3B": "triples",
+    "HR": "homeRuns",
+    "RBI": "RBIs",
+    "BB": "walks",
+    "SO": "strikeouts",
+    "SB": "stolenBases",
+    "AB": "atBats",
+    "PA": "plateAppearances",
+}
+_SAVANT_PITCHING_LEAGUE_KEYS = {
+    "ERA": "ERA",
+    "WHIP": "WHIP",
+    "W": "wins",
+    "L": "losses",
+    "SO": "strikeouts",
+    "BB": "walks",
+    "H": "hits",
+    "ER": "earnedRuns",
+    "HR": "homeRuns",
+    "IP": "innings",
+}
+_espn_team_abbr_cache: dict[str, str] = {}
 
 
 def _fold_name(value: str) -> str:
@@ -298,10 +352,11 @@ def _lookup_player_record(player_name: str) -> dict[str, Any] | None:
     record = {
         "bbref_id": str(row.get("key_bbref") or "").strip() or None,
         "mlbam_id": int(row.get("key_mlbam")) if pd.notna(row.get("key_mlbam")) else None,
+        "fangraphs_id": int(row.get("key_fangraphs")) if pd.notna(row.get("key_fangraphs")) else None,
         "debut_year": int(debut) if pd.notna(debut) else None,
         "last_year": int(last_played) if pd.notna(last_played) else date.today().year,
     }
-    if not record["bbref_id"]:
+    if not any((record["bbref_id"], record["mlbam_id"], record["fangraphs_id"])):
         record = None
     _player_lookup_cache[player_name] = (now, record)
     return record
@@ -436,24 +491,44 @@ def _pitching_career_totals(
     }
 
 
-def _load_bwar_bat() -> pd.DataFrame:
+def _load_bwar_bat() -> pd.DataFrame | None:
     global _bwar_bat_df, _bwar_bat_loaded_at
     now = time.time()
     if _bwar_bat_df is not None and now - _bwar_bat_loaded_at < _CACHE_TTL_SECONDS:
         return _bwar_bat_df
-    _bwar_bat_df = bwar_bat()
-    _bwar_bat_loaded_at = now
-    return _bwar_bat_df
+    try:
+        _bwar_bat_df = bwar_bat()
+        _bwar_bat_loaded_at = now
+        return _bwar_bat_df
+    except Exception:
+        return None
 
 
-def _load_bwar_pitch() -> pd.DataFrame:
+def _load_bwar_pitch() -> pd.DataFrame | None:
     global _bwar_pitch_df, _bwar_pitch_loaded_at
     now = time.time()
     if _bwar_pitch_df is not None and now - _bwar_pitch_loaded_at < _CACHE_TTL_SECONDS:
         return _bwar_pitch_df
-    _bwar_pitch_df = bwar_pitch()
-    _bwar_pitch_loaded_at = now
-    return _bwar_pitch_df
+    try:
+        import io
+
+        from pybaseball.datasources.bref import BRefSession
+
+        response = BRefSession().get("http://www.baseball-reference.com/data/war_daily_pitch.txt")
+        text = response.content.decode("utf-8", errors="replace")
+        if text.lstrip().startswith("<"):
+            return None
+        frame = pd.read_csv(io.StringIO(text))
+        cols_to_keep = [
+            "name_common", "mlb_ID", "player_ID", "year_ID", "team_ID", "stint_ID", "lg_ID",
+            "G", "GS", "RA", "xRA", "BIP", "BIP_perc", "salary", "ERA_plus", "WAR_rep", "WAA",
+            "WAA_adj", "WAR",
+        ]
+        _bwar_pitch_df = frame[cols_to_keep]
+        _bwar_pitch_loaded_at = now
+        return _bwar_pitch_df
+    except Exception:
+        return None
 
 
 def _parse_number(value: Any) -> float | None:
@@ -571,6 +646,8 @@ def _war_for_player(
     pitching: bool,
 ) -> tuple[str | None, str | None]:
     frame = _load_bwar_pitch() if pitching else _load_bwar_bat()
+    if frame is None or frame.empty:
+        return None, None
     rows = frame[frame["name_common"] == player_name]
     if rows.empty:
         last_name, first_name = _parse_player_name(player_name)
@@ -630,6 +707,411 @@ def _build_row_values(
     return values
 
 
+def _column_specs_for_kind(kind: str) -> tuple[tuple[str, str], ...]:
+    return _PITCHING_COLUMNS if kind == "pitching" else _BATTING_COLUMNS
+
+
+def _values_from_espn_row(
+    labels: list[str],
+    stats: list[Any],
+    column_labels: list[str],
+    *,
+    pitching: bool,
+) -> dict[str, Any]:
+    source = dict(zip(labels, stats))
+    alias_map = _ESPN_TO_PITCHING_COLUMN if pitching else _ESPN_TO_BATTING_COLUMN
+    values: dict[str, Any] = {}
+    for label in column_labels:
+        source_key = alias_map.get(label, label)
+        if source_key in source:
+            values[label] = source[source_key]
+        elif label in source:
+            values[label] = source[label]
+    return values
+
+
+_MULTI_TEAM_LABEL = "Multiple teams"
+
+
+def _espn_stat_source(labels: list[str], stats: list[Any]) -> dict[str, Any]:
+    return dict(zip(labels, stats))
+
+
+def _merge_espn_pitching_sources(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    totals = {
+        "G": 0.0,
+        "GS": 0.0,
+        "W": 0.0,
+        "L": 0.0,
+        "SV": 0.0,
+        "SO": 0.0,
+        "H": 0.0,
+        "BB": 0.0,
+        "ER": 0.0,
+        "ip_outs": 0.0,
+    }
+    war_values: list[float] = []
+    for source in sources:
+        totals["G"] += _parse_number(source.get("GP")) or 0.0
+        totals["GS"] += _parse_number(source.get("GS")) or 0.0
+        totals["W"] += _parse_number(source.get("W")) or 0.0
+        totals["L"] += _parse_number(source.get("L")) or 0.0
+        totals["SV"] += _parse_number(source.get("SV")) or 0.0
+        totals["SO"] += _parse_number(source.get("K")) or 0.0
+        totals["H"] += _parse_number(source.get("H")) or 0.0
+        totals["BB"] += _parse_number(source.get("BB")) or 0.0
+        totals["ER"] += _parse_number(source.get("ER")) or 0.0
+        totals["ip_outs"] += _ip_to_outs(source.get("IP"))
+        war = _parse_number(source.get("WAR"))
+        if war is not None:
+            war_values.append(war)
+
+    innings = totals["ip_outs"] / 3.0
+    era = (totals["ER"] / innings * 9) if innings > 0 else None
+    whip = ((totals["H"] + totals["BB"]) / innings) if innings > 0 else None
+    war_total = sum(war_values) if war_values else None
+
+    return {
+        "GP": _format_count(totals["G"]),
+        "GS": _format_count(totals["GS"]),
+        "W": _format_count(totals["W"]),
+        "L": _format_count(totals["L"]),
+        "SV": _format_count(totals["SV"]),
+        "K": _format_count(totals["SO"]),
+        "IP": _outs_to_ip(totals["ip_outs"]),
+        "ERA": "—" if era is None else f"{era:.2f}",
+        "WHIP": "—" if whip is None else f"{whip:.2f}",
+        "WAR": _format_war(war_total) if war_total is not None else "—",
+    }
+
+
+def _merge_espn_batting_sources(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    totals = {
+        "GP": 0.0,
+        "AB": 0.0,
+        "R": 0.0,
+        "H": 0.0,
+        "2B": 0.0,
+        "3B": 0.0,
+        "HR": 0.0,
+        "RBI": 0.0,
+        "BB": 0.0,
+        "HBP": 0.0,
+        "SO": 0.0,
+        "SB": 0.0,
+        "CS": 0.0,
+    }
+    war_values: list[float] = []
+    for source in sources:
+        totals["GP"] += _parse_number(source.get("GP")) or 0.0
+        totals["AB"] += _parse_number(source.get("AB")) or 0.0
+        totals["R"] += _parse_number(source.get("R")) or 0.0
+        totals["H"] += _parse_number(source.get("H")) or 0.0
+        totals["2B"] += _parse_number(source.get("2B")) or 0.0
+        totals["3B"] += _parse_number(source.get("3B")) or 0.0
+        totals["HR"] += _parse_number(source.get("HR")) or 0.0
+        totals["RBI"] += _parse_number(source.get("RBI")) or 0.0
+        totals["BB"] += _parse_number(source.get("BB")) or 0.0
+        totals["HBP"] += _parse_number(source.get("HBP")) or 0.0
+        totals["SO"] += _parse_number(source.get("SO")) or 0.0
+        totals["SB"] += _parse_number(source.get("SB")) or 0.0
+        totals["CS"] += _parse_number(source.get("CS")) or 0.0
+        war = _parse_number(source.get("WAR"))
+        if war is not None:
+            war_values.append(war)
+
+    ab = totals["AB"]
+    hits = totals["H"]
+    singles = hits - totals["2B"] - totals["3B"] - totals["HR"]
+    total_bases = singles + (2 * totals["2B"]) + (3 * totals["3B"]) + (4 * totals["HR"])
+    avg = (hits / ab) if ab > 0 else None
+    obp_den = ab + totals["BB"] + totals["HBP"]
+    obp = ((hits + totals["BB"] + totals["HBP"]) / obp_den) if obp_den > 0 else None
+    slg = (total_bases / ab) if ab > 0 else None
+    ops = (obp + slg) if obp is not None and slg is not None else None
+    war_total = sum(war_values) if war_values else None
+
+    return {
+        "GP": _format_count(totals["GP"]),
+        "AB": _format_count(totals["AB"]),
+        "R": _format_count(totals["R"]),
+        "H": _format_count(totals["H"]),
+        "2B": _format_count(totals["2B"]),
+        "3B": _format_count(totals["3B"]),
+        "HR": _format_count(totals["HR"]),
+        "RBI": _format_count(totals["RBI"]),
+        "BB": _format_count(totals["BB"]),
+        "HBP": _format_count(totals["HBP"]),
+        "SO": _format_count(totals["SO"]),
+        "SB": _format_count(totals["SB"]),
+        "CS": _format_count(totals["CS"]),
+        "AVG": _format_rate(avg) if avg is not None else "—",
+        "OBP": _format_rate(obp) if obp is not None else "—",
+        "SLG": _format_rate(slg) if slg is not None else "—",
+        "OPS": _format_rate(ops) if ops is not None else "—",
+        "WAR": _format_war(war_total) if war_total is not None else "—",
+    }
+
+
+def _collapse_espn_year_statistics(
+    stats: list[dict[str, Any]],
+    *,
+    labels: list[str],
+    column_labels: list[str],
+    pitching: bool,
+) -> dict[str, Any] | None:
+    usable: list[dict[str, Any]] = []
+    for stat in stats:
+        values = _values_from_espn_row(
+            labels,
+            stat.get("stats") or [],
+            column_labels,
+            pitching=pitching,
+        )
+        if any(value not in (None, "", "--", "-", "—") for value in values.values()):
+            usable.append(stat)
+    if not usable:
+        return None
+
+    total_rows = [stat for stat in usable if not stat.get("teamId")]
+    team_rows = [stat for stat in usable if stat.get("teamId")]
+
+    if total_rows:
+        chosen_stats = total_rows[0].get("stats") or []
+    elif len(team_rows) == 1:
+        chosen_stats = team_rows[0].get("stats") or []
+    elif len(team_rows) > 1:
+        sources = [
+            _espn_stat_source(labels, stat.get("stats") or [])
+            for stat in team_rows
+        ]
+        merged = (
+            _merge_espn_pitching_sources(sources)
+            if pitching
+            else _merge_espn_batting_sources(sources)
+        )
+        chosen_stats = [merged.get(label) for label in labels]
+    else:
+        chosen_stats = usable[0].get("stats") or []
+
+    return _values_from_espn_row(
+        labels,
+        chosen_stats,
+        column_labels,
+        pitching=pitching,
+    )
+
+
+def _all_season_rows_from_espn(
+    categories: dict[str, Any],
+    *,
+    pitching: bool,
+    column_labels: list[str],
+) -> list[tuple[int, dict[str, Any]]]:
+    category_name = (
+        _ESPN_SEASON_PITCHING_CATEGORY if pitching else _ESPN_SEASON_BATTING_CATEGORY
+    )
+    category = categories.get(category_name) or {}
+    labels = category.get("labels") or []
+    if not labels:
+        return []
+
+    by_year: dict[int, list[dict[str, Any]]] = {}
+    for stat in category.get("statistics") or []:
+        year = (stat.get("season") or {}).get("year")
+        if year is None:
+            continue
+        by_year.setdefault(int(year), []).append(stat)
+
+    rows: list[tuple[int, dict[str, Any]]] = []
+    for year in sorted(by_year.keys(), reverse=True):
+        values = _collapse_espn_year_statistics(
+            by_year[year],
+            labels=labels,
+            column_labels=column_labels,
+            pitching=pitching,
+        )
+        if values:
+            rows.append((year, values))
+    return rows
+
+
+def _all_season_rows_from_bref_pitching(
+    player_name: str,
+    *,
+    debut_year: int,
+    last_year: int,
+) -> list[tuple[int, dict[str, Any]]]:
+    rows: list[tuple[int, dict[str, Any]]] = []
+    for year in range(last_year, debut_year - 1, -1):
+        row = _pitching_bref_row(player_name, year)
+        if row is None:
+            continue
+        values = _build_row_values(row, war_value=None, pitching=True)
+        rows.append((year, values))
+    return rows
+
+
+def _all_season_rows_from_bref_batting(
+    bbref_id: str,
+    *,
+    column_labels: list[str],
+) -> list[tuple[int, dict[str, Any]]]:
+    splits = _cached_get_splits(bbref_id)
+    if splits is None or splits.empty:
+        return []
+
+    rows: list[tuple[int, dict[str, Any]]] = []
+    for split_type, split_name in splits.index:
+        if split_type != "Season Totals":
+            continue
+        match = re.fullmatch(r"(\d{4}) Totals", str(split_name))
+        if not match:
+            continue
+        year = int(match.group(1))
+        row = splits.loc[(split_type, split_name)]
+        values = _build_row_values(row, war_value=None, pitching=False)
+        if "OPS+" in column_labels:
+            values["OPS+"] = _stat_value(row, "sOPS+")
+        rows.append((year, values))
+    rows.sort(key=lambda item: item[0], reverse=True)
+    return rows
+
+
+def _career_values_from_table_columns(table: dict[str, Any]) -> dict[str, Any]:
+    values: dict[str, Any] = {}
+    for column in table.get("columns") or []:
+        label = column.get("label")
+        if not label:
+            continue
+        career_value = column.get("career")
+        values[label] = None if career_value in (None, "—") else career_value
+    return values
+
+
+def _bref_season_ops_plus(bbref_id: str, year: int) -> Any:
+    season_splits = _cached_get_splits(bbref_id, year=year)
+    if season_splits is None or season_splits.empty:
+        return None
+    key = ("Season Totals", f"{year} Totals")
+    if key not in season_splits.index:
+        return None
+    return _stat_value(season_splits.loc[key], "sOPS+")
+
+
+def _enrich_season_rows_ops_plus(
+    season_rows: list[tuple[int, dict[str, Any]]],
+    *,
+    player_record: dict[str, Any] | None,
+    pitching: bool,
+) -> list[tuple[int, dict[str, Any]]]:
+    if pitching or not player_record or not player_record.get("bbref_id"):
+        return season_rows
+
+    bbref_id = player_record["bbref_id"]
+    enriched: list[tuple[int, dict[str, Any]]] = []
+    for year, values in season_rows:
+        row_values = dict(values)
+        ops_plus = row_values.get("OPS+")
+        if ops_plus in (None, "", "--", "-", "—") or _parse_number(ops_plus) is None:
+            bref_ops_plus = _bref_season_ops_plus(bbref_id, year)
+            if bref_ops_plus is not None:
+                row_values["OPS+"] = bref_ops_plus
+        enriched.append((year, row_values))
+    return enriched
+
+
+def _enrich_season_rows_war(
+    season_rows: list[tuple[int, dict[str, Any]]],
+    *,
+    player_name: str,
+    pitching: bool,
+    player_record: dict[str, Any] | None,
+    espn_categories: dict[str, Any] | None,
+) -> list[tuple[int, dict[str, Any]]]:
+    enriched: list[tuple[int, dict[str, Any]]] = []
+    for year, values in season_rows:
+        row_values = dict(values)
+        if _normalize_war_value(row_values.get("WAR")) is None:
+            season_war, _ = _resolve_war_for_player(
+                player_name,
+                season_year=year,
+                pitching=pitching,
+                player_record=player_record,
+                espn_categories=espn_categories,
+            )
+            if season_war is not None:
+                row_values["WAR"] = season_war
+        enriched.append((year, row_values))
+    return enriched
+
+
+def _expand_stats_table_seasons(
+    table: dict[str, Any],
+    *,
+    player_name: str,
+    player_record: dict[str, Any] | None,
+    pitching: bool,
+    year: int,
+    espn_categories: dict[str, Any] | None,
+) -> dict[str, Any]:
+    kind = table.get("kind") or ("pitching" if pitching else "batting")
+    columns = _column_specs_for_kind(kind)
+    column_labels = [label for _, label in columns]
+
+    season_rows: list[tuple[int, dict[str, Any]]] = []
+    if espn_categories:
+        season_rows = _all_season_rows_from_espn(
+            espn_categories,
+            pitching=pitching,
+            column_labels=column_labels,
+        )
+
+    if not season_rows and player_record:
+        if pitching:
+            debut_year = player_record.get("debut_year") or max(1995, year - 25)
+            last_year = max(year, player_record.get("last_year") or year)
+            season_rows = _all_season_rows_from_bref_pitching(
+                player_name,
+                debut_year=debut_year,
+                last_year=last_year,
+            )
+        elif player_record.get("bbref_id"):
+            season_rows = _all_season_rows_from_bref_batting(
+                player_record["bbref_id"],
+                column_labels=column_labels,
+            )
+
+    if not season_rows:
+        return table
+
+    season_rows = _enrich_season_rows_war(
+        season_rows,
+        player_name=player_name,
+        pitching=pitching,
+        player_record=player_record,
+        espn_categories=espn_categories,
+    )
+    season_rows = _enrich_season_rows_ops_plus(
+        season_rows,
+        player_record=player_record,
+        pitching=pitching,
+    )
+
+    career_values = _career_values_from_table_columns(table)
+    season_values = dict(
+        next((values for season_year, values in season_rows if season_year == year), season_rows[0][1])
+    )
+    return _build_stats_table_result(
+        season_year=year,
+        columns=columns,
+        season_values=season_values,
+        career_values=career_values,
+        kind=kind,
+        season_rows=season_rows,
+    )
+
+
 def _build_stats_table_result(
     *,
     season_year: int,
@@ -637,6 +1119,7 @@ def _build_stats_table_result(
     season_values: dict[str, Any],
     career_values: dict[str, Any],
     kind: str,
+    season_rows: list[tuple[int, dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     table_columns: list[dict[str, str]] = []
     for _, label in columns:
@@ -645,12 +1128,131 @@ def _build_stats_table_result(
             "season": _format_stat(label, season_values.get(label)),
             "career": _format_stat(label, career_values.get(label)),
         })
+
+    row_source = season_rows or [(season_year, season_values)]
+    formatted_rows: list[dict[str, Any]] = []
+    for row_year, row_values in row_source:
+        formatted_rows.append({
+            "label": str(row_year),
+            "row_kind": "season",
+            "cells": {
+                label: _format_stat(label, row_values.get(label))
+                for _, label in columns
+            },
+        })
+    formatted_rows.append({
+        "label": "Career",
+        "row_kind": "career",
+        "cells": {
+            label: _format_stat(label, career_values.get(label))
+            for _, label in columns
+        },
+    })
+
     return {
         "kind": kind,
         "title": "Summary",
         "season_year": str(season_year),
         "columns": table_columns,
+        "rows": formatted_rows,
     }
+
+
+def _espn_team_abbr(team_id: str | None) -> str | None:
+    if not team_id:
+        return None
+    cache_key = str(team_id)
+    cached = _espn_team_abbr_cache.get(cache_key)
+    if cached:
+        return cached
+    try:
+        response = requests.get(
+            f"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{cache_key}",
+            timeout=10,
+        )
+        response.raise_for_status()
+        abbr = (response.json().get("team") or {}).get("abbreviation")
+        if abbr:
+            _espn_team_abbr_cache[cache_key] = str(abbr)
+            return str(abbr)
+    except requests.RequestException:
+        pass
+    return None
+
+
+def _espn_season_team_by_year(
+    categories: dict[str, Any],
+    *,
+    pitching: bool,
+) -> dict[int, str | None]:
+    category_name = (
+        _ESPN_SEASON_PITCHING_CATEGORY if pitching else _ESPN_SEASON_BATTING_CATEGORY
+    )
+    category = categories.get(category_name) or {}
+    teams_by_year: dict[int, set[str]] = {}
+    for stat in category.get("statistics") or []:
+        year = (stat.get("season") or {}).get("year")
+        team_id = stat.get("teamId")
+        if year is None or not team_id:
+            continue
+        abbr = _espn_team_abbr(team_id)
+        if abbr:
+            teams_by_year.setdefault(int(year), set()).add(abbr)
+
+    teams: dict[int, str | None] = {}
+    for year, abbrs in teams_by_year.items():
+        if len(abbrs) > 1:
+            teams[year] = _MULTI_TEAM_LABEL
+        elif len(abbrs) == 1:
+            teams[year] = next(iter(abbrs))
+    return teams
+
+
+def _attach_career_log(
+    table: dict[str, Any],
+    *,
+    espn_categories: dict[str, Any] | None,
+    pitching: bool,
+    season_year: int,
+) -> dict[str, Any]:
+    rows = table.get("rows") or []
+    season_rows = [row for row in rows if row.get("row_kind") == "season"]
+    career_row = next((row for row in rows if row.get("row_kind") == "career"), None)
+    if not season_rows:
+        return table
+
+    table_columns = list(
+        _CAREER_LOG_PITCHING_TABLE_COLUMNS if pitching else _CAREER_LOG_BATTING_TABLE_COLUMNS
+    )
+    team_by_year = _espn_season_team_by_year(espn_categories or {}, pitching=pitching)
+
+    seasons: list[dict[str, Any]] = []
+    for row in season_rows:
+        year = int(row["label"])
+        cells = row.get("cells") or {}
+        table_cells = {
+            column: cells.get(column, "—")
+            for column in table_columns
+        }
+        seasons.append({
+            "year": year,
+            "team": team_by_year.get(year),
+            "cells": table_cells,
+        })
+
+    career_cells = {
+        column: (career_row or {}).get("cells", {}).get(column, "—")
+        for column in table_columns
+    }
+
+    table["career_log"] = {
+        "table_columns": table_columns,
+        "header_labels": _CAREER_LOG_HEADER_LABELS,
+        "seasons": seasons,
+        "career": {"cells": career_cells},
+        "season_year": str(season_year),
+    }
+    return table
 
 
 def _fetch_batting_stats_table(
@@ -683,7 +1285,7 @@ def _fetch_batting_stats_table(
                 resolved_year = int(match.group(1))
                 break
 
-    season_war, career_war = _war_for_player(
+    season_war, career_war = _safe_war_for_player(
         player_name,
         season_year=resolved_year,
         pitching=False,
@@ -723,7 +1325,7 @@ def _fetch_pitching_stats_table(
         return None
 
     resolved_year = year
-    season_war, career_war = _war_for_player(
+    season_war, career_war = _safe_war_for_player(
         player_name,
         season_year=resolved_year,
         pitching=True,
@@ -740,11 +1342,607 @@ def _fetch_pitching_stats_table(
     )
 
 
+def _safe_war_for_player(
+    player_name: str,
+    *,
+    season_year: int | None,
+    pitching: bool,
+) -> tuple[str | None, str | None]:
+    try:
+        return _war_for_player(
+            player_name,
+            season_year=season_year,
+            pitching=pitching,
+        )
+    except Exception:
+        return None, None
+
+
+def _normalize_war_value(value: Any) -> str | None:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    text = str(value).strip()
+    if not text or text in {"—", "--", "-"}:
+        return None
+    return _format_war(value)
+
+
+def _war_from_espn_categories(
+    categories: dict[str, Any],
+    *,
+    pitching: bool,
+    season_year: int,
+) -> tuple[str | None, str | None]:
+    category_name = "pitching" if pitching else "advanced-batting"
+    category = categories.get(category_name) or {}
+    labels = category.get("labels") or []
+    if "WAR" not in labels:
+        return None, None
+
+    war_idx = labels.index("WAR")
+    season_raw: Any = None
+    for stat in category.get("statistics") or []:
+        year = (stat.get("season") or {}).get("year")
+        if str(year) != str(season_year):
+            continue
+        values = stat.get("stats") or []
+        if war_idx < len(values):
+            season_raw = values[war_idx]
+        break
+
+    career_raw: Any = None
+    totals = category.get("totals") or []
+    if war_idx < len(totals):
+        career_raw = totals[war_idx]
+
+    if _normalize_war_value(career_raw) is None:
+        career_total = 0.0
+        found = False
+        for stat in category.get("statistics") or []:
+            values = stat.get("stats") or []
+            if war_idx >= len(values):
+                continue
+            value = _parse_number(values[war_idx])
+            if value is None:
+                continue
+            career_total += value
+            found = True
+        if found:
+            career_raw = career_total
+
+    return _normalize_war_value(season_raw), _normalize_war_value(career_raw)
+
+
+def _war_from_fangraphs(
+    player_name: str,
+    *,
+    player_record: dict[str, Any],
+    season_year: int,
+    pitching: bool,
+) -> tuple[str | None, str | None]:
+    record = {**player_record, "player_name": player_name}
+    if pitching:
+        season_row, career_row = _fetch_fangraphs_pitching_frames(
+            year=season_year,
+            player_record=record,
+        )
+    else:
+        season_row, career_row = _fetch_fangraphs_batting_frames(
+            year=season_year,
+            player_record=record,
+        )
+    season_war = _normalize_war_value(season_row.get("WAR")) if season_row is not None else None
+    career_war = _normalize_war_value(career_row.get("WAR")) if career_row is not None else None
+    return season_war, career_war
+
+
+def _resolve_war_for_player(
+    player_name: str,
+    *,
+    season_year: int,
+    pitching: bool,
+    player_record: dict[str, Any] | None,
+    espn_categories: dict[str, Any] | None = None,
+) -> tuple[str | None, str | None]:
+    season_war, career_war = _safe_war_for_player(
+        player_name,
+        season_year=season_year,
+        pitching=pitching,
+    )
+
+    if espn_categories and (season_war is None or career_war is None):
+        espn_season_war, espn_career_war = _war_from_espn_categories(
+            espn_categories,
+            pitching=pitching,
+            season_year=season_year,
+        )
+        if season_war is None:
+            season_war = espn_season_war
+        if career_war is None:
+            career_war = espn_career_war
+
+    if player_record and (season_war is None or career_war is None):
+        fg_season_war, fg_career_war = _war_from_fangraphs(
+            player_name,
+            player_record=player_record,
+            season_year=season_year,
+            pitching=pitching,
+        )
+        if season_war is None:
+            season_war = fg_season_war
+        if career_war is None:
+            career_war = fg_career_war
+
+    return season_war, career_war
+
+
+def _inject_war_into_stats_table(
+    table: dict[str, Any],
+    season_war: str | None,
+    career_war: str | None,
+) -> dict[str, Any]:
+    if season_war is None and career_war is None:
+        return table
+
+    columns: list[dict[str, str]] = []
+    for column in table.get("columns") or []:
+        if column.get("label") != "WAR":
+            columns.append(column)
+            continue
+        columns.append({
+            "label": "WAR",
+            "season": season_war if season_war is not None else column.get("season", "—"),
+            "career": career_war if career_war is not None else column.get("career", "—"),
+        })
+
+    updated_rows: list[dict[str, Any]] = []
+    for row in table.get("rows") or []:
+        cells = dict(row.get("cells") or {})
+        if season_war is not None and row.get("label") == str(table.get("season_year")):
+            cells["WAR"] = season_war
+        if career_war is not None and row.get("row_kind") == "career":
+            cells["WAR"] = career_war
+        updated_rows.append({**row, "cells": cells})
+
+    result = {**table, "columns": columns}
+    if updated_rows:
+        result["rows"] = updated_rows
+    return result
+
+
+def _stats_table_has_data(table: dict[str, Any] | None) -> bool:
+    if not table:
+        return False
+    for row in table.get("rows") or []:
+        if row.get("row_kind") == "career":
+            continue
+        for value in (row.get("cells") or {}).values():
+            if value and value != "—":
+                return True
+    for column in table.get("columns") or []:
+        season_value = column.get("season")
+        if season_value and season_value != "—":
+            return True
+    return False
+
+
+def _match_name_rows(frame: pd.DataFrame, player_name: str) -> pd.DataFrame:
+    if frame.empty or "Name" not in frame.columns:
+        return frame.iloc[0:0]
+    rows = frame[frame["Name"] == player_name]
+    if not rows.empty:
+        return rows
+    folded_name = _fold_name(player_name)
+    return frame[frame["Name"].map(lambda value: _fold_name(str(value))) == folded_name]
+
+
+def _fangraphs_pitching_row(
+    frame: pd.DataFrame | None,
+    *,
+    player_name: str,
+    year: int,
+) -> pd.Series | None:
+    if frame is None or frame.empty:
+        return None
+    rows = _match_name_rows(frame, player_name)
+    if "Season" in rows.columns:
+        season_rows = rows[rows["Season"].astype(str) == str(year)]
+        if not season_rows.empty:
+            rows = season_rows
+    if rows.empty:
+        return None
+    return rows.iloc[0]
+
+
+def _fangraphs_pitching_values(row: pd.Series | None) -> dict[str, Any]:
+    if row is None:
+        return {}
+    return {
+        "W": row.get("W"),
+        "L": row.get("L"),
+        "ERA": row.get("ERA"),
+        "G": row.get("G"),
+        "GS": row.get("GS"),
+        "SV": row.get("SV"),
+        "IP": row.get("IP"),
+        "SO": row.get("SO"),
+        "WHIP": row.get("WHIP"),
+        "WAR": row.get("WAR"),
+    }
+
+
+def _fangraphs_batting_values(row: pd.Series | None) -> dict[str, Any]:
+    if row is None:
+        return {}
+    values = {
+        "AB": row.get("AB"),
+        "H": row.get("H"),
+        "HR": row.get("HR"),
+        "R": row.get("R"),
+        "RBI": row.get("RBI"),
+        "SB": row.get("SB"),
+        "BA": row.get("AVG"),
+        "OBP": row.get("OBP"),
+        "SLG": row.get("SLG"),
+        "OPS": row.get("OPS"),
+        "WAR": row.get("WAR"),
+    }
+    if "OPS+" in row.index:
+        values["OPS+"] = row.get("OPS+")
+    elif "wRC+" in row.index:
+        values["OPS+"] = row.get("wRC+")
+    return values
+
+
+def _fetch_fangraphs_pitching_frames(
+    *,
+    year: int,
+    player_record: dict[str, Any],
+) -> tuple[pd.Series | None, pd.Series | None]:
+    from pybaseball import pitching_stats
+
+    fangraphs_id = player_record.get("fangraphs_id")
+    player_filter = str(fangraphs_id) if fangraphs_id else ""
+    debut_year = player_record.get("debut_year") or max(1995, year - 25)
+    last_year = max(year, player_record.get("last_year") or year)
+
+    season_frame: pd.DataFrame | None = None
+    career_frame: pd.DataFrame | None = None
+    try:
+        season_frame = pitching_stats(
+            year,
+            year,
+            qual=0,
+            split_seasons=True,
+            players=player_filter,
+        )
+    except Exception:
+        season_frame = None
+    try:
+        career_frame = pitching_stats(
+            debut_year,
+            last_year,
+            qual=0,
+            split_seasons=False,
+            players=player_filter,
+        )
+    except Exception:
+        career_frame = None
+
+    player_name = str(player_record.get("player_name") or "")
+    season_row = _fangraphs_pitching_row(season_frame, player_name=player_name, year=year)
+    career_row = None
+    if career_frame is not None and not career_frame.empty:
+        career_rows = _match_name_rows(career_frame, player_name)
+        if not career_rows.empty:
+            career_row = career_rows.iloc[0]
+    return season_row, career_row
+
+
+def _fetch_fangraphs_batting_frames(
+    *,
+    year: int,
+    player_record: dict[str, Any],
+) -> tuple[pd.Series | None, pd.Series | None]:
+    from pybaseball import batting_stats
+
+    fangraphs_id = player_record.get("fangraphs_id")
+    player_filter = str(fangraphs_id) if fangraphs_id else ""
+    debut_year = player_record.get("debut_year") or max(1995, year - 25)
+    last_year = max(year, player_record.get("last_year") or year)
+
+    season_frame: pd.DataFrame | None = None
+    career_frame: pd.DataFrame | None = None
+    try:
+        season_frame = batting_stats(
+            year,
+            qual=0,
+            split_seasons=True,
+            players=player_filter,
+        )
+    except Exception:
+        season_frame = None
+    try:
+        career_frame = batting_stats(
+            debut_year,
+            end_season=last_year,
+            qual=0,
+            split_seasons=False,
+            players=player_filter,
+        )
+    except Exception:
+        career_frame = None
+
+    player_name = str(player_record.get("player_name") or "")
+    season_row = _fangraphs_pitching_row(season_frame, player_name=player_name, year=year)
+    career_row = None
+    if career_frame is not None and not career_frame.empty:
+        career_rows = _match_name_rows(career_frame, player_name)
+        if not career_rows.empty:
+            career_row = career_rows.iloc[0]
+    return season_row, career_row
+
+
+def _fetch_pitching_stats_table_fangraphs(
+    player_name: str,
+    *,
+    player_record: dict[str, Any],
+    year: int,
+) -> dict[str, Any] | None:
+    record = {**player_record, "player_name": player_name}
+    season_row, career_row = _fetch_fangraphs_pitching_frames(year=year, player_record=record)
+    if season_row is None and career_row is None:
+        return None
+
+    season_war = _format_war(season_row.get("WAR")) if season_row is not None else None
+    career_war = _format_war(career_row.get("WAR")) if career_row is not None else None
+    if season_war is None or career_war is None:
+        bref_season_war, bref_career_war = _safe_war_for_player(
+            player_name,
+            season_year=year,
+            pitching=True,
+        )
+        if season_war is None:
+            season_war = bref_season_war
+        if career_war is None:
+            career_war = bref_career_war
+
+    season_values = _fangraphs_pitching_values(season_row)
+    career_values = _fangraphs_pitching_values(career_row)
+    if season_war is not None:
+        season_values["WAR"] = season_war
+    if career_war is not None:
+        career_values["WAR"] = career_war
+
+    return _build_stats_table_result(
+        season_year=year,
+        columns=_PITCHING_COLUMNS,
+        season_values=season_values,
+        career_values=career_values,
+        kind="pitching",
+    )
+
+
+def _fetch_batting_stats_table_fangraphs(
+    player_name: str,
+    *,
+    player_record: dict[str, Any],
+    year: int,
+) -> dict[str, Any] | None:
+    record = {**player_record, "player_name": player_name}
+    season_row, career_row = _fetch_fangraphs_batting_frames(year=year, player_record=record)
+    if season_row is None and career_row is None:
+        return None
+
+    season_war = _format_war(season_row.get("WAR")) if season_row is not None else None
+    career_war = _format_war(career_row.get("WAR")) if career_row is not None else None
+    if season_war is None or career_war is None:
+        bref_season_war, bref_career_war = _safe_war_for_player(
+            player_name,
+            season_year=year,
+            pitching=False,
+        )
+        if season_war is None:
+            season_war = bref_season_war
+        if career_war is None:
+            career_war = bref_career_war
+
+    season_values = _fangraphs_batting_values(season_row)
+    career_values = _fangraphs_batting_values(career_row)
+    if season_war is not None:
+        season_values["WAR"] = season_war
+    if career_war is not None:
+        career_values["WAR"] = career_war
+
+    return _build_stats_table_result(
+        season_year=year,
+        columns=_BATTING_COLUMNS,
+        season_values=season_values,
+        career_values=career_values,
+        kind="batting",
+    )
+
+
+def _fetch_mlb_stat_block(
+    mlbam_id: int,
+    *,
+    group: str,
+    stats_type: str,
+    season_year: int | None = None,
+) -> dict[str, Any] | None:
+    params: dict[str, Any] = {"stats": stats_type, "group": group}
+    if season_year is not None:
+        params["season"] = season_year
+    try:
+        response = requests.get(
+            _MLB_STATS_URL.format(player_id=mlbam_id),
+            params=params,
+            timeout=15,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.RequestException:
+        return None
+
+    stats_blocks = payload.get("stats") or []
+    if not stats_blocks:
+        return None
+    splits = stats_blocks[0].get("splits") or []
+    if not splits:
+        return None
+    stat = splits[0].get("stat")
+    return stat if isinstance(stat, dict) else None
+
+
+def _mlb_pitching_values(stat: dict[str, Any] | None) -> dict[str, Any]:
+    if not stat:
+        return {}
+    return {
+        "W": stat.get("wins"),
+        "L": stat.get("losses"),
+        "ERA": stat.get("era"),
+        "G": stat.get("gamesPlayed"),
+        "GS": stat.get("gamesStarted"),
+        "SV": stat.get("saves"),
+        "IP": stat.get("inningsPitched"),
+        "SO": stat.get("strikeOuts"),
+        "WHIP": stat.get("whip"),
+    }
+
+
+def _mlb_batting_values(stat: dict[str, Any] | None) -> dict[str, Any]:
+    if not stat:
+        return {}
+    return {
+        "AB": stat.get("atBats"),
+        "H": stat.get("hits"),
+        "HR": stat.get("homeRuns"),
+        "R": stat.get("runs"),
+        "RBI": stat.get("rbi"),
+        "SB": stat.get("stolenBases"),
+        "BA": stat.get("avg"),
+        "OBP": stat.get("obp"),
+        "SLG": stat.get("slg"),
+        "OPS": stat.get("ops"),
+    }
+
+
+def _fetch_pitching_stats_table_mlb(
+    player_name: str,
+    *,
+    player_record: dict[str, Any],
+    year: int,
+) -> dict[str, Any] | None:
+    mlbam_id = player_record.get("mlbam_id")
+    if not mlbam_id:
+        return None
+
+    season_stat = _fetch_mlb_stat_block(
+        mlbam_id,
+        group="pitching",
+        stats_type="season",
+        season_year=year,
+    )
+    career_stat = _fetch_mlb_stat_block(
+        mlbam_id,
+        group="pitching",
+        stats_type="career",
+    )
+    if not season_stat and not career_stat:
+        return None
+
+    season_war, career_war = _safe_war_for_player(
+        player_name,
+        season_year=year,
+        pitching=True,
+    )
+    season_values = _mlb_pitching_values(season_stat)
+    career_values = _mlb_pitching_values(career_stat)
+    if season_war is not None:
+        season_values["WAR"] = season_war
+    if career_war is not None:
+        career_values["WAR"] = career_war
+
+    resolved_year = year
+    if season_stat and season_stat.get("season"):
+        try:
+            resolved_year = int(season_stat["season"])
+        except (TypeError, ValueError):
+            resolved_year = year
+
+    return _build_stats_table_result(
+        season_year=resolved_year,
+        columns=_PITCHING_COLUMNS,
+        season_values=season_values,
+        career_values=career_values,
+        kind="pitching",
+    )
+
+
+def _fetch_batting_stats_table_mlb(
+    player_name: str,
+    *,
+    player_record: dict[str, Any],
+    year: int,
+) -> dict[str, Any] | None:
+    mlbam_id = player_record.get("mlbam_id")
+    if not mlbam_id:
+        return None
+
+    season_stat = _fetch_mlb_stat_block(
+        mlbam_id,
+        group="hitting",
+        stats_type="season",
+        season_year=year,
+    )
+    career_stat = _fetch_mlb_stat_block(
+        mlbam_id,
+        group="hitting",
+        stats_type="career",
+    )
+    if not season_stat and not career_stat:
+        return None
+
+    season_war, career_war = _safe_war_for_player(
+        player_name,
+        season_year=year,
+        pitching=False,
+    )
+    season_values = _mlb_batting_values(season_stat)
+    career_values = _mlb_batting_values(career_stat)
+    if season_war is not None:
+        season_values["WAR"] = season_war
+    if career_war is not None:
+        career_values["WAR"] = career_war
+    if career_stat is not None:
+        career_values["OPS+"] = _compute_career_ops_plus(
+            career_stat.get("obp"),
+            career_stat.get("slg"),
+        )
+
+    resolved_year = year
+    if season_stat and season_stat.get("season"):
+        try:
+            resolved_year = int(season_stat["season"])
+        except (TypeError, ValueError):
+            resolved_year = year
+
+    return _build_stats_table_result(
+        season_year=resolved_year,
+        columns=_BATTING_COLUMNS,
+        season_values=season_values,
+        career_values=career_values,
+        kind="batting",
+    )
+
+
 def fetch_player_stats_table(
     player_name: str,
     season_year: str | int | None = None,
     *,
     position: str | None = None,
+    espn_categories: dict[str, Any] | None = None,
+    espn_player_id: str | None = None,
 ) -> dict[str, Any] | None:
     if not player_name:
         return None
@@ -759,34 +1957,97 @@ def fetch_player_stats_table(
         year = date.today().year
 
     pitching = is_pitcher_position(position)
-    cache_key = f"{player_name.lower()}:{year}:{'pitch' if pitching else 'bat'}:v4"
+    cache_key = f"{player_name.lower()}:{year}:{'pitch' if pitching else 'bat'}:v10"
     cached = _stats_table_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
         return cached[1]
 
-    player_record = _lookup_player_record(player_name)
+    player_record = _lookup_player_record(player_name) or {
+        "bbref_id": None,
+        "mlbam_id": None,
+        "fangraphs_id": None,
+        "debut_year": None,
+        "last_year": year,
+    }
 
-    try:
-        if pitching:
-            if not player_record:
-                player_record = {
-                    "bbref_id": None,
-                    "debut_year": None,
-                    "last_year": year,
-                }
-            result = _fetch_pitching_stats_table(
+    if pitching:
+        fetchers = (
+            lambda: _fetch_pitching_stats_table(
                 player_name,
                 player_record=player_record,
                 year=year,
-            )
-        else:
-            if not player_record or not player_record.get("bbref_id"):
-                return None
-            result = _fetch_batting_stats_table(
+            ),
+            lambda: _fetch_pitching_stats_table_fangraphs(
                 player_name,
-                bbref_id=player_record["bbref_id"],
+                player_record=player_record,
                 year=year,
+            ),
+            lambda: _fetch_pitching_stats_table_mlb(
+                player_name,
+                player_record=player_record,
+                year=year,
+            ),
+        )
+    else:
+        fetchers_list: list[Any] = []
+        if player_record.get("bbref_id"):
+            fetchers_list.append(
+                lambda: _fetch_batting_stats_table(
+                    player_name,
+                    bbref_id=player_record["bbref_id"],
+                    year=year,
+                )
+            )
+        fetchers_list.extend([
+            lambda: _fetch_batting_stats_table_fangraphs(
+                player_name,
+                player_record=player_record,
+                year=year,
+            ),
+            lambda: _fetch_batting_stats_table_mlb(
+                player_name,
+                player_record=player_record,
+                year=year,
+            ),
+        ])
+        fetchers = tuple(fetchers_list)
+
+    result: dict[str, Any] | None = None
+    try:
+        for fetcher in fetchers:
+            try:
+                candidate = fetcher()
+            except Exception:
+                continue
+            if _stats_table_has_data(candidate):
+                result = candidate
+                break
+        if result:
+            categories = espn_categories
+            if categories is None and espn_player_id:
+                categories = _fetch_espn_stat_categories(espn_player_id)
+            result = _expand_stats_table_seasons(
+                result,
+                player_name=player_name,
+                player_record=player_record,
+                pitching=pitching,
+                year=year,
+                espn_categories=categories,
+            )
+            season_war, career_war = _resolve_war_for_player(
+                player_name,
+                season_year=year,
+                pitching=pitching,
+                player_record=player_record,
+                espn_categories=categories,
+            )
+            result = _inject_war_into_stats_table(result, season_war, career_war)
+            result = _attach_career_log(
+                result,
+                espn_categories=categories,
+                pitching=pitching,
+                season_year=year,
             )
         _stats_table_cache[cache_key] = (now, result)
         return result
@@ -898,12 +2159,12 @@ def _parse_player_pitching_stats(
     return stats
 
 
-def _build_player_stats_panel(
+def _build_league_average_view(
     categories: dict[str, Any],
     *,
     pitching: bool,
     season_year: int,
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     from league_player_averages import get_league_player_stats_by_category
     from team_stats import (
         _BATTING_DETAIL_SPECS,
@@ -912,7 +2173,6 @@ def _build_player_stats_panel(
     )
 
     league_stats = get_league_player_stats_by_category(season_year)
-    views: list[dict[str, Any]] = []
     if pitching:
         player_pitching = _parse_player_pitching_stats(categories, season_year=season_year)
         pitching_metrics = _build_stat_metrics(
@@ -921,48 +2181,112 @@ def _build_player_stats_panel(
             category="pitching",
             league_stats=league_stats.get("pitching") or {},
         )
-        if pitching_metrics:
-            views.append({
-                "id": "pitching",
-                "label": "Pitching",
-                "metrics": pitching_metrics,
-            })
-    else:
-        player_batting = _parse_player_batting_stats(categories, season_year=season_year)
-        batting_metrics = _build_stat_metrics(
-            player_batting,
-            _BATTING_DETAIL_SPECS,
-            category="batting",
-            league_stats=league_stats.get("batting") or {},
-        )
-        if batting_metrics:
-            views.append({
-                "id": "batting",
-                "label": "Batting",
-                "metrics": batting_metrics,
-            })
+        return {
+            "id": "league_average",
+            "label": "League Average",
+            "metrics": pitching_metrics or [],
+        }
 
-    if not views:
-        return None
+    player_batting = _parse_player_batting_stats(categories, season_year=season_year)
+    batting_metrics = _build_stat_metrics(
+        player_batting,
+        _BATTING_DETAIL_SPECS,
+        category="batting",
+        league_stats=league_stats.get("batting") or {},
+    )
+    return {
+        "id": "league_average",
+        "label": "League Average",
+        "metrics": batting_metrics or [],
+    }
+
+
+def _season_stats_loading_view(*, pitching: bool, season_year: int) -> dict[str, Any]:
+    return {
+        "id": "season_stats",
+        "label": "Season Stats",
+        "loading": True,
+    }
+
+
+def _build_player_stats_panel_league_only(
+    categories: dict[str, Any],
+    *,
+    pitching: bool,
+    season_year: int,
+) -> dict[str, Any]:
+    return {
+        "id": "player_stats",
+        "label": "Player Stats",
+        "panel_kind": "toggle_stat_bars",
+        "default_view": "league_average",
+        "season_year": str(season_year),
+        "views": [
+            _build_league_average_view(
+                categories,
+                pitching=pitching,
+                season_year=season_year,
+            ),
+            _season_stats_loading_view(pitching=pitching, season_year=season_year),
+        ],
+    }
+
+
+def _build_player_stats_panel(
+    categories: dict[str, Any],
+    *,
+    pitching: bool,
+    season_year: int,
+    player_name: str = "",
+    position: str | None = None,
+) -> dict[str, Any] | None:
+    views: list[dict[str, Any]] = [
+        _build_league_average_view(
+            categories,
+            pitching=pitching,
+            season_year=season_year,
+        ),
+    ]
+
+    column_labels = [label for _, label in (_PITCHING_COLUMNS if pitching else _BATTING_COLUMNS)]
+    stats_table = (
+        fetch_player_stats_table(
+            player_name,
+            season_year,
+            position=position,
+            espn_categories=categories,
+        )
+        if player_name
+        else None
+    )
+    if not stats_table:
+        stats_table = _empty_stats_table(column_labels, season_year)
+
+    views.append({
+        "id": "season_stats",
+        "label": "Season Stats",
+        "stats_table": stats_table,
+    })
 
     return {
         "id": "player_stats",
         "label": "Player Stats",
         "panel_kind": "toggle_stat_bars",
-        "default_view": views[0]["id"],
+        "default_view": "league_average",
         "season_year": str(season_year),
         "views": views,
     }
 
 
 def _empty_stats_table(labels: list[str] | tuple[str, ...], season_year: int) -> dict[str, Any]:
-    return {
-        "season_year": str(season_year),
-        "columns": [
-            {"label": label, "season": "—", "career": "—"}
-            for label in labels
-        ],
-    }
+    empty_values = {label: None for label in labels}
+    return _build_stats_table_result(
+        season_year=season_year,
+        columns=tuple((label, label) for label in labels),
+        season_values=empty_values,
+        career_values=empty_values,
+        kind="pitching" if "ERA" in labels else "batting",
+    )
 
 
 def _parse_espn_category_table(
@@ -2054,18 +3378,44 @@ def _fetch_espn_stat_categories(player_id: str) -> dict[str, Any]:
     return categories
 
 
-def _empty_player_stats_panel(*, pitching: bool, season_year: int) -> dict[str, Any]:
+def _empty_player_stats_panel_league_only(*, pitching: bool, season_year: int) -> dict[str, Any]:
     return {
         "id": "player_stats",
         "label": "Player Stats",
         "panel_kind": "toggle_stat_bars",
-        "default_view": "pitching" if pitching else "batting",
+        "default_view": "league_average",
         "season_year": str(season_year),
-        "views": [{
-            "id": "pitching" if pitching else "batting",
-            "label": "Pitching" if pitching else "Batting",
-            "metrics": [],
-        }],
+        "views": [
+            {
+                "id": "league_average",
+                "label": "League Average",
+                "metrics": [],
+            },
+            _season_stats_loading_view(pitching=pitching, season_year=season_year),
+        ],
+    }
+
+
+def _empty_player_stats_panel(*, pitching: bool, season_year: int) -> dict[str, Any]:
+    column_labels = [label for _, label in (_PITCHING_COLUMNS if pitching else _BATTING_COLUMNS)]
+    return {
+        "id": "player_stats",
+        "label": "Player Stats",
+        "panel_kind": "toggle_stat_bars",
+        "default_view": "league_average",
+        "season_year": str(season_year),
+        "views": [
+            {
+                "id": "league_average",
+                "label": "League Average",
+                "metrics": [],
+            },
+            {
+                "id": "season_stats",
+                "label": "Season Stats",
+                "stats_table": _empty_stats_table(column_labels, season_year),
+            },
+        ],
     }
 
 
@@ -2095,7 +3445,7 @@ def fetch_player_core_stat_panels(
     year = _resolve_panel_year(season_year)
     pitching = is_pitcher_position(position)
     kind = "pitching" if pitching else "batting"
-    cache_key = f"{player_id}:{year}:{kind}:core:v1"
+    cache_key = f"{player_id}:{year}:{kind}:core:v4"
     cached = _player_core_panels_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
@@ -2106,10 +3456,396 @@ def fetch_player_core_stat_panels(
         categories,
         pitching=pitching,
         season_year=year,
+        player_name=player_name,
+        position=position,
     ) or _empty_player_stats_panel(pitching=pitching, season_year=year)
     panels = [player_stats_panel]
     _player_core_panels_cache[cache_key] = (now, panels)
     return panels
+
+
+def fetch_player_league_stat_panel(
+    player_id: str,
+    *,
+    player_name: str,
+    position: str | None,
+    season_year: str | int | None = None,
+) -> dict[str, Any]:
+    if not player_id:
+        return _empty_player_stats_panel_league_only(
+            pitching=is_pitcher_position(position),
+            season_year=_resolve_panel_year(season_year),
+        )
+
+    year = _resolve_panel_year(season_year)
+    pitching = is_pitcher_position(position)
+    kind = "pitching" if pitching else "batting"
+    cache_key = f"{player_id}:{year}:{kind}:league:v1"
+    cached = _player_core_panels_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    categories = _fetch_espn_stat_categories(player_id)
+    panel = _build_player_stats_panel_league_only(
+        categories,
+        pitching=pitching,
+        season_year=year,
+    ) or _empty_player_stats_panel_league_only(pitching=pitching, season_year=year)
+    _player_core_panels_cache[cache_key] = (now, panel)
+    return panel
+
+
+def _parse_savant_html_table(table: Any) -> dict[str, Any] | None:
+    if table is None or not hasattr(table, "find"):
+        return None
+
+    header_row = table.find("thead")
+    if header_row is None:
+        return None
+    headers = [th.get_text(strip=True) for th in header_row.find_all("th")]
+    while headers and not headers[0]:
+        headers = headers[1:]
+
+    body = table.find("tbody")
+    if body is None or not headers:
+        return None
+
+    rows: list[dict[str, str]] = []
+    for tr in body.find_all("tr"):
+        cells = [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]
+        if not any(cells):
+            continue
+        while cells and cells[0] in {"", "*"}:
+            cells = cells[1:]
+        if not cells:
+            continue
+        if len(cells) < len(headers):
+            cells.extend([""] * (len(headers) - len(cells)))
+        rows.append(dict(zip(headers, cells[: len(headers)])))
+
+    if not rows:
+        return None
+    return {"columns": headers, "rows": rows}
+
+
+def _find_savant_table_by_anchor(soup: Any, anchor_name: str) -> Any | None:
+    link = soup.find("a", attrs={"name": anchor_name})
+    if link is None:
+        link = soup.find("a", href=f"#{anchor_name}")
+    if link is None:
+        return None
+    heading = link.find_parent("h2")
+    if heading is None:
+        return None
+    return heading.find_next("table")
+
+
+def _should_drop_savant_summary_row(row: dict[str, str]) -> bool:
+    season = str(row.get("Season") or row.get("Year") or "").strip()
+    return season.upper() == "MLB"
+
+
+def _normalize_savant_season_label(season: str) -> tuple[str, str]:
+    text = str(season or "").strip()
+    if not text:
+        return text, "season"
+    lowered = text.lower()
+    if lowered in {"player", "career"} or lowered.endswith(" seasons"):
+        return "Career", "career"
+    return text, "season"
+
+
+def _savant_table_to_stats_table(
+    parsed: dict[str, Any] | None,
+    *,
+    season_year: int,
+) -> dict[str, Any]:
+    columns = list((parsed or {}).get("columns") or [])
+    raw_rows = list((parsed or {}).get("rows") or [])
+    rows: list[dict[str, Any]] = []
+    for row in raw_rows:
+        if _should_drop_savant_summary_row(row):
+            continue
+        season = row.get("Season") or row.get("Year") or ""
+        label, row_kind = _normalize_savant_season_label(str(season))
+        cells = {
+            column: (row.get(column) or "—")
+            for column in columns
+        }
+        if row_kind == "career":
+            cells["Season"] = "Career"
+        rows.append({
+            "label": label,
+            "row_kind": row_kind,
+            "cells": cells,
+        })
+    return {
+        "layout": "savant_career",
+        "columns": columns,
+        "rows": rows,
+        "season_year": str(season_year),
+    }
+
+
+def _fetch_savant_career_tables(
+    mlbam_id: int | None,
+    *,
+    pitching: bool,
+    season_year: int,
+) -> dict[str, Any] | None:
+    if not mlbam_id:
+        return None
+
+    cache_key = f"{mlbam_id}:{'pitch' if pitching else 'bat'}:career:v2"
+    cached = _savant_career_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    kind = "pitching" if pitching else "hitting"
+    url = _SAVANT_PLAYER_PAGE_URL.format(player_id=mlbam_id, kind=kind)
+    try:
+        from bs4 import BeautifulSoup
+
+        response = requests.get(
+            url,
+            timeout=25,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+    except Exception:
+        _savant_career_cache[cache_key] = (now, None)
+        return None
+
+    if pitching:
+        standard_container = soup.find("div", id="pitchingStandard")
+        standard_parsed = _parse_savant_html_table(
+            standard_container.find("table") if standard_container else _find_savant_table_by_anchor(
+                soup,
+                "standard-mlb-pitching-stats",
+            ),
+        )
+        advanced_container = soup.find("div", id="statcast_stats_pitching")
+        advanced_parsed = _parse_savant_html_table(
+            advanced_container.find("table") if advanced_container else None,
+        )
+    else:
+        standard_container = soup.find("div", id="hittingStandard")
+        standard_parsed = _parse_savant_html_table(
+            standard_container.find("table") if standard_container else None,
+        )
+        advanced_parsed = _parse_savant_html_table(
+            _find_savant_table_by_anchor(soup, "advanced-mlb-batting-stats"),
+        )
+
+    if not standard_parsed and not advanced_parsed:
+        _savant_career_cache[cache_key] = (now, None)
+        return None
+
+    result = {
+        "standard": _savant_table_to_stats_table(standard_parsed, season_year=season_year),
+        "advanced": _savant_table_to_stats_table(advanced_parsed, season_year=season_year),
+    }
+    _savant_career_cache[cache_key] = (now, result)
+    return result
+
+
+def _normalize_innings_pool_value(value: float) -> float:
+    whole = int(value)
+    partial = round((value - whole) * 10)
+    if partial > 2:
+        partial = 2
+    return float(whole) + partial / 3.0
+
+
+def _league_pool_values_for_timeline(
+    values: list[float],
+    *,
+    column: str,
+) -> list[float]:
+    if column == "IP":
+        return [_normalize_innings_pool_value(value) for value in values]
+    return list(values)
+
+
+def _season_years_from_savant_table(table: dict[str, Any]) -> list[int]:
+    years: set[int] = set()
+    for row in table.get("rows") or []:
+        season = (row.get("cells") or {}).get("Season") or row.get("label")
+        if season in (None, "", "—"):
+            continue
+        try:
+            years.add(int(str(season).strip()))
+        except ValueError:
+            continue
+    return sorted(years)
+
+
+def _build_savant_timeline_league_bounds(
+    seasons: list[int],
+    columns: list[str],
+    *,
+    pitching: bool,
+) -> dict[str, dict[str, dict[str, float]]]:
+    from league_player_averages import get_league_player_stats_by_category
+
+    key_map = _SAVANT_PITCHING_LEAGUE_KEYS if pitching else _SAVANT_BATTING_LEAGUE_KEYS
+    bounds: dict[str, dict[str, dict[str, float]]] = {}
+    for season in seasons:
+        league_stats = get_league_player_stats_by_category(season)
+        category = league_stats.get("pitching" if pitching else "batting") or {}
+        year_bounds: dict[str, dict[str, float]] = {}
+        for column in columns:
+            pool_key = key_map.get(column)
+            if not pool_key:
+                continue
+            raw_values = category.get(pool_key) or []
+            values = _league_pool_values_for_timeline(
+                [float(value) for value in raw_values],
+                column=column,
+            )
+            if not values:
+                continue
+            year_bounds[column] = {
+                "min": float(min(values)),
+                "max": float(max(values)),
+            }
+        if year_bounds:
+            bounds[str(season)] = year_bounds
+    return bounds
+
+
+def _enrich_savant_advanced_teams(
+    standard: dict[str, Any],
+    advanced: dict[str, Any],
+) -> dict[str, Any]:
+    team_by_season: dict[str, str] = {}
+    for row in standard.get("rows") or []:
+        cells = row.get("cells") or {}
+        season = cells.get("Season") or row.get("label")
+        team = cells.get("Tm")
+        if season and team and team not in {"", "—"}:
+            team_by_season[str(season)] = str(team)
+
+    for row in advanced.get("rows") or []:
+        cells = row.setdefault("cells", {})
+        season = cells.get("Season") or row.get("label")
+        if season and str(season) in team_by_season:
+            cells["Tm"] = team_by_season[str(season)]
+
+    return advanced
+
+
+def _attach_savant_timeline_league_bounds(
+    table: dict[str, Any],
+    *,
+    pitching: bool,
+) -> dict[str, Any]:
+    columns = [
+        column for column in (table.get("columns") or [])
+        if column not in {"Season", "Tm", "LG"}
+    ]
+    seasons = _season_years_from_savant_table(table)
+    if not columns or not seasons:
+        return table
+    table["league_bounds"] = _build_savant_timeline_league_bounds(
+        seasons,
+        columns,
+        pitching=pitching,
+    )
+    return table
+
+
+def fetch_player_season_stats_view(
+    player_id: str,
+    *,
+    player_name: str,
+    position: str | None,
+    season_year: str | int | None = None,
+) -> dict[str, Any]:
+    year = _resolve_panel_year(season_year)
+    pitching = is_pitcher_position(position)
+    kind = "pitching" if pitching else "batting"
+    cache_key = f"{player_id}:{year}:{kind}:season:v4"
+    cached = _player_core_panels_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    player_record = _lookup_player_record(player_name) if player_name else None
+    mlbam_id = (player_record or {}).get("mlbam_id")
+    savant_tables = _fetch_savant_career_tables(
+        mlbam_id,
+        pitching=pitching,
+        season_year=year,
+    )
+
+    empty_table = {
+        "layout": "savant_career",
+        "columns": [],
+        "rows": [],
+        "season_year": str(year),
+    }
+    if savant_tables and (savant_tables.get("standard", {}).get("rows") or savant_tables.get("advanced", {}).get("rows")):
+        standard_table = _attach_savant_timeline_league_bounds(
+            savant_tables.get("standard") or empty_table,
+            pitching=pitching,
+        )
+        advanced_table = _enrich_savant_advanced_teams(
+            standard_table,
+            savant_tables.get("advanced") or empty_table,
+        )
+        advanced_table = _attach_savant_timeline_league_bounds(
+            advanced_table,
+            pitching=pitching,
+        )
+        view = {
+            "id": "season_stats",
+            "label": "Season Stats",
+            "nested_panel": {
+                "default_view": "standard",
+                "views": [
+                    {
+                        "id": "standard",
+                        "label": "Standard",
+                        "stats_table": standard_table,
+                    },
+                    {
+                        "id": "advanced",
+                        "label": "Advanced",
+                        "stats_table": advanced_table,
+                    },
+                ],
+            },
+        }
+        _player_core_panels_cache[cache_key] = (now, view)
+        return view
+
+    column_labels = [label for _, label in (_PITCHING_COLUMNS if pitching else _BATTING_COLUMNS)]
+    categories = _fetch_espn_stat_categories(player_id) if player_id else {}
+    stats_table = (
+        fetch_player_stats_table(
+            player_name,
+            year,
+            position=position,
+            espn_categories=categories or None,
+            espn_player_id=player_id or None,
+        )
+        if player_name
+        else None
+    )
+    if not stats_table:
+        stats_table = _empty_stats_table(column_labels, year)
+
+    view = {
+        "id": "season_stats",
+        "label": "Season Stats",
+        "stats_table": stats_table,
+    }
+    _player_core_panels_cache[cache_key] = (now, view)
+    return view
 
 
 def fetch_player_visual_stat_panel(
