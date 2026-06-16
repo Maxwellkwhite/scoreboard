@@ -10,17 +10,11 @@
 </head>
 <body class="scoreboard-page team-page"{% if team.color %} style="--team-color: {{ team.color }};"{% endif %}>
   {% include "partials/desktop_only_gate.html" %}
-  <nav class="navbar scoreboard-nav">
-    <div class="container">
-      <a class="navbar-brand" href="{{ url_for('home_page') }}">Scoreboard</a>
-      <span class="navbar-text text-white-50 small">MLB Team</span>
-    </div>
-  </nav>
+  {% include "partials/scoreboard_nav.html" %}
 
   <main class="scoreboard-main game-detail-main">
-    <header class="game-detail-header">
-      <h1>{{ team.name }}</h1>
-    </header>
+    {% set standings_url = url_for('home_page') ~ '#standings' %}
+    {% include "partials/game_live_strip.html" %}
 
     <section class="game-detail-section team-profile">
       <div class="team-profile__card">
@@ -34,6 +28,7 @@
             </div>
             {% endif %}
             <div class="team-profile__details">
+              <h1 class="team-profile__name">{{ team.name }}</h1>
               {% if team.abbr or team.record or team.pct %}
               <p class="team-profile__tags">
                 {%- if team.abbr -%}<span>{{ team.abbr }}</span>{%- endif -%}
@@ -42,7 +37,9 @@
               </p>
               {% endif %}
               {% if team.standing_summary %}
-              <p class="team-profile__standing">{{ team.standing_summary }}</p>
+              <p class="team-profile__standing">
+                <a href="{{ standings_url }}" class="team-profile__standing-link">{{ team.standing_summary }}</a>
+              </p>
               {% endif %}
             </div>
           </div>
@@ -52,7 +49,7 @@
           {'label': 'Ballpark', 'value': team.venue},
           {'label': 'Home', 'value': team.home_record},
           {'label': 'Road', 'value': team.road_record},
-          {'label': 'Division GB', 'value': team.division_gb},
+          {'label': 'Division GB', 'value': team.division_gb, 'href': standings_url},
           {'label': 'Streak', 'value': team.streak},
           {'label': 'Location', 'value': team.location},
         ] %}
@@ -60,10 +57,19 @@
         {% if visible_vitals %}
         <dl class="team-vitals">
           {% for vital in visible_vitals %}
+          {% if vital.href %}
+          <div class="team-vital team-vital--link">
+            <a href="{{ vital.href }}" class="team-vital__link">
+              <span class="team-vital__label">{{ vital.label }}</span>
+              <span class="team-vital__value">{{ vital.value }}</span>
+            </a>
+          </div>
+          {% else %}
           <div class="team-vital">
             <dt>{{ vital.label }}</dt>
             <dd>{{ vital.value }}</dd>
           </div>
+          {% endif %}
           {% endfor %}
         </dl>
         {% endif %}
@@ -88,6 +94,7 @@
 
     <div id="team-stats-panels"></div>
   </main>
+  <script src="{{ url_for('static', filename='js/scoreboard-strip.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/team.js') }}" defer></script>
 </body>
 </html>

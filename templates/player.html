@@ -11,12 +11,7 @@
 </head>
 <body class="scoreboard-page player-page">
   {% include "partials/desktop_only_gate.html" %}
-  <nav class="navbar scoreboard-nav">
-    <div class="container">
-      <a class="navbar-brand" href="{{ url_for('home_page') }}">Scoreboard</a>
-      <span class="navbar-text text-white-50 small">MLB Player</span>
-    </div>
-  </nav>
+  {% include "partials/scoreboard_nav.html" %}
 
   <main
     class="scoreboard-main game-detail-main"
@@ -24,9 +19,7 @@
     data-is-pitcher="{{ 'true' if is_pitcher else 'false' }}"
     aria-busy="true"
   >
-    <header class="game-detail-header">
-      <h1>{{ player.name }}</h1>
-    </header>
+    {% include "partials/game_live_strip.html" %}
 
     <section class="game-detail-section player-profile">
       <div class="player-profile__card">
@@ -40,6 +33,7 @@
             </div>
             {% endif %}
             <div class="player-profile__details">
+              <h1 class="player-profile__name">{{ player.name }}</h1>
               {% if player.team.abbr or player.position or player.jersey %}
               <p class="player-profile__tags">
                 {%- if player.team.abbr -%}<span>{% if player.team.id %}{{ team_link(player.team.id, player.team.abbr) }}{% else %}{{ player.team.abbr }}{% endif %}</span>{%- endif -%}
@@ -88,6 +82,7 @@
 
     <div id="player-stats-panels"></div>
   </main>
+  <script src="{{ url_for('static', filename='js/scoreboard-strip.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/player.js') }}" defer></script>
 </body>
 </html>

@@ -306,6 +306,20 @@ def strip_initial_page(
     return 0
 
 
+def strip_initial_page_for_team(
+    strip_games: list[dict[str, Any]],
+    team_id: str,
+) -> int:
+    """Carousel page showing this team's game today, if any."""
+    team_id = str(team_id)
+    for index, game in enumerate(strip_games):
+        away_id = str((game.get("away") or {}).get("id") or "")
+        home_id = str((game.get("home") or {}).get("id") or "")
+        if team_id in {away_id, home_id}:
+            return (index + 1) // STRIP_CARDS_PER_PAGE
+    return 0
+
+
 def _scoreboard_sort_key(game: dict[str, Any]) -> tuple[int, str]:
     state = game.get("status_state", "pre")
     priority = _STATUS_SORT_ORDER.get(state, 1)

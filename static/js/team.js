@@ -382,44 +382,46 @@
     });
   }
 
-  function initRosterPanels(root) {
-    root.querySelectorAll('.team-stats-panel').forEach(function (panelEl) {
-      var roster = panelEl.querySelector('.team-roster');
-      if (!roster) return;
+  function initRosterPanels(panelEl) {
+    if (!panelEl) return;
+    var roster = panelEl.querySelector('.team-roster');
+    if (!roster) return;
 
-      var sections = Array.prototype.slice.call(roster.querySelectorAll('.team-roster-section'));
-      var cards = Array.prototype.slice.call(roster.querySelectorAll('.team-roster-card'));
-      var buttons = Array.prototype.slice.call(
-        panelEl.querySelectorAll('.player-panel-header .player-panel-toggle__btn[data-filter]')
-      );
+    var sections = Array.prototype.slice.call(roster.querySelectorAll('.team-roster-section'));
+    var cards = Array.prototype.slice.call(roster.querySelectorAll('.team-roster-card'));
+    var toggle = panelEl.querySelector('.player-panel-header .player-panel-toggle');
+    var buttons = toggle
+      ? Array.prototype.slice.call(toggle.querySelectorAll('.player-panel-toggle__btn[data-filter]'))
+      : [];
 
-      function applyFilter(filterId) {
-        buttons.forEach(function (btn) {
-          var isActive = btn.getAttribute('data-filter') === filterId;
-          btn.classList.toggle('is-active', isActive);
-          btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-        });
-
-        cards.forEach(function (card) {
-          var cardFilter = card.getAttribute('data-filter') || '';
-          var show = filterId === 'all' || cardFilter === filterId;
-          card.hidden = !show;
-        });
-
-        sections.forEach(function (section) {
-          var visibleCards = section.querySelectorAll('.team-roster-card:not([hidden])');
-          section.hidden = visibleCards.length === 0;
-        });
-      }
-
+    function applyFilter(filterId) {
       buttons.forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          applyFilter(btn.getAttribute('data-filter') || 'all');
-        });
+        var isActive = btn.getAttribute('data-filter') === filterId;
+        btn.classList.toggle('is-active', isActive);
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       });
 
-      applyFilter(roster.getAttribute('data-default-filter') || 'all');
+      cards.forEach(function (card) {
+        var cardFilter = card.getAttribute('data-filter') || '';
+        var show = filterId === 'all' || cardFilter === filterId;
+        card.hidden = !show;
+      });
+
+      sections.forEach(function (section) {
+        var visibleCards = section.querySelectorAll('.team-roster-card:not([hidden])');
+        section.hidden = visibleCards.length === 0;
+      });
+    }
+
+    buttons.forEach(function (btn) {
+      if (btn.dataset.rosterFilterBound === 'true') return;
+      btn.dataset.rosterFilterBound = 'true';
+      btn.addEventListener('click', function () {
+        applyFilter(btn.getAttribute('data-filter') || 'all');
+      });
     });
+
+    applyFilter(roster.getAttribute('data-default-filter') || 'all');
   }
 
   function formatGameTime(value) {
@@ -1016,20 +1018,29 @@
       });
   }
 
-  function initPanelToggles(root) {
-    root.querySelectorAll('.player-panel-toggle__btn').forEach(function (btn) {
+  function initPanelToggles(panelEl) {
+    if (!panelEl) return;
+    panelEl.querySelectorAll('.player-panel-toggle__btn[data-view]').forEach(function (btn) {
+      if (btn.dataset.toggleBound === 'true') return;
+      btn.dataset.toggleBound = 'true';
       btn.addEventListener('click', function () {
+        var panelId = btn.getAttribute('data-panel');
         var viewId = btn.getAttribute('data-view');
+        if (!viewId) return;
+
         var panel = btn.closest('.team-stats-panel');
-        if (!panel) return;
+        if (!panel || !panelId) return;
 
-        panel.querySelectorAll('.player-panel-toggle__btn').forEach(function (toggleBtn) {
-          var isActive = toggleBtn.getAttribute('data-view') === viewId;
-          toggleBtn.classList.toggle('is-active', isActive);
-          toggleBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-        });
+        var toggleGroup = btn.closest('.player-panel-toggle');
+        if (toggleGroup) {
+          toggleGroup.querySelectorAll('.player-panel-toggle__btn').forEach(function (toggleBtn) {
+            var isActive = toggleBtn.getAttribute('data-view') === viewId;
+            toggleBtn.classList.toggle('is-active', isActive);
+            toggleBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+          });
+        }
 
-        panel.querySelectorAll('.player-panel-view').forEach(function (viewEl) {
+        panel.querySelectorAll('.player-panel-view[data-panel="' + panelId + '"]').forEach(function (viewEl) {
           viewEl.hidden = viewEl.getAttribute('data-view') !== viewId;
         });
       });

@@ -383,8 +383,7 @@
               : '') +
           '</div>' +
           '<div class="season-timeline__track" aria-hidden="true">' +
-            '<span class="season-timeline__grid"></span>' +
-            '<span class="season-timeline__bar" style="width:' + widthPct + '%"></span>' +
+            '<span class="season-timeline__bar" style="width:' + widthPct + '%;background:#22a06b"></span>' +
             '<span class="season-timeline__dot" style="left:' + widthPct + '%"></span>' +
           '</div>' +
           '<div class="season-timeline__value">' +

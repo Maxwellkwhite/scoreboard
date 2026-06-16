@@ -100,6 +100,8 @@ _FIELDING_LEADER_SPECS = (
 )
 
 _LEADER_TOP_N = 5
+_PITCHING_RATE_STATS_REQUIRING_IP = frozenset({"ERA", "WHIP", "FIP", "xFIP", "OOPS"})
+_MIN_PITCHING_LEADER_IP = 5.0
 
 _BATTING_DETAIL_SPECS = (
     ("avg", "AVG"),
@@ -445,7 +447,7 @@ _ROSTER_FILTERS = (
     ("if", "Infield"),
     ("of", "Outfield"),
 )
-_FORTY_MAN_EXCLUDE_STATUSES = frozenset({"minors", "non-roster-invite"})
+_FORTY_MAN_EXCLUDE_STATUSES = frozenset({"minors", "minors-special", "non-roster-invite"})
 _IL_STATUS_LABELS = {
     "injured7": "10-Day IL",
     "15-day-il": "15-Day IL",
@@ -1024,6 +1026,10 @@ def _build_leader_categories(
             value = _leader_value(athlete["stats"], stat_name)
             if value is None:
                 continue
+            if stat_name in _PITCHING_RATE_STATS_REQUIRING_IP:
+                innings = _parse_number(athlete["stats"].get("innings"))
+                if innings is None or innings < _MIN_PITCHING_LEADER_IP:
+                    continue
             ranked.append({
                 "id": athlete["id"],
                 "name": athlete["name"],

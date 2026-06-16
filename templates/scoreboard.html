@@ -19,11 +19,7 @@
 </head>
 <body class="scoreboard-page" data-today-api="/api/mlb/scoreboard/today">
   {% include "partials/desktop_only_gate.html" %}
-  <nav class="navbar scoreboard-nav">
-    <div class="container">
-      <a class="navbar-brand" href="{{ url_for('home_page') }}">Scoreboard</a>
-    </div>
-  </nav>
+  {% include "partials/scoreboard_nav.html" %}
 
   <main class="scoreboard-main">
     <section class="scoreboard-section" id="scores-section">

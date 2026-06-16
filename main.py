@@ -1008,6 +1008,14 @@ def home_page():
     )
 
 
+@app.route('/api/mlb/search', methods=['GET'], endpoint='api_mlb_search')
+def api_mlb_search():
+    from mlb_search import search_mlb
+
+    query = request.args.get('q', '')
+    return jsonify(search_mlb(query))
+
+
 @app.route('/api/mlb/scoreboard', methods=['GET'])
 def api_mlb_scoreboard():
     from espn_mlb import fetch_scoreboard
@@ -1169,14 +1177,22 @@ def api_mlb_game_preview_team_stats(game_id):
 
 @app.route('/team/<team_id>', methods=['GET'], endpoint='mlb_team_page')
 def mlb_team_page(team_id):
-    from espn_mlb import fetch_team
+    from espn_mlb import fetch_scoreboard, fetch_team, strip_initial_page_for_team
 
     try:
         team = fetch_team(str(team_id), include_stats=False)
     except (requests.RequestException, ValueError):
         abort(404)
 
-    return render_template('team.html', team=team)
+    strip_games = fetch_scoreboard(date.today())
+
+    return render_template(
+        'team.html',
+        team=team,
+        strip_games=strip_games,
+        strip_initial_page=strip_initial_page_for_team(strip_games, str(team_id)),
+        current_game_id='',
+    )
 
 
 @app.route('/api/mlb/team/<team_id>/stats', methods=['GET'], endpoint='api_mlb_team_stats')
@@ -1254,7 +1270,7 @@ def api_mlb_team(team_id):
 
 @app.route('/player/<player_id>', methods=['GET'], endpoint='mlb_player_page')
 def mlb_player_page(player_id):
-    from espn_mlb import fetch_player
+    from espn_mlb import fetch_player, fetch_scoreboard, strip_initial_page_for_team
     from player_stats import is_pitcher_position
 
     try:
@@ -1262,10 +1278,16 @@ def mlb_player_page(player_id):
     except (requests.RequestException, ValueError):
         abort(404)
 
+    strip_games = fetch_scoreboard(date.today())
+    team_id = str((player.get('team') or {}).get('id') or '')
+
     return render_template(
         'player.html',
         player=player,
         is_pitcher=is_pitcher_position(player.get('position')),
+        strip_games=strip_games,
+        strip_initial_page=strip_initial_page_for_team(strip_games, team_id) if team_id else 0,
+        current_game_id='',
     )
 
 

@@ -1,0 +1,32 @@
+<nav class="navbar scoreboard-nav">
+  <div class="scoreboard-nav__inner">
+    <a class="navbar-brand" href="{{ url_for('home_page') }}">Scoreboard</a>
+    <div
+      class="scoreboard-search"
+      data-scoreboard-search
+      data-search-api="{{ url_for('api_mlb_search') }}"
+    >
+      <label class="scoreboard-search__label" for="scoreboard-search-input">Search teams or players</label>
+      <span class="scoreboard-search__icon bi bi-search" aria-hidden="true"></span>
+      <input
+        type="search"
+        id="scoreboard-search-input"
+        class="scoreboard-search__input"
+        placeholder="Search teams or players…"
+        autocomplete="off"
+        spellcheck="false"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded="false"
+        aria-controls="scoreboard-search-results"
+      >
+      <div
+        id="scoreboard-search-results"
+        class="scoreboard-search__results"
+        role="listbox"
+        hidden
+      ></div>
+    </div>
+  </div>
+</nav>
+<script src="{{ url_for('static', filename='js/scoreboard-search.js') }}" defer></script>
