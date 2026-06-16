@@ -1049,9 +1049,14 @@ def mlb_game_page(game_id):
     except (requests.RequestException, ValueError):
         abort(404)
 
+    if game.get("status_state") == "pre":
+        from espn_mlb import attach_preview_team_panels
+
+        attach_preview_team_panels(game)
+
     strip_games = fetch_scoreboard(date.today())
 
-    template = 'game_preview.html' if game.get('status_state') == 'pre' else 'game_live.html'
+    template = "game_live.html"
     return render_template(
         template,
         game=game,

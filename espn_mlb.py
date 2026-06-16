@@ -434,6 +434,7 @@ def _parse_probable(competitor: dict[str, Any]) -> dict[str, Any] | None:
             or "'" in str(throws_display)
         ):
             throws_display = None
+        stats = _normalize_probable_pitcher_stats(stats)
         return {
             "id": _athlete_id(athlete),
             "name": athlete.get("displayName", ""),
@@ -1306,6 +1307,168 @@ def parse_game_detail(payload: dict[str, Any]) -> dict[str, Any]:
             live_data["pitching_decisions"] = pitching_decisions
     game["live"] = live_data
     return game
+
+
+def attach_preview_team_panels(game: dict[str, Any]) -> None:
+    """Attach roster and leader panels for pre-game pages (not used on live poll API)."""
+    if game.get("status_state") != "pre":
+        return
+
+    away_id = str((game.get("away") or {}).get("id") or "")
+    home_id = str((game.get("home") or {}).get("id") or "")
+    if not away_id or not home_id:
+        return
+
+    try:
+        from team_stats import (
+            fetch_team_leaders_stat_panel,
+            fetch_team_roster_stat_panel,
+        )
+    except ImportError:
+        return
+
+    team_panels: dict[str, Any] = {}
+    for side, team_id in (("away", away_id), ("home", home_id)):
+        leaders = fetch_team_leaders_stat_panel(team_id)
+        roster = fetch_team_roster_stat_panel(team_id)
+        if not leaders and not roster:
+            continue
+        team_panels[side] = {
+            "leaders": leaders,
+            "roster": roster,
+        }
+
+    if team_panels:
+        preview = game.setdefault("preview", {})
+        preview["team_panels"] = team_panels
+
+    _enrich_probable_pitchers(game)
+
+
+    return None
+
+
+def _normalize_probable_pitcher_stats(stats: dict[str, str]) -> dict[str, str]:
+    normalized = dict(stats)
+    full_innings = normalized.get("FI")
+    if full_innings and not normalized.get("IP"):
+        partial = str(normalized.get("PI") or "0").strip()
+        normalized["IP"] = (
+            f"{full_innings}.{partial}"
+            if partial not in {"", "0", "—"}
+            else str(full_innings)
+        )
+    strikeouts = normalized.get("SO") or normalized.get("K")
+    if strikeouts and not normalized.get("SO"):
+        normalized["SO"] = strikeouts
+    return normalized
+
+
+def _probable_pitcher_cells_from_espn_categories(
+    player_id: str,
+    season_year: int,
+) -> dict[str, str]:
+    try:
+        from player_stats import _fetch_espn_stat_categories
+        from team_stats import _espn_category_season_row
+    except ImportError:
+        return {}
+
+    categories = _fetch_espn_stat_categories(str(player_id))
+    row = _espn_category_season_row(categories.get("pitching"), season_year)
+    if not row:
+        return {}
+
+    cells: dict[str, str] = {}
+    mapping = {
+        "GP": "G",
+        "GS": "GS",
+        "IP": "IP",
+        "K": "SO",
+        "BB": "BB",
+        "W": "W",
+        "L": "L",
+        "ERA": "ERA",
+        "WHIP": "WHIP",
+    }
+    for source, target in mapping.items():
+        value = row.get(source)
+        if value not in (None, "", "—"):
+            cells[target] = str(value)
+    return cells
+
+
+def _merge_probable_pitcher_cells(
+    cells: dict[str, str],
+    espn_stats: dict[str, str],
+) -> dict[str, str]:
+    merged = dict(cells)
+    summary = _normalize_probable_pitcher_stats(espn_stats)
+    for key in ("IP", "G", "GS", "SO", "BB", "W", "L", "ERA", "WHIP", "HR"):
+        if merged.get(key) in (None, "", "—") and summary.get(key) not in (None, "", "—"):
+            merged[key] = str(summary[key])
+    return merged
+
+
+def _enrich_probable_pitcher_season_stats(pitcher: dict[str, Any]) -> None:
+    player_id = pitcher.get("id")
+    player_name = pitcher.get("name")
+    if not player_id or not player_name:
+        return
+
+    try:
+        from datetime import date
+
+        from player_stats import fetch_player_stats_table
+    except ImportError:
+        return
+
+    year = date.today().year
+    cells: dict[str, str] = {}
+    table = fetch_player_stats_table(
+        player_name,
+        year,
+        position="P",
+        espn_player_id=str(player_id),
+    )
+    if table:
+        season_row = next(
+            (row for row in table.get("rows") or [] if row.get("row_kind") == "season"),
+            None,
+        )
+        if season_row is None and table.get("rows"):
+            season_row = table["rows"][0]
+        if season_row:
+            cells = {
+                str(key): str(value)
+                for key, value in (season_row.get("cells") or {}).items()
+                if value not in (None, "", "—")
+            }
+
+    espn_cells = _probable_pitcher_cells_from_espn_categories(str(player_id), year)
+    for key, value in espn_cells.items():
+        if cells.get(key) in (None, "", "—"):
+            cells[key] = value
+
+    cells = _merge_probable_pitcher_cells(cells, pitcher.get("stats") or {})
+    if not cells:
+        return
+
+    pitcher["season_stats"] = {
+        "columns": list(cells.keys()),
+        "cells": cells,
+    }
+
+
+def _enrich_probable_pitchers(game: dict[str, Any]) -> None:
+    for side in ("away", "home"):
+        pitcher = (game.get(side) or {}).get("probable_pitcher")
+        if not pitcher:
+            continue
+        try:
+            _enrich_probable_pitcher_season_stats(pitcher)
+        except Exception:
+            continue
 
 
 def _standing_stat(entry: dict[str, Any], name: str) -> str | None:

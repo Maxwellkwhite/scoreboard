@@ -1834,6 +1834,10 @@ html[data-scoreboard-view="standings"] #tab-standings {
   align-items: flex-end;
 }
 
+.game-detail-matchup-row--no-scores {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
 .game-detail-matchup-scores {
   display: flex;
   align-items: center;
@@ -2893,6 +2897,162 @@ html[data-scoreboard-view="standings"] #tab-standings {
   font-size: 0.85rem;
   color: #6b7789;
   margin: 0;
+}
+
+.pitcher-card--preview {
+  background: #fff;
+  border: 1px solid #e8edf3;
+  box-shadow: 0 1px 4px rgba(26, 35, 50, 0.05);
+}
+
+.pitcher-grid--preview {
+  gap: 1.25rem;
+}
+
+.pitcher-copy {
+  min-width: 0;
+}
+
+.pitcher-jersey {
+  font-weight: 600;
+  color: #8a95a5;
+}
+
+.pitcher-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem 0.85rem;
+  margin: 0.65rem 0 0;
+}
+
+.pitcher-stat-grid__item dt {
+  margin: 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #8a95a5;
+}
+
+.pitcher-stat-grid__item dd {
+  margin: 0.1rem 0 0;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #1a2332;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-detail-title {
+  margin: 0.35rem 0 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #1a2332;
+}
+
+.game-detail-panel__lead {
+  margin: -0.35rem 0 1rem;
+  font-size: 0.82rem;
+  color: #6b7789;
+}
+
+.game-preview-columns {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 900px) {
+  .game-preview-columns {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.75rem;
+  }
+}
+
+.game-preview-columns__head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.85rem;
+}
+
+.game-preview-columns__logo {
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.game-preview-columns__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #1a2332;
+}
+
+.game-preview-panel__toolbar {
+  margin-bottom: 1rem;
+}
+
+.game-preview-roster-section + .game-preview-roster-section {
+  margin-top: 1.25rem;
+}
+
+.game-preview-roster-section__title {
+  margin: 0 0 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7789;
+}
+
+.team-roster-grid--preview {
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+}
+
+.game-preview-venue-image-wrap {
+  margin-top: 1rem;
+}
+
+.game-preview-page .game-detail-hero {
+  border-color: #e8edf3;
+}
+
+.game-preview-page .game-card-score {
+  color: #8a95a5;
+}
+
+.probable-pitchers {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.probable-pitchers-matchup {
+  margin-top: 0.15rem;
+}
+
+.probable-pitchers-matchup__label {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8a95a5;
+  text-align: center;
+}
+
+.probable-pitchers-matchup .team-stats__head {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.probable-pitchers-matchup .team-stats__cell--away .team-stats__value {
+  color: color-mix(in srgb, var(--away-team-color) 55%, #8a95a5);
+  font-weight: 700;
+}
+
+.probable-pitchers-matchup .team-stats__cell--home .team-stats__value {
+  color: color-mix(in srgb, var(--home-team-color) 55%, #8a95a5);
+  font-weight: 700;
 }
 
 .game-detail-facts {

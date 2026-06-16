@@ -4,6 +4,8 @@
   var pollTimer = null;
   var POLL_MS_LIVE = 15000;
   var POLL_MS_FINAL = 60000;
+  var POLL_MS_PREVIEW = 60000;
+  var initialStatus = body.getAttribute('data-game-status') || '';
 
   if (!apiUrl || !body.classList.contains('game-live-page')) {
     return;
@@ -805,6 +807,20 @@
     }
   }
 
+  function formatPreGameDateTime(el) {
+    var iso = el.getAttribute('data-start-time');
+    if (!iso) return;
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return;
+    el.textContent = d.toLocaleString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  }
+
   function formatPreGameTime(el) {
     var iso = el.getAttribute('data-start-time');
     if (!iso) return;
@@ -912,12 +928,21 @@
   }
 
   function applyGame(game) {
+    if (initialStatus === 'pre' && game.status_state !== 'pre') {
+      window.location.reload();
+      return;
+    }
+
     var pill = document.getElementById('game-status-pill');
     var countEl = document.getElementById('game-count');
 
     if (pill) {
       pill.className = 'status-pill status-pill--' + game.status_state;
       pill.textContent = game.status_detail || '';
+      if (game.status_state === 'pre' && game.start_time) {
+        pill.setAttribute('data-start-time', game.start_time);
+        formatPreGameDateTime(pill);
+      }
     }
 
     applyBattingTheme(game);
@@ -951,7 +976,11 @@
 
       var scoreEl = document.getElementById('game-' + side + '-score');
       if (scoreEl) {
-        scoreEl.textContent = team.score != null ? team.score : '0';
+        if (game.status_state === 'pre') {
+          scoreEl.textContent = '—';
+        } else {
+          scoreEl.textContent = team.score != null ? team.score : '0';
+        }
         var scoreWrap = scoreEl.closest('.game-detail-matchup-score');
         if (scoreWrap) {
           scoreWrap.style.setProperty(
@@ -1121,7 +1150,11 @@
         if (data.strip_games) {
           updateStripGames(data.strip_games);
         }
-        schedulePoll(data.game.status_state === 'in' ? POLL_MS_LIVE : POLL_MS_FINAL);
+        schedulePoll(
+          data.game.status_state === 'in'
+            ? POLL_MS_LIVE
+            : (data.game.status_state === 'pre' ? POLL_MS_PREVIEW : POLL_MS_FINAL)
+        );
       })
       .catch(function () {});
   }
@@ -1152,7 +1185,36 @@
     });
   }
 
+  function initPreviewLeadersToggle() {
+    var container = document.getElementById('game-preview-leaders');
+    if (!container) return;
+
+    container.querySelectorAll('.game-preview-leaders-toggle .player-panel-toggle__btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var viewId = btn.getAttribute('data-leaders-view');
+        if (!viewId) return;
+
+        container.querySelectorAll('.game-preview-leaders-toggle .player-panel-toggle__btn').forEach(function (toggleBtn) {
+          var isActive = toggleBtn.getAttribute('data-leaders-view') === viewId;
+          toggleBtn.classList.toggle('is-active', isActive);
+          toggleBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+
+        container.querySelectorAll('.game-preview-leaders-view').forEach(function (panel) {
+          panel.hidden = panel.getAttribute('data-leaders-view') !== viewId;
+        });
+      });
+    });
+  }
+
   initDetailTabs();
   initLineupStatToggle();
+  initPreviewLeadersToggle();
+
+  if (initialStatus === 'pre') {
+    var statusPill = document.getElementById('game-status-pill');
+    if (statusPill) formatPreGameDateTime(statusPill);
+  }
+
   refreshGame();
 })();

@@ -1,0 +1,119 @@
+{% from 'macros/players.html' import player_link %}
+{% from 'macros/teams.html' import team_link %}
+<div class="probable-pitchers">
+  <div class="pitcher-grid pitcher-grid--preview">
+    {% for side in [('away', game.away), ('home', game.home)] %}
+    {% set team = side[1] %}
+    {% set pitcher = team.probable_pitcher %}
+    <article class="pitcher-card pitcher-card--preview">
+      <p class="pitcher-team">{{ team_link(team.id, team.abbr) }}</p>
+      {% if pitcher %}
+      <div class="pitcher-body">
+        {% if pitcher.headshot %}
+        <img src="{{ pitcher.headshot }}" alt="" class="pitcher-headshot" width="72" height="72" loading="lazy">
+        {% endif %}
+        <div class="pitcher-copy">
+          <p class="pitcher-name">{{ player_link(pitcher.id, pitcher.name) }}{% if pitcher.jersey %} <span class="pitcher-jersey">#{{ pitcher.jersey }}</span>{% endif %}</p>
+          {% if pitcher.throws %}<p class="pitcher-meta">Throws {{ pitcher.throws }}</p>{% endif %}
+        </div>
+      </div>
+      {% else %}
+      <p class="pitcher-tbd">TBD</p>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+
+  {% set away_pitcher = game.away.probable_pitcher %}
+  {% set home_pitcher = game.home.probable_pitcher %}
+  {% if away_pitcher or home_pitcher %}
+  <div class="probable-pitchers__stats team-stats probable-pitchers-matchup" style="--away-team-color: {{ game.away.win_color or game.away.color or '#1a2332' }}; --home-team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};">
+    <div class="team-stats__head">
+      <div class="team-stats__team team-stats__team--away">
+        {% if game.away.logo %}
+        <img class="team-stats__logo" src="{{ game.away.logo }}" alt="" width="32" height="32" loading="lazy">
+        {% else %}
+        <span class="team-stats__logo-fallback">{{ game.away.abbr }}</span>
+        {% endif %}
+        <span class="team-stats__abbr">{{ team_link(game.away.id, game.away.abbr) }}</span>
+      </div>
+      <p class="probable-pitchers-matchup__label">Season Statistics</p>
+      <div class="team-stats__team team-stats__team--home">
+        {% if game.home.logo %}
+        <img class="team-stats__logo" src="{{ game.home.logo }}" alt="" width="32" height="32" loading="lazy">
+        {% else %}
+        <span class="team-stats__logo-fallback">{{ game.home.abbr }}</span>
+        {% endif %}
+        <span class="team-stats__abbr">{{ team_link(game.home.id, game.home.abbr) }}</span>
+      </div>
+    </div>
+    <div class="team-stats__rows">
+      {% for stat_key, stat_label in [
+        ('record', 'Record'),
+        ('ERA', 'ERA'),
+        ('WHIP', 'WHIP'),
+        ('IP', 'IP'),
+        ('G', 'G'),
+        ('GS', 'GS'),
+        ('SO', 'Strikeouts'),
+        ('BB', 'Walks'),
+        ('HR', 'Home Runs')
+      ] %}
+      {% set away_cells = (away_pitcher.season_stats.cells if away_pitcher and away_pitcher.season_stats else {}) %}
+      {% set home_cells = (home_pitcher.season_stats.cells if home_pitcher and home_pitcher.season_stats else {}) %}
+      {% set away_espn = (away_pitcher.stats if away_pitcher else {}) or {} %}
+      {% set home_espn = (home_pitcher.stats if home_pitcher else {}) or {} %}
+      {% if stat_key == 'record' %}
+        {% set away_raw = (away_cells.W ~ '-' ~ away_cells.L) if away_cells.W and away_cells.L else ((away_espn.W ~ '-' ~ away_espn.L) if away_espn.W and away_espn.L else none) %}
+        {% set home_raw = (home_cells.W ~ '-' ~ home_cells.L) if home_cells.W and home_cells.L else ((home_espn.W ~ '-' ~ home_espn.L) if home_espn.W and home_espn.L else none) %}
+      {% elif stat_key == 'SO' %}
+        {% set away_raw = away_cells.SO or away_espn.SO or away_espn.K %}
+        {% set home_raw = home_cells.SO or home_espn.SO or home_espn.K %}
+      {% else %}
+        {% set away_raw = away_cells[stat_key] if away_cells.get(stat_key) else away_espn.get(stat_key) %}
+        {% set home_raw = home_cells[stat_key] if home_cells.get(stat_key) else home_espn.get(stat_key) %}
+      {% endif %}
+      {% if away_raw or home_raw %}
+      {% set away_num = away_raw | float if away_raw is not none and stat_key not in ['record', 'IP'] else none %}
+      {% set home_num = home_raw | float if home_raw is not none and stat_key not in ['record', 'IP'] else none %}
+      {% set lower_is_better = stat_key in ['ERA', 'WHIP', 'BB', 'HR'] %}
+      {% if away_num is not none and home_num is not none %}
+        {% if lower_is_better %}
+          {% set away_bar = home_num %}
+          {% set home_bar = away_num %}
+        {% else %}
+          {% set away_bar = away_num %}
+          {% set home_bar = home_num %}
+        {% endif %}
+        {% set stat_total = away_bar + home_bar %}
+      {% else %}
+        {% set stat_total = 0 %}
+      {% endif %}
+      <div class="team-stats__row">
+        <div class="team-stats__values">
+          <div class="team-stats__cell team-stats__cell--away">
+            <span class="team-stats__value">{{ away_raw if away_raw is not none else '—' }}</span>
+          </div>
+          <div class="team-stats__label">{{ stat_label }}</div>
+          <div class="team-stats__cell team-stats__cell--home">
+            <span class="team-stats__value">{{ home_raw if home_raw is not none else '—' }}</span>
+          </div>
+        </div>
+        {% if stat_total > 0 %}
+        <div class="team-stats__bar" role="presentation">
+          <span class="team-stats__bar-away" style="width: {{ (away_bar / stat_total * 100) | round(1) }}%;"></span>
+          <span class="team-stats__bar-home" style="width: {{ (home_bar / stat_total * 100) | round(1) }}%;"></span>
+        </div>
+        {% elif away_num is not none and home_num is not none %}
+        <div class="team-stats__bar team-stats__bar--even" role="presentation">
+          <span class="team-stats__bar-away" style="width: 50%;"></span>
+          <span class="team-stats__bar-home" style="width: 50%;"></span>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>

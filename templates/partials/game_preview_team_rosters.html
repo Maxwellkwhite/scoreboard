@@ -1,0 +1,44 @@
+{% from 'macros/players.html' import player_link %}
+{% from 'macros/teams.html' import team_link %}
+{% set team_panels = game.preview.team_panels %}
+{% set roster_section_ids = ['rotation', 'catchers', 'infield', 'outfield'] %}
+<div class="game-preview-columns game-preview-columns--rosters">
+  {% for side in [('away', game.away), ('home', game.home)] %}
+  {% set team = side[1] %}
+  {% set roster_panel = team_panels[side[0]].roster if team_panels.get(side[0]) else none %}
+  <div class="game-preview-columns__team">
+    <header class="game-preview-columns__head">
+      {% if team.logo %}
+      <img src="{{ team.logo }}" alt="" class="game-preview-columns__logo" width="28" height="28" loading="lazy">
+      {% endif %}
+      <h4 class="game-preview-columns__title">{{ team_link(team.id, team.name) }}</h4>
+    </header>
+    {% if roster_panel and roster_panel.sections %}
+    {% for section in roster_panel.sections if section.id in roster_section_ids %}
+    <section class="game-preview-roster-section">
+      <h5 class="game-preview-roster-section__title">{{ section.title }}</h5>
+      <div class="team-roster-grid team-roster-grid--preview">
+        {% for player in section.players %}
+        <a href="{{ url_for('mlb_player_page', player_id=player.id) }}" class="team-roster-card team-roster-card--{{ player.filter or 'other' }} team-roster-card--status-{{ player.status_variant or 'active' }}">
+          {% if player.jersey %}<span class="team-roster-card__jersey">#{{ player.jersey }}</span>{% endif %}
+          {% if player.headshot %}
+          <span class="team-roster-card__avatar-wrap">
+            <img class="team-roster-card__avatar team-roster-card__avatar--{{ player.filter or 'other' }}" src="{{ player.headshot }}" alt="" width="52" height="52" loading="lazy">
+          </span>
+          {% else %}
+          <span class="team-roster-card__avatar team-roster-card__avatar--placeholder team-roster-card__avatar--{{ player.filter or 'other' }}">{{ player.name[:1] }}</span>
+          {% endif %}
+          <span class="team-roster-card__name">{{ player.name }}</span>
+          <span class="team-roster-card__pos">{{ player.position }}</span>
+          {% if player.meta %}<span class="team-roster-card__meta">{{ player.meta }}</span>{% endif %}
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+    {% else %}
+    <p class="player-splits-empty">Roster unavailable.</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>

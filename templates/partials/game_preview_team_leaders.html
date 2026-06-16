@@ -1,0 +1,66 @@
+{% from 'macros/players.html' import player_link %}
+{% from 'macros/teams.html' import team_link %}
+{% set team_panels = game.preview.team_panels %}
+{% set leader_views = (team_panels.away.leaders.views if team_panels.away and team_panels.away.leaders else (team_panels.home.leaders.views if team_panels.home and team_panels.home.leaders else [])) %}
+{% if leader_views %}
+<div class="game-preview-panel" id="game-preview-leaders" data-default-view="{{ leader_views[0].id }}">
+  <div class="game-preview-panel__toolbar">
+    <div class="player-panel-toggle game-preview-leaders-toggle" role="group" aria-label="Leader stat type">
+      {% for view in leader_views %}
+      <button type="button" class="player-panel-toggle__btn{% if loop.first %} is-active{% endif %}" data-leaders-view="{{ view.id }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ view.label }}</button>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="game-preview-columns">
+    {% for side in [('away', game.away), ('home', game.home)] %}
+    {% set team = side[1] %}
+    {% set leaders_panel = team_panels[side[0]].leaders if team_panels.get(side[0]) else none %}
+    <div class="game-preview-columns__team">
+      <header class="game-preview-columns__head">
+        {% if team.logo %}
+        <img src="{{ team.logo }}" alt="" class="game-preview-columns__logo" width="28" height="28" loading="lazy">
+        {% endif %}
+        <h4 class="game-preview-columns__title">{{ team_link(team.id, team.abbr) }}</h4>
+      </header>
+      {% if leaders_panel and leaders_panel.views %}
+      {% for view in leaders_panel.views %}
+      <div class="game-preview-leaders-view" data-leaders-view="{{ view.id }}"{% if not loop.first %} hidden{% endif %}>
+        {% if view.categories %}
+        <div class="team-leaders">
+          <div class="team-leaders-grid">
+            {% for category in view.categories %}
+            <article class="team-leader-card">
+              <h4 class="team-leader-card__title">{{ category.title }}</h4>
+              <ol class="team-leader-card__list">
+                {% for leader in category.leaders %}
+                <li class="team-leader-card__row{% if loop.first %} team-leader-card__row--first{% endif %}">
+                  <span class="team-leader-card__rank">{{ loop.index }}</span>
+                  <div class="team-leader-card__player">
+                    {% if leader.headshot %}
+                    <span class="team-leader-card__headshot-wrap">
+                      <img class="team-leader-card__headshot" src="{{ leader.headshot }}" alt="" width="32" height="32" loading="lazy">
+                    </span>
+                    {% endif %}
+                    <span class="team-leader-card__name">{{ player_link(leader.id, leader.name) }}</span>
+                  </div>
+                  <span class="team-leader-card__value">{{ leader.value }}</span>
+                </li>
+                {% endfor %}
+              </ol>
+            </article>
+            {% endfor %}
+          </div>
+        </div>
+        {% else %}
+        <p class="player-splits-empty">No leaders available.</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+      {% else %}
+      <p class="player-splits-empty">No leaders available.</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
