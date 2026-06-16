@@ -1410,6 +1410,28 @@ def _merge_probable_pitcher_cells(
     return merged
 
 
+def parse_innings_stat_value(value: Any) -> float | None:
+    if value in (None, "", "—"):
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if "." in text:
+        whole_text, partial_text = text.split(".", 1)
+        try:
+            whole = int(whole_text)
+            partial = int(partial_text)
+        except ValueError:
+            return None
+        if partial > 2:
+            partial = 2
+        return float(whole) + partial / 3.0
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
 def _enrich_probable_pitcher_season_stats(pitcher: dict[str, Any]) -> None:
     player_id = pitcher.get("id")
     player_name = pitcher.get("name")

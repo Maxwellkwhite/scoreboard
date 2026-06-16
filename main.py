@@ -97,6 +97,7 @@ def linkify_players_filter(text, player_map=None):
     from espn_mlb import linkify_player_names
 
     return linkify_player_names(text, player_map)
+
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 
 # Bulk list validation + DigitalOcean Spaces (worker + web)

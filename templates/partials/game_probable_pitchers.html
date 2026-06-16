@@ -1,52 +1,42 @@
 {% from 'macros/players.html' import player_link %}
 {% from 'macros/teams.html' import team_link %}
+{% set away_pitcher = game.away.probable_pitcher %}
+{% set home_pitcher = game.home.probable_pitcher %}
 <div class="probable-pitchers">
-  <div class="pitcher-grid pitcher-grid--preview">
-    {% for side in [('away', game.away), ('home', game.home)] %}
-    {% set team = side[1] %}
-    {% set pitcher = team.probable_pitcher %}
-    <article class="pitcher-card pitcher-card--preview">
-      <p class="pitcher-team">{{ team_link(team.id, team.abbr) }}</p>
-      {% if pitcher %}
-      <div class="pitcher-body">
-        {% if pitcher.headshot %}
-        <img src="{{ pitcher.headshot }}" alt="" class="pitcher-headshot" width="72" height="72" loading="lazy">
-        {% endif %}
-        <div class="pitcher-copy">
-          <p class="pitcher-name">{{ player_link(pitcher.id, pitcher.name) }}{% if pitcher.jersey %} <span class="pitcher-jersey">#{{ pitcher.jersey }}</span>{% endif %}</p>
-          {% if pitcher.throws %}<p class="pitcher-meta">Throws {{ pitcher.throws }}</p>{% endif %}
-        </div>
-      </div>
-      {% else %}
-      <p class="pitcher-tbd">TBD</p>
-      {% endif %}
-    </article>
-    {% endfor %}
-  </div>
-
-  {% set away_pitcher = game.away.probable_pitcher %}
-  {% set home_pitcher = game.home.probable_pitcher %}
   {% if away_pitcher or home_pitcher %}
   <div class="probable-pitchers__stats team-stats probable-pitchers-matchup" style="--away-team-color: {{ game.away.win_color or game.away.color or '#1a2332' }}; --home-team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};">
-    <div class="team-stats__head">
-      <div class="team-stats__team team-stats__team--away">
-        {% if game.away.logo %}
-        <img class="team-stats__logo" src="{{ game.away.logo }}" alt="" width="32" height="32" loading="lazy">
+    <div class="probable-pitchers-matchup__pitchers">
+      {% for side in [('away', game.away), ('home', game.home)] %}
+      {% set team = side[1] %}
+      {% set pitcher = team.probable_pitcher %}
+      <article class="pitcher-card pitcher-card--preview pitcher-card--matchup pitcher-card--{{ side[0] }}">
+        <header class="pitcher-card__team pitcher-card__team--{{ side[0] }}">
+          {% if team.logo %}
+          <img class="pitcher-card__team-logo" src="{{ team.logo }}" alt="" width="32" height="32" loading="lazy">
+          {% else %}
+          <span class="pitcher-card__team-logo-fallback">{{ team.abbr }}</span>
+          {% endif %}
+          <span class="pitcher-card__team-abbr">{{ team_link(team.id, team.abbr) }}</span>
+        </header>
+        {% if pitcher %}
+        <div class="pitcher-body">
+          {% if pitcher.headshot %}
+          <img src="{{ pitcher.headshot }}" alt="" class="pitcher-headshot" width="72" height="72" loading="lazy">
+          {% endif %}
+          <div class="pitcher-copy">
+            <p class="pitcher-name">{{ player_link(pitcher.id, pitcher.name) }}{% if pitcher.jersey %} <span class="pitcher-jersey">#{{ pitcher.jersey }}</span>{% endif %}</p>
+            {% if pitcher.throws %}<p class="pitcher-meta">Throws {{ pitcher.throws }}</p>{% endif %}
+          </div>
+        </div>
         {% else %}
-        <span class="team-stats__logo-fallback">{{ game.away.abbr }}</span>
+        <p class="pitcher-tbd">TBD</p>
         {% endif %}
-        <span class="team-stats__abbr">{{ team_link(game.away.id, game.away.abbr) }}</span>
-      </div>
-      <p class="probable-pitchers-matchup__label">Season Statistics</p>
-      <div class="team-stats__team team-stats__team--home">
-        {% if game.home.logo %}
-        <img class="team-stats__logo" src="{{ game.home.logo }}" alt="" width="32" height="32" loading="lazy">
-        {% else %}
-        <span class="team-stats__logo-fallback">{{ game.home.abbr }}</span>
-        {% endif %}
-        <span class="team-stats__abbr">{{ team_link(game.home.id, game.home.abbr) }}</span>
-      </div>
+      </article>
+      {% endfor %}
     </div>
+
+    <p class="probable-pitchers-matchup__label">Season Statistics</p>
+
     <div class="team-stats__rows">
       {% for stat_key, stat_label in [
         ('record', 'Record'),
@@ -74,8 +64,30 @@
         {% set home_raw = home_cells[stat_key] if home_cells.get(stat_key) else home_espn.get(stat_key) %}
       {% endif %}
       {% if away_raw or home_raw %}
-      {% set away_num = away_raw | float if away_raw is not none and stat_key not in ['record', 'IP'] else none %}
-      {% set home_num = home_raw | float if home_raw is not none and stat_key not in ['record', 'IP'] else none %}
+      {% if stat_key == 'record' %}
+        {% set away_num = none %}
+        {% set home_num = none %}
+      {% elif stat_key == 'IP' %}
+        {% if away_raw and '.' in away_raw %}
+          {% set away_ip = away_raw.split('.') %}
+          {% set away_num = (away_ip[0] | int) + ((away_ip[1] | int) / 3.0) %}
+        {% elif away_raw %}
+          {% set away_num = away_raw | float %}
+        {% else %}
+          {% set away_num = none %}
+        {% endif %}
+        {% if home_raw and '.' in home_raw %}
+          {% set home_ip = home_raw.split('.') %}
+          {% set home_num = (home_ip[0] | int) + ((home_ip[1] | int) / 3.0) %}
+        {% elif home_raw %}
+          {% set home_num = home_raw | float %}
+        {% else %}
+          {% set home_num = none %}
+        {% endif %}
+      {% else %}
+        {% set away_num = away_raw | float if away_raw is not none else none %}
+        {% set home_num = home_raw | float if home_raw is not none else none %}
+      {% endif %}
       {% set lower_is_better = stat_key in ['ERA', 'WHIP', 'BB', 'HR'] %}
       {% if away_num is not none and home_num is not none %}
         {% if lower_is_better %}

@@ -2902,7 +2902,79 @@ html[data-scoreboard-view="standings"] #tab-standings {
 .pitcher-card--preview {
   background: #fff;
   border: 1px solid #e8edf3;
+  border-radius: 10px;
   box-shadow: 0 1px 4px rgba(26, 35, 50, 0.05);
+}
+
+.pitcher-card--matchup.pitcher-card--preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+  background: #fff;
+}
+
+.pitcher-card--matchup.pitcher-card--away {
+  border-left: 4px solid var(--away-team-color, #1a2332);
+}
+
+.pitcher-card--matchup.pitcher-card--home {
+  border-right: 4px solid var(--home-team-color, #1a2332);
+}
+
+.pitcher-card__team {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.pitcher-card__team--home {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+
+.pitcher-card__team-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.pitcher-card__team-logo-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #eef1f5;
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: #5c6778;
+  flex-shrink: 0;
+}
+
+.pitcher-card__team-abbr {
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #1a2332;
+}
+
+.pitcher-card--matchup .pitcher-body {
+  padding: 0;
+}
+
+.pitcher-card--matchup .pitcher-tbd {
+  padding: 0;
+  margin: 0;
+}
+
+.pitcher-card--matchup.pitcher-card--home .pitcher-body {
+  flex-direction: row-reverse;
+  text-align: right;
 }
 
 .pitcher-grid--preview {
@@ -3029,20 +3101,27 @@ html[data-scoreboard-view="standings"] #tab-standings {
   margin-top: 0.15rem;
 }
 
+.probable-pitchers-matchup__pitchers {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+@media (min-width: 576px) {
+  .probable-pitchers-matchup__pitchers {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+  }
+}
+
 .probable-pitchers-matchup__label {
-  margin: 0;
+  margin: 0 0 1rem;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #8a95a5;
   text-align: center;
-}
-
-.probable-pitchers-matchup .team-stats__head {
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 0.75rem;
 }
 
 .probable-pitchers-matchup .team-stats__cell--away .team-stats__value {
