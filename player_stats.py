@@ -19,7 +19,6 @@ from pybaseball import (
     get_splits,
     pitching_stats_bref,
     playerid_lookup,
-    statcast_batter,
     statcast_batter_expected_stats,
     statcast_batter_exitvelo_barrels,
     statcast_batter_percentile_ranks,
@@ -72,26 +71,17 @@ _PITCHER_MIX_METRICS = (
     ("put_away", "Put Away%", "%", 100.0),
     ("xwoba", "xwOBA", "", 0.600),
 )
-_SPRAY_EVENT_LABELS = {
-    "single": "Single",
-    "double": "Double",
-    "triple": "Triple",
-    "home_run": "Home Run",
-    "out": "Out",
-}
 _SPRAY_BB_TYPE_LABELS = {
     "ground_ball": "Ground Ball",
     "line_drive": "Line Drive",
     "fly_ball": "Fly Ball",
     "popup": "Popup",
 }
-_SPRAY_BB_TYPE_ORDER = ("ground_ball", "line_drive", "fly_ball", "popup")
-_SPRAY_TYPE_METRICS = (
-    ("ev", "Exit Velo", "mph", 115.0),
-    ("launch_angle", "Launch Angle", "°", 45.0),
-    ("distance", "Distance", "ft", 450.0),
-    ("xwoba", "xwOBA", "", 0.600),
-    ("hard_hit", "Hard Hit%", "%", 100.0),
+_SPRAY_BB_TYPE_RATE_COLUMNS = (
+    ("ground_ball", "gb_rate"),
+    ("line_drive", "ld_rate"),
+    ("fly_ball", "fb_rate"),
+    ("popup", "pu_rate"),
 )
 _PERCENTILE_MIN_YEAR = 2015
 _BATTER_PERCENTILE_GROUPS = (
@@ -160,6 +150,9 @@ _SAVANT_DISCIPLINE_URL = (
     "&selections=player_id%2Ck_percent%2Cbb_percent%2Cwhiff_percent%2Cchase_percent"
     "&csv=true"
 )
+_SAVANT_BATTED_BALL_URL = (
+    "https://baseballsavant.mlb.com/leaderboard/batted-ball?year={year}&min=0&csv=true"
+)
 _SAVANT_PLAYER_PAGE_URL = (
     "https://baseballsavant.mlb.com/savant-player/{player_id}"
     "?stats=statcast-r-{kind}-mlb"
@@ -226,6 +219,9 @@ _pitcher_percentile_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = 
 _discipline_table_cache: dict[tuple[int, str], tuple[float, pd.DataFrame | None]] = {}
 _bat_tracking_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
 _sprint_speed_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
+_batted_ball_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
+_exitvelo_batter_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
+_expected_batter_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
 _pitching_bref_season_cache: dict[int, pd.DataFrame] = {}
 _ESPN_SEASON_PITCHING_CATEGORY = "pitching"
 _ESPN_SEASON_BATTING_CATEGORY = "career-batting"
@@ -2629,64 +2625,184 @@ def _pitch_mix_numeric(value: Any) -> float | None:
     return number
 
 
-def _statcast_season_range(season_year: int) -> tuple[str, str]:
-    today = date.today()
-    start = f"{season_year}-03-01"
-    if season_year >= today.year:
-        end = today.isoformat()
-    else:
-        end = f"{season_year}-11-30"
-    return start, end
-
-
-def _spray_event_category(event: str) -> str:
-    if event in {"single", "double", "triple", "home_run"}:
-        return event
-    return "out"
-
-
-def _series_mean(values: pd.Series) -> float | None:
-    numbers = [_parse_number(value) for value in values]
-    valid = [number for number in numbers if number is not None]
-    if not valid:
+def _table_row_value(row: pd.Series | None, key: str) -> Any:
+    if row is None:
         return None
-    return round(sum(valid) / len(valid), 1)
+    return row.get(key)
 
 
-def _hard_hit_rate(values: pd.Series) -> float | None:
-    numbers = [_parse_number(value) for value in values]
-    valid = [number for number in numbers if number is not None]
-    if not valid:
-        return None
-    hard = sum(1 for number in valid if number >= 95)
-    return round(hard / len(valid) * 100, 1)
-
-
-def _barrel_rate(values: pd.Series) -> float | None:
-    numbers = [_parse_number(value) for value in values]
-    valid = [number for number in numbers if number is not None]
-    if not valid:
-        return None
-    barrels = sum(1 for number in valid if number == 6)
-    return round(barrels / len(valid) * 100, 1)
-
-
-def _spray_type_stats(group: pd.DataFrame) -> dict[str, float | None]:
+def _spray_empty_panel(*, season_year: int) -> dict[str, Any]:
     return {
-        "ev": _series_mean(group.get("launch_speed", pd.Series(dtype=float))),
-        "launch_angle": _series_mean(group.get("launch_angle", pd.Series(dtype=float))),
-        "distance": _series_mean(group.get("hit_distance_sc", pd.Series(dtype=float))),
-        "xwoba": _round_rate_mean(group.get("estimated_woba_using_speedangle", pd.Series(dtype=float))),
-        "hard_hit": _hard_hit_rate(group.get("launch_speed", pd.Series(dtype=float))),
+        "id": "spray_chart",
+        "label": "Batting Metrics",
+        "panel_kind": "spray_chart",
+        "season_year": str(season_year),
+        "summary": {},
+        "legend": [],
+        "types": [],
+        "metrics": [],
+        "points": [],
     }
 
 
-def _round_rate_mean(values: pd.Series) -> float | None:
-    numbers = [_parse_number(value) for value in values]
-    valid = [number for number in numbers if number is not None]
-    if not valid:
+def _spray_rate_percent(value: Any) -> float | None:
+    number = _parse_number(value)
+    if number is None:
         return None
-    return round(sum(valid) / len(valid), 3)
+    if number <= 1.0:
+        return round(number * 100, 1)
+    return round(number, 1)
+
+
+def _get_batter_exitvelo_table(season_year: int) -> pd.DataFrame | None:
+    cached = _exitvelo_batter_table_cache.get(season_year)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+    try:
+        table = statcast_batter_exitvelo_barrels(season_year, minBBE=0)
+        result = table if table is not None and not table.empty else None
+    except Exception:
+        result = None
+    _exitvelo_batter_table_cache[season_year] = (now, result)
+    return result
+
+
+def _get_batter_expected_table(season_year: int) -> pd.DataFrame | None:
+    cached = _expected_batter_table_cache.get(season_year)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+    try:
+        table = statcast_batter_expected_stats(season_year, minPA=0)
+        result = table if table is not None and not table.empty else None
+    except Exception:
+        result = None
+    _expected_batter_table_cache[season_year] = (now, result)
+    return result
+
+
+def _get_batted_ball_table(season_year: int) -> pd.DataFrame | None:
+    cached = _batted_ball_table_cache.get(season_year)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+    try:
+        response = requests.get(
+            _SAVANT_BATTED_BALL_URL.format(year=season_year),
+            timeout=20,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        response.raise_for_status()
+        table = pd.read_csv(pd.io.common.StringIO(response.text))
+        result = table if not table.empty else None
+    except Exception:
+        result = None
+    _batted_ball_table_cache[season_year] = (now, result)
+    return result
+
+
+def _fetch_spray_chart_panel(
+    *,
+    mlbam_id: int | None,
+    season_year: int,
+) -> dict[str, Any]:
+    empty = _spray_empty_panel(season_year=season_year)
+    if not mlbam_id:
+        return empty
+
+    try:
+        exitvelo_table = _get_batter_exitvelo_table(season_year)
+        expected_table = _get_batter_expected_table(season_year)
+        batted_ball_table = _get_batted_ball_table(season_year)
+
+        ev_row = (
+            exitvelo_table[exitvelo_table["player_id"] == mlbam_id]
+            if exitvelo_table is not None
+            else pd.DataFrame()
+        )
+        exp_row = (
+            expected_table[expected_table["player_id"] == mlbam_id]
+            if expected_table is not None
+            else pd.DataFrame()
+        )
+        bb_row = (
+            batted_ball_table[batted_ball_table["id"] == mlbam_id]
+            if batted_ball_table is not None
+            else pd.DataFrame()
+        )
+
+        if ev_row.empty and bb_row.empty:
+            return empty
+
+        ev_record = ev_row.iloc[0] if not ev_row.empty else None
+        bb_record = bb_row.iloc[0] if not bb_row.empty else None
+        exp_record = exp_row.iloc[0] if not exp_row.empty else None
+
+        total = 0
+        if bb_record is not None:
+            total = int(_parse_number(_table_row_value(bb_record, "bbe")) or 0)
+        if not total and ev_record is not None:
+            total = int(_parse_number(_table_row_value(ev_record, "attempts")) or 0)
+        if not total:
+            return empty
+
+        avg_xwoba = _parse_number(_table_row_value(exp_record, "est_woba"))
+        if avg_xwoba is None:
+            avg_xwoba = _parse_number(_table_row_value(exp_record, "woba"))
+
+        summary = {
+            "total": total,
+            "avg_ev": _parse_number(_table_row_value(ev_record, "avg_hit_speed")),
+            "avg_launch_angle": _parse_number(_table_row_value(ev_record, "avg_hit_angle")),
+            "avg_distance": _parse_number(_table_row_value(ev_record, "avg_distance")),
+            "avg_xwoba": avg_xwoba,
+            "hard_hit_pct": _parse_number(_table_row_value(ev_record, "ev95percent")),
+            "barrel_pct": _parse_number(_table_row_value(ev_record, "brl_percent")),
+        }
+
+        gb_ev = _parse_number(_table_row_value(ev_record, "gb"))
+        fbld_ev = _parse_number(_table_row_value(ev_record, "fbld"))
+        types: list[dict[str, Any]] = []
+        if bb_record is not None:
+            for bb_type, rate_column in _SPRAY_BB_TYPE_RATE_COLUMNS:
+                usage = _spray_rate_percent(_table_row_value(bb_record, rate_column))
+                if not usage:
+                    continue
+                count = round(total * usage / 100) if total else 0
+                if not count:
+                    continue
+                type_entry: dict[str, Any] = {
+                    "label": _SPRAY_BB_TYPE_LABELS[bb_type],
+                    "bb_type": bb_type,
+                    "usage": usage,
+                    "count": count,
+                }
+                if bb_type == "ground_ball" and gb_ev is not None:
+                    type_entry["ev"] = gb_ev
+                elif bb_type in {"line_drive", "fly_ball"} and fbld_ev is not None:
+                    type_entry["ev"] = fbld_ev
+                types.append(type_entry)
+
+        metrics: list[dict[str, Any]] = []
+        if any("ev" in item for item in types):
+            metrics = [
+                {"id": "ev", "label": "Exit Velo", "unit": "mph", "max": 115.0},
+            ]
+
+        return {
+            "id": "spray_chart",
+            "label": "Batting Metrics",
+            "panel_kind": "spray_chart",
+            "season_year": str(season_year),
+            "summary": summary,
+            "legend": [],
+            "types": types,
+            "metrics": metrics,
+            "points": [],
+        }
+    except Exception:
+        return empty
 
 
 def _fetch_pitch_mix_panel(
@@ -2760,137 +2876,6 @@ def _fetch_pitch_mix_panel(
         "pitches": pitches,
         "metrics": metrics,
     }
-
-
-def _fetch_spray_chart_panel(
-    *,
-    mlbam_id: int | None,
-    season_year: int,
-) -> dict[str, Any]:
-    empty: dict[str, Any] = {
-        "id": "spray_chart",
-        "label": "Batting Metrics",
-        "panel_kind": "spray_chart",
-        "season_year": str(season_year),
-        "summary": {},
-        "legend": [],
-        "types": [],
-        "metrics": [],
-        "points": [],
-    }
-    if not mlbam_id:
-        return empty
-
-    try:
-        start_dt, end_dt = _statcast_season_range(season_year)
-        df = statcast_batter(start_dt, end_dt, mlbam_id)
-        if df is None or df.empty:
-            return empty
-
-        sub = df[
-            df["events"].notna()
-            & df["hc_x"].notna()
-            & df["hc_y"].notna()
-        ].copy()
-        if sub.empty:
-            return empty
-
-        total = len(sub)
-        counts: dict[str, int] = {"single": 0, "double": 0, "triple": 0, "home_run": 0, "out": 0}
-        points: list[dict[str, Any]] = []
-
-        for _, row in sub.iterrows():
-            raw_event = str(row.get("events") or "")
-            category = _spray_event_category(raw_event)
-            counts[category] = counts.get(category, 0) + 1
-
-            bb_type = str(row.get("bb_type") or "")
-            launch_speed = _parse_number(row.get("launch_speed"))
-            launch_angle = _parse_number(row.get("launch_angle"))
-            distance = _parse_number(row.get("hit_distance_sc"))
-            xwoba = _parse_number(row.get("estimated_woba_using_speedangle"))
-
-            points.append({
-                "x": round(float(row["hc_x"]), 2),
-                "y": round(float(row["hc_y"]), 2),
-                "event": category,
-                "event_label": _SPRAY_EVENT_LABELS.get(category, category),
-                "bb_type": bb_type,
-                "bb_type_label": _SPRAY_BB_TYPE_LABELS.get(bb_type, bb_type),
-                "launch_speed": launch_speed,
-                "launch_angle": launch_angle,
-                "distance": distance,
-                "xwoba": xwoba,
-            })
-
-        legend_order = ("home_run", "triple", "double", "single", "out")
-        legend = [
-            {
-                "event": event,
-                "label": _SPRAY_EVENT_LABELS[event],
-                "count": counts.get(event, 0),
-            }
-            for event in legend_order
-            if counts.get(event, 0)
-        ]
-
-        hits = counts["single"] + counts["double"] + counts["triple"] + counts["home_run"]
-        non_hr_hits = hits - counts["home_run"]
-        hr_count = counts["home_run"]
-        babip = (
-            round(non_hr_hits / (total - hr_count), 3)
-            if total > hr_count
-            else None
-        )
-
-        bb_type_counts = sub["bb_type"].value_counts() if "bb_type" in sub.columns else pd.Series(dtype=int)
-        types: list[dict[str, Any]] = []
-        for bb_type in _SPRAY_BB_TYPE_ORDER:
-            count = int(bb_type_counts.get(bb_type, 0))
-            if not count:
-                continue
-            group = sub[sub["bb_type"] == bb_type]
-            type_stats = _spray_type_stats(group)
-            types.append({
-                "label": _SPRAY_BB_TYPE_LABELS[bb_type],
-                "bb_type": bb_type,
-                "usage": round(count / total * 100, 1),
-                "count": count,
-                **type_stats,
-            })
-
-        metrics = [
-            {"id": key, "label": label, "unit": unit, "max": max_val}
-            for key, label, unit, max_val in _SPRAY_TYPE_METRICS
-        ]
-
-        return {
-            "id": "spray_chart",
-            "label": "Batting Metrics",
-            "panel_kind": "spray_chart",
-            "season_year": str(season_year),
-            "summary": {
-                "total": total,
-                "hits": hits,
-                "home_runs": counts["home_run"],
-                "outs": counts["out"],
-                "avg_ev": _series_mean(sub.get("launch_speed", pd.Series(dtype=float))),
-                "avg_launch_angle": _series_mean(sub.get("launch_angle", pd.Series(dtype=float))),
-                "avg_distance": _series_mean(sub.get("hit_distance_sc", pd.Series(dtype=float))),
-                "avg_xwoba": _round_rate_mean(
-                    sub.get("estimated_woba_using_speedangle", pd.Series(dtype=float))
-                ),
-                "hard_hit_pct": _hard_hit_rate(sub.get("launch_speed", pd.Series(dtype=float))),
-                "barrel_pct": _barrel_rate(sub.get("launch_speed_angle", pd.Series(dtype=float))),
-                "babip": babip,
-            },
-            "legend": legend,
-            "types": types,
-            "metrics": metrics,
-            "points": points,
-        }
-    except Exception:
-        return empty
 
 
 def _get_batter_percentile_table(season_year: int) -> pd.DataFrame | None:
@@ -4068,7 +4053,7 @@ def fetch_player_visual_stat_panel(
     year = _resolve_panel_year(season_year)
     pitching = is_pitcher_position(position)
     kind = "pitching" if pitching else "batting"
-    cache_key = f"{player_id}:{year}:{kind}:visual:v1"
+    cache_key = f"{player_id}:{year}:{kind}:visual:v2"
     cached = _player_visual_panel_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:

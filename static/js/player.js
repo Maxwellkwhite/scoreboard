@@ -1310,8 +1310,7 @@
       { label: 'Avg Dist', value: summary.avg_distance !== null && summary.avg_distance !== undefined ? summary.avg_distance + ' ft' : null },
       { label: 'xwOBA', value: summary.avg_xwoba !== null && summary.avg_xwoba !== undefined ? formatSpraySummaryRate(summary.avg_xwoba) : null },
       { label: 'Hard Hit%', value: summary.hard_hit_pct !== null && summary.hard_hit_pct !== undefined ? summary.hard_hit_pct + '%' : null },
-      { label: 'Barrel%', value: summary.barrel_pct !== null && summary.barrel_pct !== undefined ? summary.barrel_pct + '%' : null },
-      { label: 'BABIP', value: summary.babip !== null && summary.babip !== undefined ? formatSpraySummaryRate(summary.babip) : null }
+      { label: 'Barrel%', value: summary.barrel_pct !== null && summary.barrel_pct !== undefined ? summary.barrel_pct + '%' : null }
     ];
 
     var summaryHtml = summaryItems.map(function (item) {
@@ -1351,10 +1350,16 @@
     }
 
     var metricsHtml = metrics.length && types.length ? metrics.map(function (metric) {
-      var barsHtml = types.map(function (item, index) {
+      var metricTypes = types.filter(function (item) {
+        return item.bb_type !== 'popup';
+      });
+      var barsHtml = metricTypes.map(function (item) {
+        var typeIndex = types.findIndex(function (entry) {
+          return entry.bb_type === item.bb_type;
+        });
         var value = item[metric.id];
         var display = formatSprayMetricValue(metric, value);
-        var width = sprayMetricBarWidth(metric, value, types);
+        var width = sprayMetricBarWidth(metric, value, metricTypes);
         var suffix = '';
         if (display !== '—') {
           if (metric.unit === '%') suffix = '%';
@@ -1367,7 +1372,7 @@
             '</span>' +
             '<div class="pitch-mix-bar-row__track" aria-hidden="true">' +
               '<span class="pitch-mix-bar-row__fill" style="width:' + width.toFixed(1) + '%;background:' +
-              bbTypeColor(item.bb_type, index) + '"></span>' +
+              bbTypeColor(item.bb_type, typeIndex === -1 ? 0 : typeIndex) + '"></span>' +
             '</div>' +
             '<span class="pitch-mix-bar-row__value">' + escapeHtml(display + suffix) + '</span>' +
           '</div>'
