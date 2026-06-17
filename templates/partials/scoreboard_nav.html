@@ -1,6 +1,18 @@
 <nav class="navbar scoreboard-nav">
   <div class="scoreboard-nav__inner">
-    <a class="navbar-brand" href="{{ url_for('home_page') }}">Scoreboard</a>
+    <a class="navbar-brand" href="{{ url_for('home_page') }}" aria-label="ScoreBore home">
+      <img
+        class="navbar-brand__logo"
+        src="{{ url_for('static', filename='images/logo.png') }}"
+        alt=""
+        width="44"
+        height="44"
+        loading="eager"
+      >
+      <span class="navbar-brand__text" aria-hidden="true">
+        <span class="navbar-brand__score">Score</span><span class="navbar-brand__bore">bore</span>
+      </span>
+    </a>
     <div
       class="scoreboard-search"
       data-scoreboard-search

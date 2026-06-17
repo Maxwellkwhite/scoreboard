@@ -4,20 +4,59 @@
 }
 
 .scoreboard-nav {
-  background: #eef1f5;
-  color: #1a2332;
+  --nav-bg: #1a2332;
+  --nav-search-bg: #222d3f;
+  --nav-search-bg-hover: #263245;
+  --nav-search-border: #2f3d52;
+  --nav-search-border-hover: #3a4a61;
+  background: var(--nav-bg);
+  color: #fff;
   padding: 0.85rem 0;
   box-shadow: none;
 }
 
 .scoreboard-nav .navbar-brand {
-  color: #1a2332;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+}
+
+.scoreboard-nav .navbar-brand__logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+
+.scoreboard-nav .navbar-brand__text {
+  display: inline-flex;
+  align-items: baseline;
+  font-size: 1.35rem;
   font-weight: 800;
   letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.scoreboard-nav .navbar-brand__score {
+  color: #fff;
+}
+
+.scoreboard-nav .navbar-brand__bore {
+  color: #1d7cff;
 }
 
 .scoreboard-nav .navbar-brand:hover {
-  color: #3d4f66;
+  opacity: 0.9;
+}
+
+.scoreboard-nav .navbar-brand:hover .navbar-brand__score {
+  color: #fff;
+}
+
+.scoreboard-nav .navbar-brand:hover .navbar-brand__bore {
+  color: #1d7cff;
 }
 
 .scoreboard-nav__inner {
@@ -25,9 +64,9 @@
   align-items: center;
   gap: 1rem;
   width: 100%;
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 0 1rem;
+  max-width: none;
+  margin: 0;
+  padding: 0 clamp(1rem, 2.5vw, 2rem);
 }
 
 .scoreboard-search {
@@ -55,7 +94,7 @@
   left: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #6b7a90;
+  color: #fff;
   font-size: 0.95rem;
   pointer-events: none;
 }
@@ -63,28 +102,30 @@
 .scoreboard-search__input {
   width: 100%;
   padding: 0.5rem 0.85rem 0.5rem 2.25rem;
-  border: 1px solid #d5dbe3;
+  border: 1px solid var(--nav-search-border);
   border-radius: 10px;
-  background: #fff;
-  color: #1a2332;
+  background: var(--nav-search-bg);
+  color: #fff;
   font-size: 0.92rem;
   line-height: 1.2;
   transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .scoreboard-search__input::placeholder {
-  color: #8a96a8;
+  color: #fff;
+  opacity: 0.55;
 }
 
 .scoreboard-search__input:hover {
-  border-color: #bcc5d1;
+  background: var(--nav-search-bg-hover);
+  border-color: var(--nav-search-border-hover);
 }
 
 .scoreboard-search__input:focus {
   outline: none;
-  background: #fff;
-  border-color: #9aa8ba;
-  box-shadow: 0 0 0 3px rgba(26, 35, 50, 0.08);
+  background: var(--nav-search-bg-hover);
+  border-color: #4a6a8a;
+  box-shadow: 0 0 0 3px rgba(29, 124, 255, 0.18);
 }
 
 .scoreboard-search__results {
@@ -1693,7 +1734,7 @@ html[data-scoreboard-view="standings"] #tab-standings {
   animation: game-card-shimmer-wave var(--score-flash-duration, 5s) ease-in-out forwards;
 }
 
-@keyframes game-card-shimmer-wave {
+  @keyframes game-card-shimmer-wave {
   0% {
     transform: translateX(-130%);
     opacity: 0;

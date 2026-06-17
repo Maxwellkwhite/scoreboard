@@ -1,4 +1,4 @@
-"""Qualified MLB player league stat pools via pybaseball (daily JSON cache)."""
+"""Qualified MLB player league stat pools via pybaseball (single JSON cache file)."""
 
 from __future__ import annotations
 
@@ -16,6 +16,8 @@ from pybaseball import batting_stats_bref, pitching_stats_bref
 logger = logging.getLogger(__name__)
 
 _DATA_DIR = Path(__file__).resolve().parent / "data" / "league_player_averages"
+_MASTER_CACHE_PATH = _DATA_DIR / "league_player_averages.json"
+_MASTER_LOCK_PATH = _DATA_DIR / "league_player_averages.lock"
 _BUILD_WAIT_SECONDS = 180
 _BUILD_POLL_SECONDS = 0.5
 _MEMORY_TTL_SECONDS = 3600
@@ -242,14 +244,6 @@ def _build_league_stats(season_year: int) -> dict[str, Any]:
     return _build_from_bref(season_year)
 
 
-def _cache_file_path(season_year: int, cache_date: str) -> Path:
-    return _DATA_DIR / str(season_year) / f"{cache_date}.json"
-
-
-def _lock_file_path(season_year: int, cache_date: str) -> Path:
-    return _DATA_DIR / str(season_year) / f"{cache_date}.lock"
-
-
 def _payload_has_data(payload: dict[str, Any]) -> bool:
     batting = payload.get("batting") or {}
     pitching = payload.get("pitching") or {}
@@ -287,52 +281,71 @@ def _league_stats_from_payload(payload: dict[str, Any]) -> dict[str, dict[str, l
     }
 
 
-def _load_payload_from_disk(path: Path) -> dict[str, Any] | None:
-    if not path.is_file():
-        return None
+def _empty_store() -> dict[str, Any]:
+    return {"seasons": {}}
+
+
+def _load_store() -> dict[str, Any]:
+    if not _MASTER_CACHE_PATH.is_file():
+        return _empty_store()
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        store = json.loads(_MASTER_CACHE_PATH.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
-        logger.warning("Failed to read league cache %s: %s", path, exc)
-        return None
-    if not _payload_has_data(payload):
-        logger.warning("League cache %s is empty; rebuilding", path)
-        return None
-    return payload
+        logger.warning("Failed to read league cache %s: %s", _MASTER_CACHE_PATH, exc)
+        return _empty_store()
+    if not isinstance(store.get("seasons"), dict):
+        return _empty_store()
+    return store
 
 
-def _save_payload(payload: dict[str, Any]) -> None:
-    season_year = payload["season_year"]
-    cache_date = payload["date"]
-    path = _cache_file_path(season_year, cache_date)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(".json.tmp")
-    encoded = json.dumps(payload, separators=(",", ":"))
+def _save_store(store: dict[str, Any]) -> None:
+    _DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tmp_path = _MASTER_CACHE_PATH.with_suffix(".json.tmp")
+    encoded = json.dumps(store, separators=(",", ":"))
     tmp_path.write_text(encoded, encoding="utf-8")
-    os.replace(tmp_path, path)
-    logger.info("Wrote league player cache to %s (%d bytes)", path, len(encoded))
+    os.replace(tmp_path, _MASTER_CACHE_PATH)
+    logger.info("Wrote league player cache to %s (%d bytes)", _MASTER_CACHE_PATH, len(encoded))
 
 
-def _wait_for_cache_file(path: Path, lock_path: Path) -> dict[str, Any] | None:
-    deadline = time.time() + _BUILD_WAIT_SECONDS
-    while time.time() < deadline:
-        payload = _load_payload_from_disk(path)
-        if payload is not None:
+def _season_needs_refresh(season_year: int, entry: dict[str, Any] | None, cache_date: str) -> bool:
+    if entry is None or not _payload_has_data(entry):
+        return True
+    if season_year < date.today().year:
+        return False
+    if season_year > date.today().year:
+        return False
+    return entry.get("date") != cache_date
+
+
+def _import_legacy_season(season_year: int) -> dict[str, Any] | None:
+    """One-time import from old per-year daily JSON files, if present."""
+    year_dir = _DATA_DIR / str(season_year)
+    if not year_dir.is_dir():
+        return None
+    candidates = sorted(
+        (
+            path
+            for path in year_dir.glob("*.json")
+            if not path.name.endswith(".tmp")
+        ),
+        key=lambda path: path.name,
+        reverse=True,
+    )
+    for path in candidates:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, TypeError, ValueError):
+            continue
+        if _payload_has_data(payload):
+            logger.info("Imported legacy league cache for %s from %s", season_year, path)
             return payload
-        if not lock_path.exists():
-            return None
-        time.sleep(_BUILD_POLL_SECONDS)
-    payload = _load_payload_from_disk(path)
-    if payload is not None:
-        return payload
-    logger.warning("Timed out waiting for league cache build at %s", path)
     return None
 
 
-def _try_acquire_build_lock(lock_path: Path) -> bool:
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
+def _try_acquire_build_lock() -> bool:
+    _DATA_DIR.mkdir(parents=True, exist_ok=True)
     try:
-        fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        fd = os.open(str(_MASTER_LOCK_PATH), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
         return False
     with os.fdopen(fd, "w", encoding="utf-8") as lock_file:
@@ -345,36 +358,91 @@ def _try_acquire_build_lock(lock_path: Path) -> bool:
     return True
 
 
-def _build_and_save_league_cache(
-    season_year: int,
-    cache_date: str,
-    *,
-    path: Path,
-    lock_path: Path,
-) -> dict[str, dict[str, list[float]]]:
-    if not _try_acquire_build_lock(lock_path):
-        payload = _wait_for_cache_file(path, lock_path)
-        if payload is not None:
-            return _league_stats_from_payload(payload)
-        raise RuntimeError(f"Another worker is building league cache at {path}")
+def _release_build_lock() -> None:
+    try:
+        _MASTER_LOCK_PATH.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _wait_for_store_season(season_year: int, cache_date: str) -> dict[str, Any] | None:
+    deadline = time.time() + _BUILD_WAIT_SECONDS
+    key = str(season_year)
+    while time.time() < deadline:
+        entry = (_load_store().get("seasons") or {}).get(key)
+        if entry is not None and _payload_has_data(entry):
+            if not _season_needs_refresh(season_year, entry, cache_date):
+                return entry
+        if not _MASTER_LOCK_PATH.exists():
+            return None
+        time.sleep(_BUILD_POLL_SECONDS)
+    entry = (_load_store().get("seasons") or {}).get(key)
+    if entry is not None and _payload_has_data(entry):
+        if not _season_needs_refresh(season_year, entry, cache_date):
+            return entry
+    logger.warning(
+        "Timed out waiting for league cache season %s in %s",
+        season_year,
+        _MASTER_CACHE_PATH,
+    )
+    return None
+
+
+def _build_season_entry(season_year: int, cache_date: str) -> dict[str, Any]:
+    logger.info("Building league player cache for season %s", season_year)
+    built = _build_league_stats(season_year)
+    payload = _payload_from_league_stats(season_year, cache_date, built)
+    if not _payload_has_data(payload):
+        raise RuntimeError("League stats build returned no qualified player data")
+    return payload
+
+
+def _ensure_season_entry(season_year: int, cache_date: str) -> dict[str, Any]:
+    key = str(season_year)
+    store = _load_store()
+    seasons = store.setdefault("seasons", {})
+    entry = seasons.get(key)
+
+    if not _season_needs_refresh(season_year, entry, cache_date):
+        return entry
+
+    if entry is None:
+        legacy = _import_legacy_season(season_year)
+        if legacy is not None:
+            seasons[key] = legacy
+            _save_store(store)
+            return legacy
+
+    if not _try_acquire_build_lock():
+        waited = _wait_for_store_season(season_year, cache_date)
+        if waited is not None:
+            return waited
+        raise RuntimeError(f"Another worker is building league cache at {_MASTER_CACHE_PATH}")
 
     try:
-        logger.info("Building league player cache for %s season %s", cache_date, season_year)
-        built = _build_league_stats(season_year)
-        payload = _payload_from_league_stats(season_year, cache_date, built)
-        if not _payload_has_data(payload):
-            raise RuntimeError("League stats build returned no qualified player data")
-        _save_payload(payload)
-        return _league_stats_from_payload(payload)
+        store = _load_store()
+        seasons = store.setdefault("seasons", {})
+        entry = seasons.get(key)
+        if not _season_needs_refresh(season_year, entry, cache_date):
+            return entry
+
+        if entry is None:
+            legacy = _import_legacy_season(season_year)
+            if legacy is not None:
+                seasons[key] = legacy
+                _save_store(store)
+                return legacy
+
+        entry = _build_season_entry(season_year, cache_date)
+        seasons[key] = entry
+        _save_store(store)
+        return entry
     finally:
-        try:
-            lock_path.unlink(missing_ok=True)
-        except OSError:
-            pass
+        _release_build_lock()
 
 
 def warm_league_cache_for_today(season_year: int | None = None) -> bool:
-    """Build today's league cache file if missing (safe to call on app startup)."""
+    """Refresh the current season in the master cache if today's data is missing."""
     year = season_year or date.today().year
     result = get_league_player_stats_by_category(year)
     has_data = bool((result.get("batting") or {}) or (result.get("pitching") or {}))
@@ -390,42 +458,30 @@ def get_league_player_stats_by_category(
     *,
     cache_date: str | None = None,
 ) -> dict[str, dict[str, list[float]]]:
-    """Qualified MLB player distributions for stat-bar comparisons (cached per day)."""
+    """Qualified MLB player distributions for stat-bar comparisons.
+
+    All seasons live in data/league_player_averages/league_player_averages.json.
+    The current calendar year is refreshed once per day; older seasons are built
+    only when missing and then kept permanently.
+    """
     cache_date = cache_date or date.today().isoformat()
-    mem_key = f"{season_year}:{cache_date}"
+    mem_key = (
+        f"{season_year}:{cache_date}"
+        if season_year == date.today().year
+        else str(season_year)
+    )
     cached = _memory_cache.get(mem_key)
     now = time.time()
     if cached and now - cached[0] < _MEMORY_TTL_SECONDS:
         return cached[1]
 
-    path = _cache_file_path(season_year, cache_date)
-    lock_path = _lock_file_path(season_year, cache_date)
-
-    payload = _load_payload_from_disk(path)
-    if payload is not None:
-        result = _league_stats_from_payload(payload)
-        _memory_cache[mem_key] = (now, result)
-        return result
-
-    if lock_path.exists():
-        payload = _wait_for_cache_file(path, lock_path)
-        if payload is not None:
-            result = _league_stats_from_payload(payload)
-            _memory_cache[mem_key] = (time.time(), result)
-            return result
-
     try:
-        result = _build_and_save_league_cache(
-            season_year,
-            cache_date,
-            path=path,
-            lock_path=lock_path,
-        )
+        entry = _ensure_season_entry(season_year, cache_date)
+        result = _league_stats_from_payload(entry)
     except Exception:
         logger.exception(
-            "Failed to build league player cache for season %s on %s",
+            "Failed to build league player cache for season %s",
             season_year,
-            cache_date,
         )
         return {"batting": {}, "pitching": {}}
 
