@@ -2201,11 +2201,257 @@ def _build_league_average_view(
     }
 
 
-def _season_stats_loading_view(*, pitching: bool, season_year: int) -> dict[str, Any]:
+def _espn_timeline_standard_columns(*, pitching: bool) -> tuple[str, ...]:
+    if pitching:
+        return (
+            "Season", "Tm", "LG", "W", "L", "ERA", "G", "GS", "SV", "IP", "SO", "BB", "WHIP",
+        )
+    return (
+        "Season", "Tm", "LG", "G", "PA", "AB", "R", "H", "2B", "3B", "HR", "RBI",
+        "BB", "SO", "SB", "AVG", "OBP", "SLG", "OPS",
+    )
+
+
+def _espn_pa_by_year(categories: dict[str, Any]) -> dict[int, str]:
+    category = categories.get("expanded-batting") or {}
+    labels = category.get("labels") or []
+    if "PA" not in labels:
+        return {}
+    pa_idx = labels.index("PA")
+    by_year: dict[int, str] = {}
+    for stat in category.get("statistics") or []:
+        year = (stat.get("season") or {}).get("year")
+        if year is None:
+            continue
+        values = stat.get("stats") or []
+        if pa_idx < len(values):
+            by_year[int(year)] = str(values[pa_idx])
+    return by_year
+
+
+def _espn_year_source(
+    stats: list[dict[str, Any]],
+    *,
+    labels: list[str],
+    pitching: bool,
+) -> dict[str, Any] | None:
+    usable: list[dict[str, Any]] = []
+    for stat in stats:
+        values = stat.get("stats") or []
+        if any(str(value).strip() not in {"", "--", "-", "—"} for value in values):
+            usable.append(stat)
+    if not usable:
+        return None
+
+    total_rows = [stat for stat in usable if not stat.get("teamId")]
+    team_rows = [stat for stat in usable if stat.get("teamId")]
+
+    if total_rows:
+        return dict(zip(labels, total_rows[0].get("stats") or []))
+    if len(team_rows) == 1:
+        return dict(zip(labels, team_rows[0].get("stats") or []))
+    if len(team_rows) > 1:
+        sources = [
+            _espn_stat_source(labels, stat.get("stats") or [])
+            for stat in team_rows
+        ]
+        return (
+            _merge_espn_pitching_sources(sources)
+            if pitching
+            else _merge_espn_batting_sources(sources)
+        )
+    return dict(zip(labels, usable[0].get("stats") or []))
+
+
+def _espn_source_to_timeline_cells(
+    source: dict[str, Any],
+    *,
+    pitching: bool,
+) -> dict[str, str]:
+    if pitching:
+        mapping = {
+            "GP": "G",
+            "K": "SO",
+            "W": "W",
+            "L": "L",
+            "ERA": "ERA",
+            "GS": "GS",
+            "SV": "SV",
+            "IP": "IP",
+            "BB": "BB",
+            "WHIP": "WHIP",
+        }
+    else:
+        mapping = {
+            "GP": "G",
+            "AB": "AB",
+            "R": "R",
+            "H": "H",
+            "2B": "2B",
+            "3B": "3B",
+            "HR": "HR",
+            "RBI": "RBI",
+            "BB": "BB",
+            "SO": "SO",
+            "SB": "SB",
+            "AVG": "AVG",
+            "OBP": "OBP",
+            "SLG": "SLG",
+            "OPS": "OPS",
+        }
+
+    cells: dict[str, str] = {}
+    for espn_key, timeline_key in mapping.items():
+        if espn_key not in source:
+            continue
+        value = source[espn_key]
+        if timeline_key in {"AVG", "OBP", "SLG", "OPS"}:
+            cells[timeline_key] = _format_stat(
+                "BA" if timeline_key == "AVG" else timeline_key,
+                value,
+            )
+        elif timeline_key in {"ERA", "WHIP", "IP"}:
+            cells[timeline_key] = _format_stat(timeline_key, value)
+        else:
+            cells[timeline_key] = _format_espn_value(value)
+    return cells
+
+
+def _timeline_row_from_espn_source(
+    source: dict[str, Any],
+    *,
+    pitching: bool,
+    columns: tuple[str, ...],
+    season_label: str,
+    row_kind: str,
+    team: str | None = None,
+    pa: str | None = None,
+) -> dict[str, Any]:
+    cells = _espn_source_to_timeline_cells(source, pitching=pitching)
+    cells["Season"] = season_label
+    cells["Tm"] = team or "—"
+    cells["LG"] = "—"
+    if pa is not None:
+        cells["PA"] = _format_espn_value(pa)
+    for column in columns:
+        cells.setdefault(column, "—")
+    return {
+        "label": season_label,
+        "row_kind": row_kind,
+        "cells": cells,
+    }
+
+
+def _empty_espn_timeline_standard_table(*, pitching: bool, season_year: int) -> dict[str, Any]:
+    return {
+        "layout": "savant_career",
+        "columns": list(_espn_timeline_standard_columns(pitching=pitching)),
+        "rows": [],
+        "season_year": str(season_year),
+    }
+
+
+def _build_espn_season_stats_standard_table(
+    categories: dict[str, Any],
+    *,
+    pitching: bool,
+    season_year: int,
+) -> dict[str, Any]:
+    columns = _espn_timeline_standard_columns(pitching=pitching)
+    category_name = (
+        _ESPN_SEASON_PITCHING_CATEGORY if pitching else _ESPN_SEASON_BATTING_CATEGORY
+    )
+    category = categories.get(category_name) or {}
+    labels = category.get("labels") or []
+    if not labels:
+        return _empty_espn_timeline_standard_table(
+            pitching=pitching,
+            season_year=season_year,
+        )
+
+    team_by_year = _espn_season_team_by_year(categories, pitching=pitching)
+    pa_by_year = {} if pitching else _espn_pa_by_year(categories)
+
+    by_year: dict[int, list[dict[str, Any]]] = {}
+    for stat in category.get("statistics") or []:
+        year = (stat.get("season") or {}).get("year")
+        if year is None:
+            continue
+        by_year.setdefault(int(year), []).append(stat)
+
+    rows: list[dict[str, Any]] = []
+    for year in sorted(by_year.keys(), reverse=True):
+        source = _espn_year_source(by_year[year], labels=labels, pitching=pitching)
+        if not source:
+            continue
+        rows.append(
+            _timeline_row_from_espn_source(
+                source,
+                pitching=pitching,
+                columns=columns,
+                season_label=str(year),
+                row_kind="season",
+                team=team_by_year.get(year),
+                pa=pa_by_year.get(year),
+            )
+        )
+
+    totals = category.get("totals") or []
+    if totals:
+        career_source = dict(zip(labels, totals))
+        rows.append(
+            _timeline_row_from_espn_source(
+                career_source,
+                pitching=pitching,
+                columns=columns,
+                season_label="Career",
+                row_kind="career",
+            )
+        )
+
+    if not rows:
+        return _empty_espn_timeline_standard_table(
+            pitching=pitching,
+            season_year=season_year,
+        )
+
+    table: dict[str, Any] = {
+        "layout": "savant_career",
+        "columns": list(columns),
+        "rows": rows,
+        "season_year": str(season_year),
+    }
+    return _attach_savant_timeline_league_bounds(table, pitching=pitching)
+
+
+def _build_season_stats_nested_view(
+    categories: dict[str, Any],
+    *,
+    pitching: bool,
+    season_year: int,
+) -> dict[str, Any]:
     return {
         "id": "season_stats",
         "label": "Season Stats",
-        "loading": True,
+        "nested_panel": {
+            "default_view": "standard",
+            "views": [
+                {
+                    "id": "standard",
+                    "label": "Standard",
+                    "stats_table": _build_espn_season_stats_standard_table(
+                        categories,
+                        pitching=pitching,
+                        season_year=season_year,
+                    ),
+                },
+                {
+                    "id": "advanced",
+                    "label": "Advanced",
+                    "coming_soon": True,
+                },
+            ],
+        },
     }
 
 
@@ -2227,7 +2473,11 @@ def _build_player_stats_panel_league_only(
                 pitching=pitching,
                 season_year=season_year,
             ),
-            _season_stats_loading_view(pitching=pitching, season_year=season_year),
+            _build_season_stats_nested_view(
+                categories,
+                pitching=pitching,
+                season_year=season_year,
+            ),
         ],
     }
 
@@ -3391,7 +3641,28 @@ def _empty_player_stats_panel_league_only(*, pitching: bool, season_year: int) -
                 "label": "League Average",
                 "metrics": [],
             },
-            _season_stats_loading_view(pitching=pitching, season_year=season_year),
+            {
+                "id": "season_stats",
+                "label": "Season Stats",
+                "nested_panel": {
+                    "default_view": "standard",
+                    "views": [
+                        {
+                            "id": "standard",
+                            "label": "Standard",
+                            "stats_table": _empty_espn_timeline_standard_table(
+                                pitching=pitching,
+                                season_year=season_year,
+                            ),
+                        },
+                        {
+                            "id": "advanced",
+                            "label": "Advanced",
+                            "coming_soon": True,
+                        },
+                    ],
+                },
+            },
         ],
     }
 
@@ -3480,7 +3751,7 @@ def fetch_player_league_stat_panel(
     year = _resolve_panel_year(season_year)
     pitching = is_pitcher_position(position)
     kind = "pitching" if pitching else "batting"
-    cache_key = f"{player_id}:{year}:{kind}:league:v1"
+    cache_key = f"{player_id}:{year}:{kind}:league:v3"
     cached = _player_core_panels_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
@@ -3768,82 +4039,18 @@ def fetch_player_season_stats_view(
     year = _resolve_panel_year(season_year)
     pitching = is_pitcher_position(position)
     kind = "pitching" if pitching else "batting"
-    cache_key = f"{player_id}:{year}:{kind}:season:v4"
+    cache_key = f"{player_id}:{year}:{kind}:season:v6"
     cached = _player_core_panels_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
         return cached[1]
 
-    player_record = _lookup_player_record(player_name) if player_name else None
-    mlbam_id = (player_record or {}).get("mlbam_id")
-    savant_tables = _fetch_savant_career_tables(
-        mlbam_id,
+    categories = _fetch_espn_stat_categories(player_id) if player_id else {}
+    view = _build_season_stats_nested_view(
+        categories,
         pitching=pitching,
         season_year=year,
     )
-
-    empty_table = {
-        "layout": "savant_career",
-        "columns": [],
-        "rows": [],
-        "season_year": str(year),
-    }
-    if savant_tables and (savant_tables.get("standard", {}).get("rows") or savant_tables.get("advanced", {}).get("rows")):
-        standard_table = _attach_savant_timeline_league_bounds(
-            savant_tables.get("standard") or empty_table,
-            pitching=pitching,
-        )
-        advanced_table = _enrich_savant_advanced_teams(
-            standard_table,
-            savant_tables.get("advanced") or empty_table,
-        )
-        advanced_table = _attach_savant_timeline_league_bounds(
-            advanced_table,
-            pitching=pitching,
-        )
-        view = {
-            "id": "season_stats",
-            "label": "Season Stats",
-            "nested_panel": {
-                "default_view": "standard",
-                "views": [
-                    {
-                        "id": "standard",
-                        "label": "Standard",
-                        "stats_table": standard_table,
-                    },
-                    {
-                        "id": "advanced",
-                        "label": "Advanced",
-                        "stats_table": advanced_table,
-                    },
-                ],
-            },
-        }
-        _player_core_panels_cache[cache_key] = (now, view)
-        return view
-
-    column_labels = [label for _, label in (_PITCHING_COLUMNS if pitching else _BATTING_COLUMNS)]
-    categories = _fetch_espn_stat_categories(player_id) if player_id else {}
-    stats_table = (
-        fetch_player_stats_table(
-            player_name,
-            year,
-            position=position,
-            espn_categories=categories or None,
-            espn_player_id=player_id or None,
-        )
-        if player_name
-        else None
-    )
-    if not stats_table:
-        stats_table = _empty_stats_table(column_labels, year)
-
-    view = {
-        "id": "season_stats",
-        "label": "Season Stats",
-        "stats_table": stats_table,
-    }
     _player_core_panels_cache[cache_key] = (now, view)
     return view
 

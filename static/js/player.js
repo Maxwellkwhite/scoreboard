@@ -460,6 +460,26 @@
     return buildSeasonCareerTableHtml(statsTable);
   }
 
+  function buildSeasonStatsComingSoonHtml() {
+    var metrics = ['Exit Velo', 'Barrel%', 'xBA', 'xwOBA', 'Chase%', 'Whiff%'];
+    var chips = metrics.map(function (metric) {
+      return '<span class="player-season-stats__coming-soon-chip">' + escapeHtml(metric) + '</span>';
+    }).join('');
+
+    return (
+      '<div class="player-season-stats__coming-soon" role="status">' +
+        '<div class="player-season-stats__coming-soon-icon" aria-hidden="true">' +
+          '<span class="player-season-stats__coming-soon-radar"></span>' +
+        '</div>' +
+        '<p class="player-season-stats__coming-soon-title">Advanced stats coming soon</p>' +
+        '<p class="player-season-stats__coming-soon-copy">' +
+          'Season-by-season Statcast metrics and league context are on the way.' +
+        '</p>' +
+        '<div class="player-season-stats__coming-soon-chips" aria-hidden="true">' + chips + '</div>' +
+      '</div>'
+    );
+  }
+
   function buildSeasonStatsNestedHtml(nestedPanel) {
     var views = nestedPanel.views || [];
     var defaultView = nestedPanel.default_view || (views[0] && views[0].id) || 'standard';
@@ -474,7 +494,9 @@
 
     var panelsHtml = views.map(function (view) {
       var content = '';
-      if (view.stats_table && view.stats_table.layout === 'savant_career') {
+      if (view.coming_soon) {
+        content = buildSeasonStatsComingSoonHtml();
+      } else if (view.stats_table && view.stats_table.layout === 'savant_career') {
         content = buildSavantTimelineHtml(view.stats_table, {
           abbreviateTicks: view.id === 'advanced',
         });
@@ -1756,7 +1778,6 @@
   var PANEL_ORDER = ['player_stats', visualPanelId, 'percentile_ranks', 'splits'];
   var activePanelId = null;
   var tabNavigationBound = false;
-  var playerStatsPanel = null;
 
   function panelSortIndex(panelId) {
     var idx = PANEL_ORDER.indexOf(panelId);
@@ -1940,31 +1961,6 @@
     });
   }
 
-  function loadDeferredPanels() {
-    fetchPlayerStats('/stats/season')
-      .then(function (payload) {
-        if (!payload.view || !playerStatsPanel) return;
-        playerStatsPanel.views = playerStatsPanel.views.map(function (view) {
-          return view.id === 'season_stats' ? payload.view : view;
-        });
-        upsertPanel(playerStatsPanel);
-      })
-      .catch(function () {
-        if (!playerStatsPanel) return;
-        playerStatsPanel.views = playerStatsPanel.views.map(function (view) {
-          if (view.id !== 'season_stats') return view;
-          return {
-            id: 'season_stats',
-            label: 'Season Stats',
-            stats_table: { columns: [], rows: [] },
-          };
-        });
-        upsertPanel(playerStatsPanel);
-      });
-
-    loadStagedPanels();
-  }
-
   function loadStagedPanels() {
     fetchPlayerStats('/stats/visual')
       .then(function (payload) {
@@ -2007,10 +2003,9 @@
       return;
     }
 
-    playerStatsPanel = payload.stat_panel;
-    initCorePanels([playerStatsPanel]);
+    initCorePanels([payload.stat_panel]);
     finishLoading();
-    loadDeferredPanels();
+    loadStagedPanels();
   }
 
   panelsEl.innerHTML = buildPanelLoadingHtml();
