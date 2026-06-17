@@ -1317,23 +1317,23 @@ def api_mlb_player_stats(player_id):
     endpoint='api_mlb_player_stats_league',
 )
 def api_mlb_player_stats_league(player_id):
-    from espn_mlb import fetch_player, fetch_player_league_stat_panel
+    from espn_mlb import fetch_player, fetch_player_league_bundle
 
     try:
         player = fetch_player(str(player_id), include_stats=False)
     except (requests.RequestException, ValueError):
         return jsonify({'error': 'Player not found'}), 404
 
-    stat_panel = fetch_player_league_stat_panel(
+    bundle = fetch_player_league_bundle(
         str(player_id),
         player_name=player.get('name') or '',
         position=player.get('position'),
         season_year=player.get('season_year'),
     )
-    if not stat_panel:
+    if not bundle or not bundle.get('stat_panel'):
         return jsonify({'error': 'Stats unavailable'}), 404
 
-    return jsonify({'stat_panel': stat_panel})
+    return jsonify(bundle)
 
 
 @app.route(

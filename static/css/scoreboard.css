@@ -5227,6 +5227,457 @@ a.player-link:hover {
   }
 }
 
+.hit-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ── Hero / archetype (matches player-splits-card palette) ── */
+.hit-profile__hero {
+  --hit-profile-accent: #1a2332;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 1.25rem 1.1rem 1.1rem;
+  border-radius: 0.875rem;
+  border: 1px solid #e8edf3;
+  background: #f6f8fb;
+}
+
+.hit-profile__hero-kicker {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #8a95a5;
+}
+
+.hit-profile__hero-title {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 2.85rem);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1.08;
+  text-transform: uppercase;
+  color: var(--hit-profile-accent);
+}
+
+.hit-profile__hero .hit-profile__hero-title {
+  font-size: clamp(2rem, 5vw, 2.85rem);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  margin: 0;
+  color: var(--hit-profile-accent);
+}
+
+.hit-profile__hero-copy {
+  margin: 0;
+  max-width: 32rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: #6b7789;
+}
+
+.hit-profile__signals {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+}
+
+.hit-profile__signal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  min-width: 5rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.65rem;
+  border: 1px solid #e8edf3;
+  background: #fff;
+}
+
+.hit-profile__signal-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8a95a5;
+}
+
+.hit-profile__signal-value {
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #1a2332;
+  font-variant-numeric: tabular-nums;
+}
+
+.hit-profile__signal-detail {
+  font-size: 0.68rem;
+  line-height: 1.25;
+  color: #6b7789;
+  max-width: 8.5rem;
+}
+
+.hit-profile__hero--balanced {
+  --hit-profile-accent: #3498db;
+}
+
+.hit-profile__hero--patient_masher {
+  --hit-profile-accent: #3498db;
+}
+
+.hit-profile__hero--power_first {
+  --hit-profile-accent: #c0392b;
+}
+
+.hit-profile__hero--ground_ball {
+  --hit-profile-accent: #8b6914;
+}
+
+.hit-profile__hero--fly_ball {
+  --hit-profile-accent: #2980b9;
+}
+
+.hit-profile__hero--contact_producer {
+  --hit-profile-accent: #27ae60;
+}
+
+.hit-profile__hero--strikeout_artist {
+  --hit-profile-accent: #c0392b;
+}
+
+.hit-profile__hero--run_suppressor {
+  --hit-profile-accent: #27ae60;
+}
+
+.hit-profile__hero--command_arm {
+  --hit-profile-accent: #2980b9;
+}
+
+/* ── Body layout ── */
+.hit-profile__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.hit-profile__pillars {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.hit-profile__pillar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 1rem 1.1rem 0.95rem;
+  border: 1px solid #e8edf3;
+  border-radius: 0.875rem;
+  background: #f6f8fb;
+  text-align: center;
+}
+
+.hit-profile__pillar--good {
+  background: #eaf7ef;
+  border-color: #b8e6c8;
+}
+
+.hit-profile__pillar--poor {
+  background: #fdeeee;
+  border-color: #f0c8c8;
+}
+
+.hit-profile__pillar-indicator {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  line-height: 1.2;
+}
+
+.hit-profile__pillar-indicator--good {
+  background: #fff;
+  color: #1f7a3f;
+}
+
+.hit-profile__pillar-indicator--average {
+  background: #fff;
+  color: #5c6778;
+}
+
+.hit-profile__pillar-indicator--poor {
+  background: #fff;
+  color: #b03a3a;
+}
+
+.hit-profile__pillar-value {
+  font-size: 1.85rem;
+  font-weight: 700;
+  color: #1a2332;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.hit-profile__pillar-value--good {
+  color: #27ae60;
+}
+
+.hit-profile__pillar-value--poor {
+  color: #b03a3a;
+}
+
+.hit-profile__pillar-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8a95a5;
+}
+
+.hit-profile__pillar-note {
+  font-size: 0.72rem;
+  color: #6b7789;
+  line-height: 1.35;
+}
+
+.hit-profile__section-title {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #8a95a5;
+}
+
+.hit-profile__section-icon {
+  font-size: 0.9rem;
+  line-height: 1;
+  color: #3498db;
+}
+
+.hit-profile__tendency-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.hit-profile__tendency {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid #e8edf3;
+  border-radius: 0.875rem;
+  background: #f6f8fb;
+}
+
+.hit-profile__tendency-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.hit-profile__tendency-ratio {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #1a2332;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #e8edf3;
+  font-variant-numeric: tabular-nums;
+}
+
+.hit-profile__tendency-spectrum {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.hit-profile__tendency-axis {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.hit-profile__tendency-axis-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #5c6778;
+}
+
+.hit-profile__tendency-axis-label strong {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #1a2332;
+  font-variant-numeric: tabular-nums;
+}
+
+.hit-profile__tendency-axis-label--ground strong {
+  color: #2980b9;
+}
+
+.hit-profile__tendency-axis-label--fly strong {
+  color: #27ae60;
+}
+
+.hit-profile__tendency-track {
+  position: relative;
+  display: flex;
+  height: 0.65rem;
+  border-radius: 999px;
+  overflow: visible;
+  background: #e8edf3;
+}
+
+.hit-profile__tendency-segment {
+  display: block;
+  height: 100%;
+  min-width: 0;
+}
+
+.hit-profile__tendency-segment--ground {
+  background: #85c1e9;
+  border-radius: 999px 0 0 999px;
+}
+
+.hit-profile__tendency-segment--fly {
+  background: #2ecc71;
+  border-radius: 0 999px 999px 0;
+}
+
+.hit-profile__tendency-segment--ground:only-child,
+.hit-profile__tendency-segment--fly:only-child {
+  border-radius: 999px;
+}
+
+.hit-profile__tendency-marker {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  width: 0.78rem;
+  height: 0.78rem;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #1a2332;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 4px rgba(26, 35, 50, 0.18);
+  pointer-events: none;
+}
+
+.hit-profile__tendency-caption {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: #8a95a5;
+  text-align: center;
+}
+
+.hit-profile__groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.hit-profile__group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid #e8edf3;
+  border-radius: 0.875rem;
+  background: #f6f8fb;
+}
+
+.hit-profile__group .hit-profile__section-title {
+  color: #5c6778;
+}
+
+.hit-profile__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.hit-profile__stat {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid #e8edf3;
+}
+
+.hit-profile__stat:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.hit-profile__stat-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #5c6778;
+}
+
+.hit-profile__stat-value-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  text-align: right;
+}
+
+.hit-profile__stat-value {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #1a2332;
+  font-variant-numeric: tabular-nums;
+}
+
+.hit-profile__stat-note {
+  font-size: 0.72rem;
+  color: #6b7789;
+  line-height: 1.3;
+}
+
+@media (max-width: 839px) {
+  .hit-profile__groups {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 639px) {
+  .hit-profile__pillars {
+    grid-template-columns: 1fr;
+  }
+
+  .hit-profile__hero {
+    padding: 1.35rem 1rem 1.2rem;
+  }
+
+  .hit-profile__signal {
+    min-width: calc(50% - 0.55rem);
+    flex: 1 1 calc(50% - 0.55rem);
+  }
+}
+
 .percentile-ranks {
   display: flex;
   flex-direction: column;

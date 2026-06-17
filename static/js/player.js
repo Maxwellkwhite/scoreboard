@@ -4,8 +4,8 @@
 
   var playerId = rootEl.getAttribute('data-player-id');
   var isPitcher = rootEl.getAttribute('data-is-pitcher') === 'true';
-  var visualPanelId = isPitcher ? 'pitch_mix' : 'spray_chart';
-  var visualPanelLabel = isPitcher ? 'Pitch Mix' : 'Batting Metrics';
+  var visualPanelId = isPitcher ? 'pitch_profile' : 'hit_profile';
+  var visualPanelLabel = 'Advanced Stats';
   var tabsEl = document.getElementById('player-stats-tabs');
   var panelsEl = document.getElementById('player-stats-panels');
 
@@ -1295,6 +1295,160 @@
     return Math.min(100, (num / scaleMax) * 100);
   }
 
+  function buildHitProfileHtml(panel) {
+    var pillars = panel.pillars || [];
+    var groups = panel.groups || [];
+    var tendency = panel.contact_tendency;
+    var profileType = panel.profile_type || 'batter';
+    var profileKicker = profileType === 'pitcher' ? 'Pitcher profile' : 'Hitter profile';
+    var archetype = panel.archetype;
+    var archetypeLabel = archetype
+      ? (typeof archetype === 'string' ? archetype : archetype.label)
+      : null;
+    var archetypeTheme = archetype && archetype.theme ? archetype.theme : 'balanced';
+    var archetypeDrivers = archetype && archetype.drivers ? archetype.drivers : [];
+    var archetypeSignals = archetype && archetype.signals ? archetype.signals : [];
+
+    if (!archetypeLabel && !pillars.length && !groups.length) {
+      return '<p class="player-splits-empty">Advanced stats unavailable.</p>';
+    }
+
+    var archetypeHtml = archetypeLabel
+      ? (
+        '<section class="hit-profile__hero hit-profile__hero--' + escapeHtml(archetypeTheme) + '">' +
+          '<span class="hit-profile__hero-kicker">' + escapeHtml(profileKicker) + '</span>' +
+          '<h3 class="hit-profile__hero-title">' + escapeHtml(archetypeLabel) + '</h3>' +
+          (archetypeDrivers.length
+            ? '<p class="hit-profile__hero-copy">' + escapeHtml(archetypeDrivers[0]) + '</p>'
+            : '') +
+          (archetypeSignals.length
+            ? (
+              '<ul class="hit-profile__signals" aria-label="Profile inputs">' +
+                archetypeSignals.map(function (signal) {
+                  var kind = signal.kind || 'default';
+                  var detailHtml = signal.detail
+                    ? '<span class="hit-profile__signal-detail">' + escapeHtml(signal.detail) + '</span>'
+                    : '';
+                  return (
+                    '<li class="hit-profile__signal hit-profile__signal--' + escapeHtml(kind) + '">' +
+                      '<span class="hit-profile__signal-label">' + escapeHtml(signal.label) + '</span>' +
+                      '<span class="hit-profile__signal-value">' + escapeHtml(signal.value || '—') + '</span>' +
+                      detailHtml +
+                    '</li>'
+                  );
+                }).join('') +
+              '</ul>'
+            )
+            : '') +
+        '</section>'
+      )
+      : '';
+
+    var pillarsHtml = pillars.map(function (pillar) {
+      var pillarId = pillar.id || 'default';
+      var tier = pillar.tier || 'average';
+      var tierLabel = pillar.tier_label || '';
+      var noteHtml = pillar.note
+        ? '<span class="hit-profile__pillar-note">' + escapeHtml(pillar.note) + '</span>'
+        : '';
+      var indicatorHtml = tierLabel
+        ? '<span class="hit-profile__pillar-indicator hit-profile__pillar-indicator--' + escapeHtml(tier) + '">' + escapeHtml(tierLabel) + '</span>'
+        : '';
+      return (
+        '<article class="hit-profile__pillar hit-profile__pillar--' + escapeHtml(tier) + '">' +
+          indicatorHtml +
+          '<span class="hit-profile__pillar-value hit-profile__pillar-value--' + escapeHtml(tier) + '">' + escapeHtml(pillar.value || '—') + '</span>' +
+          '<span class="hit-profile__pillar-label">' + escapeHtml(pillar.label) + '</span>' +
+          noteHtml +
+        '</article>'
+      );
+    }).join('');
+
+    var tendencyHtml = '';
+    if (tendency && tendency.ground_pct != null) {
+      var groundPct = Number(tendency.ground_pct);
+      var flyPct = Number(tendency.fly_pct);
+      var groundLabel = tendency.ground_label || 'Ground outs';
+      var flyLabel = tendency.fly_label || 'Fly outs';
+      var goFoText = tendency.go_fo != null ? Number(tendency.go_fo).toFixed(2) : '';
+      var spectrumLabel = groundLabel + ' ' + groundPct.toFixed(1) + '%, ' + flyLabel + ' ' + flyPct.toFixed(1) + '%';
+      var ratioLabel = tendency.ratio_label || 'GO/FO';
+      var tendencyCaption = tendency.caption || '';
+      var groundWidth = Math.max(0, Math.min(100, groundPct));
+      var flyWidth = Math.max(0, Math.min(100, flyPct));
+      var markerLeft = Math.max(4, Math.min(96, groundWidth));
+      tendencyHtml =
+        '<section class="hit-profile__tendency">' +
+          '<div class="hit-profile__tendency-head">' +
+            '<div class="hit-profile__tendency-title-wrap">' +
+              '<span class="hit-profile__section-icon" aria-hidden="true">◐</span>' +
+              '<h4 class="hit-profile__section-title">Batted-ball tendency</h4>' +
+            '</div>' +
+            (goFoText ? '<span class="hit-profile__tendency-ratio">' + escapeHtml(ratioLabel) + ' ' + escapeHtml(goFoText) + '</span>' : '') +
+          '</div>' +
+          '<div class="hit-profile__tendency-spectrum" role="img" aria-label="' + escapeHtml(spectrumLabel) + '">' +
+            '<div class="hit-profile__tendency-axis">' +
+              '<span class="hit-profile__tendency-axis-label hit-profile__tendency-axis-label--ground">' +
+                escapeHtml(groundLabel) + ' <strong>' + escapeHtml(String(tendency.ground_pct)) + '%</strong>' +
+              '</span>' +
+              '<span class="hit-profile__tendency-axis-label hit-profile__tendency-axis-label--fly">' +
+                escapeHtml(flyLabel) + ' <strong>' + escapeHtml(String(tendency.fly_pct)) + '%</strong>' +
+              '</span>' +
+            '</div>' +
+            '<div class="hit-profile__tendency-track">' +
+              '<span class="hit-profile__tendency-segment hit-profile__tendency-segment--ground" style="width:' + groundWidth.toFixed(1) + '%"></span>' +
+              '<span class="hit-profile__tendency-segment hit-profile__tendency-segment--fly" style="width:' + flyWidth.toFixed(1) + '%"></span>' +
+              '<span class="hit-profile__tendency-marker" style="left:' + markerLeft.toFixed(1) + '%" title="' + escapeHtml(spectrumLabel) + '"></span>' +
+            '</div>' +
+            (tendencyCaption
+              ? '<p class="hit-profile__tendency-caption">' + escapeHtml(tendencyCaption) + '</p>'
+              : '') +
+          '</div>' +
+        '</section>';
+    }
+
+    var groupsHtml = groups.map(function (group) {
+      var groupId = group.id || group.label.toLowerCase();
+      var statsHtml = (group.stats || []).map(function (stat) {
+        var noteHtml = stat.note
+          ? '<span class="hit-profile__stat-note">' + escapeHtml(stat.note) + '</span>'
+          : '';
+        return (
+          '<div class="hit-profile__stat">' +
+            '<span class="hit-profile__stat-label">' + escapeHtml(stat.label) + '</span>' +
+            '<div class="hit-profile__stat-value-wrap">' +
+              '<span class="hit-profile__stat-value">' + escapeHtml(stat.value || '—') + '</span>' +
+              noteHtml +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+      return (
+        '<section class="hit-profile__group hit-profile__group--' + escapeHtml(groupId) + '">' +
+          '<h4 class="hit-profile__section-title">' + escapeHtml(group.label) + '</h4>' +
+          '<div class="hit-profile__stats">' + statsHtml + '</div>' +
+        '</section>'
+      );
+    }).join('');
+
+    var bodyHtml = '';
+    if (pillarsHtml || tendencyHtml) {
+      bodyHtml +=
+        '<div class="hit-profile__body">' +
+          (pillarsHtml ? '<div class="hit-profile__pillars">' + pillarsHtml + '</div>' : '') +
+          tendencyHtml +
+        '</div>';
+    }
+
+    return (
+      '<div class="hit-profile">' +
+        archetypeHtml +
+        bodyHtml +
+        (groupsHtml ? '<div class="hit-profile__groups">' + groupsHtml + '</div>' : '') +
+      '</div>'
+    );
+  }
+
   function buildSprayChartHtml(panel) {
     var types = panel.types || [];
     var metrics = panel.metrics || [];
@@ -1692,6 +1846,10 @@
       return '<div class="player-panel-body">' + buildPitchMixHtml(panel) + '</div>';
     }
 
+    if (panel.panel_kind === 'hit_profile') {
+      return '<div class="player-panel-body">' + buildHitProfileHtml(panel) + '</div>';
+    }
+
     if (panel.panel_kind === 'spray_chart') {
       return '<div class="player-panel-body">' + buildSprayChartHtml(panel) + '</div>';
     }
@@ -1934,7 +2092,12 @@
       wirePanelElement(insertPanelSection(panel, index === 0));
     });
 
-    upsertPanel({ id: visualPanelId, label: visualPanelLabel, panel_kind: 'loading' });
+    var profileLoaded = panels.some(function (panel) {
+      return panel.id === 'hit_profile' || panel.id === 'pitch_profile';
+    });
+    if (!profileLoaded) {
+      upsertPanel({ id: visualPanelId, label: visualPanelLabel, panel_kind: 'loading' });
+    }
     upsertPanel({ id: 'percentile_ranks', label: 'Percentile Rankings', panel_kind: 'loading' });
     upsertPanel({ id: 'splits', label: 'Splits', panel_kind: 'loading' });
 
@@ -1967,14 +2130,6 @@
   }
 
   function loadStagedPanels() {
-    fetchPlayerStats('/stats/visual')
-      .then(function (payload) {
-        fulfillStagedPanel(visualPanelId, payload.stat_panel);
-      })
-      .catch(function () {
-        fulfillStagedPanel(visualPanelId, null);
-      });
-
     fetchPlayerStats('/stats/percentiles')
       .then(function (payload) {
         fulfillStagedPanel('percentile_ranks', payload.stat_panel);
@@ -2008,7 +2163,11 @@
       return;
     }
 
-    initCorePanels([payload.stat_panel]);
+    var panels = [payload.stat_panel];
+    if (payload.profile_panel) {
+      panels.push(payload.profile_panel);
+    }
+    initCorePanels(panels);
     finishLoading();
     loadStagedPanels();
   }

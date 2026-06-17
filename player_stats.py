@@ -2443,7 +2443,7 @@ def _build_season_stats_nested_view(
                 },
                 {
                     "id": "advanced",
-                    "label": "Advanced",
+                    "label": "Advanced Stats",
                     "coming_soon": True,
                 },
             ],
@@ -2629,6 +2629,704 @@ def _table_row_value(row: pd.Series | None, key: str) -> Any:
     if row is None:
         return None
     return row.get(key)
+
+
+def _espn_advanced_batting_row(
+    categories: dict[str, Any],
+    *,
+    season_year: int,
+) -> dict[str, str]:
+    from team_stats import _espn_category_season_row
+
+    return _espn_category_season_row(
+        categories.get("advanced-batting"),
+        season_year,
+    )
+
+
+def _format_hr_pace(ab_per_hr: Any) -> str | None:
+    number = _parse_number(ab_per_hr)
+    if number is None or number <= 0:
+        return None
+    pace = f"{number:.1f}".rstrip("0").rstrip(".")
+    return f"1 HR per {pace} AB"
+
+
+_ARCHETYPE_THEMES = {
+    "Patient masher": "patient_masher",
+    "Power-first": "power_first",
+    "Ground-ball contact": "ground_ball",
+    "Fly-ball threat": "fly_ball",
+    "Contact run producer": "contact_producer",
+    "Balanced hitter": "balanced",
+}
+
+
+def _isop_context(isop: float | None) -> str | None:
+    if isop is None:
+        return None
+    if isop >= 0.25:
+        return "Elite isolated power"
+    if isop >= 0.18:
+        return "Plus power"
+    if isop >= 0.14:
+        return "Average power"
+    return "Light power"
+
+
+def _bb_k_context(bb_k: float | None) -> str | None:
+    if bb_k is None:
+        return None
+    if bb_k >= 0.75:
+        return "Elite plate discipline"
+    if bb_k >= 0.5:
+        return "Patient approach"
+    if bb_k >= 0.35:
+        return "Average discipline"
+    return "Aggressive approach"
+
+
+def _seca_context(seca: float | None) -> str | None:
+    if seca is None:
+        return None
+    if seca >= 0.38:
+        return "Strong secondary value"
+    if seca >= 0.33:
+        return "Plus secondary value"
+    if seca >= 0.28:
+        return "Average secondary value"
+    return "Limited secondary value"
+
+
+def _go_fo_context(go_fo: float | None) -> str | None:
+    if go_fo is None:
+        return None
+    if go_fo >= 1.2:
+        return "Ground-ball lean"
+    if go_fo <= 0.8:
+        return "Fly-ball lean"
+    return "Balanced contact mix"
+
+
+def _build_hit_archetype(
+    metrics: dict[str, float | None],
+    row: dict[str, str],
+) -> dict[str, Any]:
+    isop = metrics.get("isop")
+    ab_hr = metrics.get("ab_hr")
+    bb_k = metrics.get("bb_k")
+    seca = metrics.get("seca")
+    go_fo = metrics.get("go_fo")
+
+    if bb_k is not None and bb_k >= 0.5 and isop is not None and isop >= 0.18:
+        label = "Patient masher"
+        drivers = ["Elite patience meets plus power"]
+    elif isop is not None and isop >= 0.22 and ab_hr is not None and ab_hr <= 18:
+        label = "Power-first"
+        drivers = ["Power tools drive the profile"]
+    elif go_fo is not None and go_fo >= 1.15:
+        label = "Ground-ball contact"
+        drivers = ["Contact skews to the ground"]
+    elif go_fo is not None and go_fo <= 0.75 and isop is not None and isop >= 0.16:
+        label = "Fly-ball threat"
+        drivers = ["Lift and damage on contact"]
+    elif seca is not None and seca >= 0.33:
+        label = "Contact run producer"
+        drivers = ["Creates runs beyond batting average"]
+    else:
+        label = "Balanced hitter"
+        drivers = ["No single trait dominates the offensive profile"]
+
+    signals: list[dict[str, Any]] = []
+    isop_value = _format_espn_value(row.get("ISOP"))
+    if isop_value != "—":
+        signals.append({
+            "kind": "power",
+            "label": "ISOP",
+            "value": isop_value,
+            "detail": _isop_context(isop),
+        })
+    ab_hr_value = _format_espn_value(row.get("AB/HR"))
+    if ab_hr_value != "—":
+        signals.append({
+            "kind": "power",
+            "label": "AB/HR",
+            "value": ab_hr_value,
+            "detail": _format_hr_pace(row.get("AB/HR")),
+        })
+    bb_k_value = _format_espn_value(row.get("BB/K"))
+    if bb_k_value != "—":
+        signals.append({
+            "kind": "discipline",
+            "label": "BB/K",
+            "value": bb_k_value,
+            "detail": _bb_k_context(bb_k),
+        })
+    seca_value = _format_espn_value(row.get("SECA"))
+    if seca_value != "—":
+        signals.append({
+            "kind": "production",
+            "label": "SECA",
+            "value": seca_value,
+            "detail": _seca_context(seca),
+        })
+    go_fo_value = _format_espn_value(row.get("GO/FO"))
+    if go_fo_value != "—":
+        signals.append({
+            "kind": "contact",
+            "label": "GO/FO",
+            "value": go_fo_value,
+            "detail": _go_fo_context(go_fo),
+        })
+
+    return {
+        "label": label,
+        "theme": _ARCHETYPE_THEMES.get(label, "balanced"),
+        "drivers": drivers,
+        "signals": signals,
+    }
+
+
+def _hit_profile_pillar_tier(
+    pillar_id: str,
+    value: float,
+) -> tuple[str, str]:
+    if pillar_id == "war":
+        if value >= 2.5:
+            return "good", "Plus value"
+        if value >= 1.0:
+            return "average", "Solid contributor"
+        if value >= 0:
+            return "poor", "Below average"
+        return "poor", "Replacement level"
+    if pillar_id == "rc27":
+        if value >= 5.5:
+            return "good", "Strong production"
+        if value >= 4.3:
+            return "average", "League average"
+        return "poor", "Below average"
+    if pillar_id == "bb_k":
+        if value >= 0.60:
+            return "good", "Patient approach"
+        if value >= 0.40:
+            return "average", "League average"
+        return "poor", "Aggressive approach"
+    return "average", "League average"
+
+
+def _ground_pct_from_ratio(ratio: float | None) -> float | None:
+    if ratio is None or ratio < 0:
+        return None
+    return round(ratio / (1 + ratio) * 100, 1)
+
+
+def _build_contact_tendency(
+    *,
+    ground_count: float,
+    fly_count: float,
+    ratio: float | None,
+    ground_label: str,
+    fly_label: str,
+    ratio_label: str,
+    caption: str,
+) -> dict[str, Any] | None:
+    ground_pct = _ground_pct_from_ratio(ratio)
+    total = ground_count + fly_count
+    if ground_pct is None and total > 0:
+        ground_pct = round(ground_count / total * 100, 1)
+    if ground_pct is None:
+        return None
+    fly_pct = round(100 - ground_pct, 1)
+    return {
+        "ground_pct": ground_pct,
+        "fly_pct": fly_pct,
+        "go_fo": round(ratio, 2) if ratio is not None else None,
+        "ground_label": ground_label,
+        "fly_label": fly_label,
+        "ratio_label": ratio_label,
+        "caption": caption,
+    }
+
+
+def _hit_profile_stat(
+    label: str,
+    value: Any,
+    *,
+    note: str | None = None,
+) -> dict[str, Any]:
+    text = _format_espn_value(value)
+    if text == "—":
+        text = None
+    return {
+        "label": label,
+        "value": text,
+        "note": note,
+    }
+
+
+def _empty_hit_profile_panel(*, season_year: int) -> dict[str, Any]:
+    return {
+        "id": "hit_profile",
+        "label": "Advanced Stats",
+        "panel_kind": "hit_profile",
+        "profile_type": "batter",
+        "season_year": str(season_year),
+        "archetype": None,
+        "pillars": [],
+        "contact_tendency": None,
+        "groups": [],
+    }
+
+
+def _build_hit_profile_panel(
+    categories: dict[str, Any],
+    *,
+    season_year: int,
+) -> dict[str, Any]:
+    row = _espn_advanced_batting_row(categories, season_year=season_year)
+    if not row:
+        return _empty_hit_profile_panel(season_year=season_year)
+
+    war = _parse_number(row.get("WAR"))
+    owar = _parse_number(row.get("OWAR"))
+    rc27 = _parse_number(row.get("RC/27"))
+    bb_k = _parse_number(row.get("BB/K"))
+    isop = _parse_number(row.get("ISOP"))
+    seca = _parse_number(row.get("SECA"))
+    ab_hr = _parse_number(row.get("AB/HR"))
+    go = _parse_number(row.get("GO")) or 0.0
+    fo = _parse_number(row.get("FO")) or 0.0
+    go_fo = _parse_number(row.get("GO/FO"))
+
+    metrics = {
+        "isop": isop,
+        "ab_hr": ab_hr,
+        "bb_k": bb_k,
+        "seca": seca,
+        "go_fo": go_fo,
+    }
+    archetype = _build_hit_archetype(metrics, row)
+
+    pillars: list[dict[str, Any]] = []
+    if war is not None:
+        war_tier, war_tier_label = _hit_profile_pillar_tier("war", war)
+        pillars.append({
+            "id": "war",
+            "label": "WAR",
+            "value": _format_war(war),
+            "note": f"oWAR {_format_war(owar)}" if owar is not None else None,
+            "tier": war_tier,
+            "tier_label": war_tier_label,
+        })
+    if rc27 is not None:
+        rc27_tier, rc27_tier_label = _hit_profile_pillar_tier("rc27", rc27)
+        pillars.append({
+            "id": "rc27",
+            "label": "RC/27",
+            "value": f"{rc27:.1f}",
+            "note": "Runs created per 27 outs",
+            "tier": rc27_tier,
+            "tier_label": rc27_tier_label,
+        })
+    if bb_k is not None:
+        bb_k_tier, bb_k_tier_label = _hit_profile_pillar_tier("bb_k", bb_k)
+        pillars.append({
+            "id": "bb_k",
+            "label": "BB/K",
+            "value": f"{bb_k:.2f}",
+            "note": "Walk-to-strikeout ratio",
+            "tier": bb_k_tier,
+            "tier_label": bb_k_tier_label,
+        })
+
+    contact_tendency = _build_contact_tendency(
+        ground_count=go,
+        fly_count=fo,
+        ratio=go_fo,
+        ground_label="Ground outs",
+        fly_label="Fly outs",
+        ratio_label="GO/FO",
+        caption="Share of recorded ground outs vs. fly outs (line drives and other types excluded).",
+    )
+
+    power_stats = [
+        _hit_profile_stat("ISOP", row.get("ISOP")),
+        _hit_profile_stat(
+            "AB/HR",
+            row.get("AB/HR"),
+            note=_format_hr_pace(row.get("AB/HR")),
+        ),
+    ]
+    approach_stats = [
+        _hit_profile_stat("BB/PA", row.get("BB/PA")),
+        _hit_profile_stat("SECA", row.get("SECA")),
+    ]
+    production_stats = [
+        _hit_profile_stat("RC", row.get("RC")),
+        _hit_profile_stat("oWAR", row.get("OWAR")),
+    ]
+
+    groups = []
+    if any(stat.get("value") for stat in power_stats):
+        groups.append({"id": "power", "label": "Power", "stats": power_stats})
+    if any(stat.get("value") for stat in approach_stats):
+        groups.append({"id": "approach", "label": "Approach", "stats": approach_stats})
+    if any(stat.get("value") for stat in production_stats):
+        groups.append({"id": "production", "label": "Production", "stats": production_stats})
+
+    if not pillars and not groups:
+        return _empty_hit_profile_panel(season_year=season_year)
+
+    return {
+        "id": "hit_profile",
+        "label": "Advanced Stats",
+        "panel_kind": "hit_profile",
+        "profile_type": "batter",
+        "season_year": str(season_year),
+        "archetype": archetype,
+        "pillars": pillars,
+        "contact_tendency": contact_tendency,
+        "groups": groups,
+    }
+
+
+def _espn_pitching_profile_rows(
+    categories: dict[str, Any],
+    *,
+    season_year: int,
+) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
+    from team_stats import _espn_category_season_row
+
+    pitching_row = _espn_category_season_row(
+        categories.get("pitching"),
+        season_year,
+    )
+    expanded_row = _espn_category_season_row(
+        categories.get("expanded-pitching"),
+        season_year,
+    )
+    opponent_row = _espn_category_season_row(
+        categories.get("opponent-batting"),
+        season_year,
+    )
+    return pitching_row, expanded_row, opponent_row
+
+
+_PITCH_ARCHETYPE_THEMES = {
+    "Strikeout artist": "strikeout_artist",
+    "Run suppressor": "run_suppressor",
+    "Ground-ball pitcher": "ground_ball",
+    "Fly-ball pitcher": "fly_ball",
+    "Command arm": "command_arm",
+    "Balanced arm": "balanced",
+}
+
+
+def _era_context(era: float | None) -> str | None:
+    if era is None:
+        return None
+    if era <= 2.75:
+        return "Elite run prevention"
+    if era <= 3.75:
+        return "League-average ERA"
+    return "Elevated ERA"
+
+
+def _whip_context(whip: float | None) -> str | None:
+    if whip is None:
+        return None
+    if whip <= 1.05:
+        return "Elite command"
+    if whip <= 1.25:
+        return "League-average WHIP"
+    return "Walks and hits pile up"
+
+
+def _k9_context(k9: float | None) -> str | None:
+    if k9 is None:
+        return None
+    if k9 >= 10.0:
+        return "Dominant strikeout rate"
+    if k9 >= 7.5:
+        return "League-average K/9"
+    return "Limited swing-and-miss"
+
+
+def _k_bb_context(k_bb: float | None) -> str | None:
+    if k_bb is None:
+        return None
+    if k_bb >= 4.5:
+        return "Elite strikeout-to-walk"
+    if k_bb >= 3.0:
+        return "Solid command"
+    if k_bb >= 2.0:
+        return "League-average K/BB"
+    return "Control issues"
+
+
+def _gf_context(gf: float | None) -> str | None:
+    if gf is None:
+        return None
+    if gf >= 1.2:
+        return "Ground-ball lean"
+    if gf <= 0.8:
+        return "Fly-ball lean"
+    return "Balanced batted-ball mix"
+
+
+def _oops_context(oops: float | None) -> str | None:
+    if oops is None:
+        return None
+    if oops <= 0.650:
+        return "Limits opponent damage"
+    if oops <= 0.730:
+        return "League-average contact"
+    return "Hard contact allowed"
+
+
+def _build_pitch_archetype(
+    metrics: dict[str, float | None],
+    pitching_row: dict[str, str],
+    expanded_row: dict[str, str],
+    opponent_row: dict[str, str],
+) -> dict[str, Any]:
+    k9 = metrics.get("k9")
+    k_bb = metrics.get("k_bb")
+    era = metrics.get("era")
+    war = metrics.get("war")
+    whip = metrics.get("whip")
+    gf = metrics.get("gf")
+    oops = _parse_number(opponent_row.get("OOPS"))
+
+    if k9 is not None and k9 >= 10.0 and k_bb is not None and k_bb >= 4.0:
+        label = "Strikeout artist"
+        drivers = ["Swing-and-miss stuff drives the profile"]
+    elif era is not None and era <= 3.25 and war is not None and war >= 2.0:
+        label = "Run suppressor"
+        drivers = ["Keeps runs off the board"]
+    elif gf is not None and gf >= 1.15:
+        label = "Ground-ball pitcher"
+        drivers = ["Induces ground balls on contact"]
+    elif gf is not None and gf <= 0.75:
+        label = "Fly-ball pitcher"
+        drivers = ["Fly-ball contact profile"]
+    elif whip is not None and whip <= 1.10 and k_bb is not None and k_bb >= 3.5:
+        label = "Command arm"
+        drivers = ["Command and control stand out"]
+    else:
+        label = "Balanced arm"
+        drivers = ["No single trait dominates the pitching profile"]
+
+    signals: list[dict[str, Any]] = []
+    war_value = _format_espn_value(pitching_row.get("WAR"))
+    if war_value != "—":
+        signals.append({
+            "kind": "production",
+            "label": "WAR",
+            "value": war_value,
+            "detail": _pitch_profile_pillar_tier("war", war)[1] if war is not None else None,
+        })
+    era_value = _format_espn_value(pitching_row.get("ERA"))
+    if era_value != "—":
+        signals.append({
+            "kind": "prevention",
+            "label": "ERA",
+            "value": era_value,
+            "detail": _era_context(era),
+        })
+    whip_value = _format_espn_value(pitching_row.get("WHIP"))
+    if whip_value != "—":
+        signals.append({
+            "kind": "command",
+            "label": "WHIP",
+            "value": whip_value,
+            "detail": _whip_context(whip),
+        })
+    k9_value = _format_espn_value(expanded_row.get("K/9"))
+    if k9_value != "—":
+        signals.append({
+            "kind": "stuff",
+            "label": "K/9",
+            "value": k9_value,
+            "detail": _k9_context(k9),
+        })
+    gf_value = _format_espn_value(expanded_row.get("G/F"))
+    if gf_value != "—":
+        signals.append({
+            "kind": "contact",
+            "label": "G/F",
+            "value": gf_value,
+            "detail": _gf_context(gf),
+        })
+    oops_value = _format_espn_value(opponent_row.get("OOPS"))
+    if oops_value != "—":
+        signals.append({
+            "kind": "contact",
+            "label": "OOPS",
+            "value": oops_value,
+            "detail": _oops_context(oops),
+        })
+
+    return {
+        "label": label,
+        "theme": _PITCH_ARCHETYPE_THEMES.get(label, "balanced"),
+        "drivers": drivers,
+        "signals": signals,
+    }
+
+
+def _pitch_profile_pillar_tier(
+    pillar_id: str,
+    value: float,
+) -> tuple[str, str]:
+    if pillar_id == "war":
+        return _hit_profile_pillar_tier("war", value)
+    if pillar_id == "era":
+        if value <= 2.75:
+            return "good", "Elite run prevention"
+        if value <= 3.75:
+            return "average", "League average"
+        return "poor", "Below average"
+    if pillar_id == "k9":
+        if value >= 10.0:
+            return "good", "Dominant strikeouts"
+        if value >= 7.5:
+            return "average", "League average"
+        return "poor", "Below average"
+    return "average", "League average"
+
+
+def _empty_pitch_profile_panel(*, season_year: int) -> dict[str, Any]:
+    return {
+        "id": "pitch_profile",
+        "label": "Advanced Stats",
+        "panel_kind": "hit_profile",
+        "profile_type": "pitcher",
+        "season_year": str(season_year),
+        "archetype": None,
+        "pillars": [],
+        "contact_tendency": None,
+        "groups": [],
+    }
+
+
+def _build_pitch_profile_panel(
+    categories: dict[str, Any],
+    *,
+    season_year: int,
+) -> dict[str, Any]:
+    pitching_row, expanded_row, opponent_row = _espn_pitching_profile_rows(
+        categories,
+        season_year=season_year,
+    )
+    if not pitching_row and not expanded_row:
+        return _empty_pitch_profile_panel(season_year=season_year)
+
+    war = _parse_number(pitching_row.get("WAR"))
+    era = _parse_number(pitching_row.get("ERA"))
+    whip = _parse_number(pitching_row.get("WHIP"))
+    k9 = _parse_number(expanded_row.get("K/9"))
+    k_bb = _parse_number(pitching_row.get("K/BB"))
+    gb = _parse_number(expanded_row.get("GB")) or 0.0
+    fb = _parse_number(expanded_row.get("FB")) or 0.0
+    gf = _parse_number(expanded_row.get("G/F"))
+
+    metrics = {
+        "k9": k9,
+        "k_bb": k_bb,
+        "era": era,
+        "war": war,
+        "whip": whip,
+        "gf": gf,
+    }
+    archetype = _build_pitch_archetype(
+        metrics,
+        pitching_row,
+        expanded_row,
+        opponent_row,
+    )
+
+    pillars: list[dict[str, Any]] = []
+    if war is not None:
+        war_tier, war_tier_label = _pitch_profile_pillar_tier("war", war)
+        pillars.append({
+            "id": "war",
+            "label": "WAR",
+            "value": _format_war(war),
+            "note": f"ERA {_format_espn_value(pitching_row.get('ERA'))}" if era is not None else None,
+            "tier": war_tier,
+            "tier_label": war_tier_label,
+        })
+    if era is not None:
+        era_tier, era_tier_label = _pitch_profile_pillar_tier("era", era)
+        pillars.append({
+            "id": "era",
+            "label": "ERA",
+            "value": _format_espn_value(pitching_row.get("ERA")),
+            "note": f"WHIP {_format_espn_value(pitching_row.get('WHIP'))}" if whip is not None else None,
+            "tier": era_tier,
+            "tier_label": era_tier_label,
+        })
+    if k9 is not None:
+        k9_tier, k9_tier_label = _pitch_profile_pillar_tier("k9", k9)
+        pillars.append({
+            "id": "k9",
+            "label": "K/9",
+            "value": f"{k9:.1f}",
+            "note": (
+                f"K/BB {_format_espn_value(pitching_row.get('K/BB'))}"
+                if pitching_row.get("K/BB") is not None
+                else None
+            ),
+            "tier": k9_tier,
+            "tier_label": k9_tier_label,
+        })
+
+    contact_tendency = _build_contact_tendency(
+        ground_count=gb,
+        fly_count=fb,
+        ratio=gf,
+        ground_label="Ground balls",
+        fly_label="Fly balls",
+        ratio_label="G/F",
+        caption="Share of ground balls vs. fly balls allowed on contact.",
+    )
+
+    prevention_stats = [
+        _hit_profile_stat("ERA", pitching_row.get("ERA")),
+        _hit_profile_stat("WHIP", pitching_row.get("WHIP")),
+    ]
+    command_stats = [
+        _hit_profile_stat("K/9", expanded_row.get("K/9")),
+        _hit_profile_stat("K/BB", pitching_row.get("K/BB")),
+    ]
+    contact_stats = [
+        _hit_profile_stat("OOPS", opponent_row.get("OOPS")),
+        _hit_profile_stat("OBA", opponent_row.get("OBA")),
+    ]
+
+    groups = []
+    if any(stat.get("value") for stat in prevention_stats):
+        groups.append({"id": "prevention", "label": "Run prevention", "stats": prevention_stats})
+    if any(stat.get("value") for stat in command_stats):
+        groups.append({"id": "command", "label": "Command", "stats": command_stats})
+    if any(stat.get("value") for stat in contact_stats):
+        groups.append({"id": "contact", "label": "Contact allowed", "stats": contact_stats})
+
+    if not pillars and not groups:
+        return _empty_pitch_profile_panel(season_year=season_year)
+
+    return {
+        "id": "pitch_profile",
+        "label": "Advanced Stats",
+        "panel_kind": "hit_profile",
+        "profile_type": "pitcher",
+        "season_year": str(season_year),
+        "archetype": archetype,
+        "pillars": pillars,
+        "contact_tendency": contact_tendency,
+        "groups": groups,
+    }
 
 
 def _spray_empty_panel(*, season_year: int) -> dict[str, Any]:
@@ -3642,7 +4340,7 @@ def _empty_player_stats_panel_league_only(*, pitching: bool, season_year: int) -
                         },
                         {
                             "id": "advanced",
-                            "label": "Advanced",
+                            "label": "Advanced Stats",
                             "coming_soon": True,
                         },
                     ],
@@ -3720,6 +4418,52 @@ def fetch_player_core_stat_panels(
     return panels
 
 
+def fetch_player_league_bundle(
+    player_id: str,
+    *,
+    player_name: str,
+    position: str | None,
+    season_year: str | int | None = None,
+) -> dict[str, Any]:
+    year = _resolve_panel_year(season_year)
+    pitching = is_pitcher_position(position)
+    if not player_id:
+        return {
+            "stat_panel": _empty_player_stats_panel_league_only(
+                pitching=pitching,
+                season_year=year,
+            ),
+            "profile_panel": _empty_pitch_profile_panel(season_year=year)
+            if pitching
+            else _empty_hit_profile_panel(season_year=year),
+        }
+
+    kind = "pitching" if pitching else "batting"
+    cache_key = f"{player_id}:{year}:{kind}:league:v8"
+    cached = _player_core_panels_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    categories = _fetch_espn_stat_categories(player_id)
+    stat_panel = _build_player_stats_panel_league_only(
+        categories,
+        pitching=pitching,
+        season_year=year,
+    ) or _empty_player_stats_panel_league_only(pitching=pitching, season_year=year)
+    profile_panel = (
+        _build_pitch_profile_panel(categories, season_year=year)
+        if pitching
+        else _build_hit_profile_panel(categories, season_year=year)
+    )
+    result = {
+        "stat_panel": stat_panel,
+        "profile_panel": profile_panel,
+    }
+    _player_core_panels_cache[cache_key] = (now, result)
+    return result
+
+
 def fetch_player_league_stat_panel(
     player_id: str,
     *,
@@ -3727,29 +4471,12 @@ def fetch_player_league_stat_panel(
     position: str | None,
     season_year: str | int | None = None,
 ) -> dict[str, Any]:
-    if not player_id:
-        return _empty_player_stats_panel_league_only(
-            pitching=is_pitcher_position(position),
-            season_year=_resolve_panel_year(season_year),
-        )
-
-    year = _resolve_panel_year(season_year)
-    pitching = is_pitcher_position(position)
-    kind = "pitching" if pitching else "batting"
-    cache_key = f"{player_id}:{year}:{kind}:league:v3"
-    cached = _player_core_panels_cache.get(cache_key)
-    now = time.time()
-    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
-        return cached[1]
-
-    categories = _fetch_espn_stat_categories(player_id)
-    panel = _build_player_stats_panel_league_only(
-        categories,
-        pitching=pitching,
-        season_year=year,
-    ) or _empty_player_stats_panel_league_only(pitching=pitching, season_year=year)
-    _player_core_panels_cache[cache_key] = (now, panel)
-    return panel
+    return fetch_player_league_bundle(
+        player_id,
+        player_name=player_name,
+        position=position,
+        season_year=season_year,
+    )["stat_panel"]
 
 
 def _parse_savant_html_table(table: Any) -> dict[str, Any] | None:
