@@ -1,6 +1,5 @@
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, session, abort, Response, stream_with_context
 from flask_bootstrap import Bootstrap5
-from openai import OpenAI
 from flask_ckeditor import CKEditor
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, SelectField, PasswordField
