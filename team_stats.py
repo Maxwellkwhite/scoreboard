@@ -14,8 +14,8 @@ import requests
 ESPN_TEAM_STATISTICS_URL = (
     "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{team_id}/statistics"
 )
-ESPN_TEAM_ATHLETES_CORE_URL = (
-    "https://sports.core.api.espn.com/v2/sports/baseball/leagues/mlb/seasons/{season}/teams/{team_id}/athletes"
+ESPN_TEAM_ROSTER_URL = (
+    "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/{team_id}/roster"
 )
 ESPN_TEAM_INJURIES_URL = (
     "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/injuries?team={team_id}"
@@ -601,54 +601,29 @@ def _fetch_team_injury_lookup(team_id: str) -> dict[str, dict[str, str]]:
     return lookup
 
 
-def _fetch_forty_man_athletes(team_id: str, season_year: int) -> list[dict[str, Any]]:
-    refs: list[str] = []
-    page = 1
-    while True:
-        response = requests.get(
-            ESPN_TEAM_ATHLETES_CORE_URL.format(season=season_year, team_id=team_id),
-            params={"limit": 200, "page": page},
-            timeout=20,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        for item in payload.get("items") or []:
-            ref = item.get("$ref")
-            if ref:
-                refs.append(str(ref))
-        page_count = int(payload.get("pageCount") or 1)
-        if page >= page_count:
-            break
-        page += 1
-
+def _fetch_site_roster_athletes(team_id: str) -> list[dict[str, Any]]:
+    response = requests.get(
+        ESPN_TEAM_ROSTER_URL.format(team_id=team_id),
+        timeout=20,
+    )
+    response.raise_for_status()
+    payload = response.json()
     athletes: list[dict[str, Any]] = []
-
-    def fetch_athlete(ref: str) -> dict[str, Any] | None:
-        try:
-            athlete_response = requests.get(ref, timeout=15)
-            athlete_response.raise_for_status()
-            return athlete_response.json()
-        except requests.RequestException:
-            return None
-
-    with ThreadPoolExecutor(max_workers=24) as executor:
-        futures = [executor.submit(fetch_athlete, ref) for ref in refs]
-        for future in as_completed(futures):
-            athlete = future.result()
-            if not athlete or not athlete.get("id"):
+    for group in payload.get("athletes") or []:
+        for athlete in group.get("items") or []:
+            if not athlete.get("id"):
                 continue
             status_type = str((athlete.get("status") or {}).get("type") or "")
             if status_type in _FORTY_MAN_EXCLUDE_STATUSES:
                 continue
             athletes.append(athlete)
-
     return athletes
 
 
 def _fetch_team_roster(team_id: str, *, season_year: int | None = None) -> dict[str, Any]:
     year = season_year or date.today().year
     injury_lookup = _fetch_team_injury_lookup(team_id)
-    athletes = _fetch_forty_man_athletes(team_id, year)
+    athletes = _fetch_site_roster_athletes(team_id)
 
     grouped: dict[str, list[dict[str, Any]]] = {
         "rotation": [],

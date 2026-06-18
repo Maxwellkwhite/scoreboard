@@ -308,8 +308,7 @@
       rosterHeadshotHtml(player) +
       '<span class="team-roster-card__name">' + escapeHtml(player.name) + '</span>' +
       '<span class="team-roster-card__pos">' + escapeHtml(player.position || '') + '</span>' +
-      (meta ? '<span class="team-roster-card__meta">' + escapeHtml(meta) + '</span>' : '') +
-      '<span class="team-roster-card__status" aria-hidden="true"></span>';
+      (meta ? '<span class="team-roster-card__meta">' + escapeHtml(meta) + '</span>' : '');
 
     return (
       '<a href="/player/' + encodeURIComponent(player.id) + '" class="' + cardClass + '"' +
