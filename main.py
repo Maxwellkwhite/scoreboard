@@ -79,7 +79,13 @@ def _start_league_cache_warmup() -> None:
 
             warm_league_cache_for_today()
         except Exception:
-            logging.getLogger(__name__).exception("League cache warm-up failed")
+            logging.getLogger(__name__).exception("League player cache warm-up failed")
+        try:
+            from league_team_averages import warm_league_team_cache_for_today
+
+            warm_league_team_cache_for_today()
+        except Exception:
+            logging.getLogger(__name__).exception("League team cache warm-up failed")
 
     threading.Thread(
         target=_warm,

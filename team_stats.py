@@ -161,7 +161,6 @@ ESPN_TEAMS_URL = (
 )
 
 _team_statistics_cache: dict[str, tuple[float, dict[str, dict[str, Any]]]] = {}
-_league_stats_cache: dict[int, tuple[float, dict[str, dict[str, list[float]]]]] = {}
 
 
 def _parse_number(value: Any) -> float | None:
@@ -259,38 +258,9 @@ def _get_mlb_team_ids() -> list[str]:
 
 
 def _get_league_stats_by_category(season_year: int) -> dict[str, dict[str, list[float]]]:
-    cached = _league_stats_cache.get(season_year)
-    now = time.time()
-    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
-        return cached[1]
+    from league_team_averages import get_league_team_stats_by_category
 
-    league_stats: dict[str, dict[str, list[float]]] = {
-        "batting": {},
-        "pitching": {},
-        "fielding": {},
-    }
-    team_ids = _get_mlb_team_ids()
-    if team_ids:
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            futures = {
-                executor.submit(_fetch_team_statistics, team_id): team_id
-                for team_id in team_ids
-            }
-            for future in as_completed(futures):
-                try:
-                    stats_by_category = future.result()
-                except Exception:
-                    continue
-                for category_name, category_stats in stats_by_category.items():
-                    bucket = league_stats.setdefault(category_name, {})
-                    for stat_name, raw_value in category_stats.items():
-                        number = _parse_number(raw_value)
-                        if number is None:
-                            continue
-                        bucket.setdefault(stat_name, []).append(number)
-
-    _league_stats_cache[season_year] = (now, league_stats)
-    return league_stats
+    return get_league_team_stats_by_category(season_year)
 
 
 def _stat_lower_is_better(category: str, stat_name: str) -> bool:
