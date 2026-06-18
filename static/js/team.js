@@ -969,7 +969,6 @@
       wirePanelElement(insertPanelSection(panel, index === 0));
     });
 
-    upsertPanel({ id: 'leaders', label: 'Team Leaders', panel_kind: 'loading' });
     upsertPanel({ id: 'roster', label: 'Roster', panel_kind: 'loading' });
 
     if (activePanelId) {
@@ -1007,14 +1006,6 @@
       })
       .catch(function () {
         fulfillStagedPanel('roster', null);
-      });
-
-    fetchTeamStats('/stats/leaders')
-      .then(function (payload) {
-        fulfillStagedPanel('leaders', payload.stat_panel);
-      })
-      .catch(function () {
-        fulfillStagedPanel('leaders', null);
       });
   }
 

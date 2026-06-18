@@ -1196,7 +1196,7 @@ def mlb_team_page(team_id):
 
 @app.route('/api/mlb/team/<team_id>/stats', methods=['GET'], endpoint='api_mlb_team_stats')
 def api_mlb_team_stats(team_id):
-    from espn_mlb import fetch_team, fetch_team_core_stat_panels, fetch_team_stats
+    from espn_mlb import fetch_team, fetch_team_core_stat_panels, fetch_team_leaders_stat_panel, fetch_team_stats
 
     try:
         team = fetch_team(str(team_id), include_stats=False)
@@ -1208,6 +1208,12 @@ def api_mlb_team_stats(team_id):
         str(team_id),
         season_year=team.get('season_year'),
     )
+    leaders_panel = fetch_team_leaders_stat_panel(
+        str(team_id),
+        season_year=team.get('season_year'),
+    )
+    if leaders_panel:
+        stat_panels.append(leaders_panel)
     if not stats_table and not stat_panels:
         return jsonify({'error': 'Stats unavailable'}), 404
 

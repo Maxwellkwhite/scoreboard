@@ -1,14 +1,7 @@
-Main scoreboard page:
-- visual updates when something happens - already implemented pulse for score
-- 
-
 Individual Game page:
-- Ensure due up is working
-- Add lineup tab, make sure game stats are shown, along with season stats
 - Connection to ticket sales for upcoming games would be cool
 
 Player pages
-- 
-
-Team pages:
-- Better metrics
+- Splits page simple
+- percentile rankings simple
+- advanced stats add helper for player prototype

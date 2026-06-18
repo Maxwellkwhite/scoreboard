@@ -39,9 +39,6 @@ _matchup_leaders_panel_cache: dict[str, tuple[float, dict[str, Any] | None]] = {
 _team_roster_data_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _team_summary_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _athlete_season_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
-_fangraphs_batting_cache: dict[int, tuple[float, dict[str, dict[str, Any]]]] = {}
-_fangraphs_pitching_cache: dict[int, tuple[float, dict[str, dict[str, Any]]]] = {}
-_bwar_season_cache: dict[tuple[int, bool], tuple[float, dict[str, float]]] = {}
 
 _TEAM_SUMMARY_BATTING = (
     ("avg", "AVG"),
@@ -70,8 +67,6 @@ _BATTING_LEADER_SPECS = (
     ("stolenBases", "SB", True),
 )
 _BATTING_ADVANCED_LEADER_SPECS = (
-    ("OPS+", "OPS+", True),
-    ("wOBA", "wOBA", True),
     ("RC", "RC", True),
     ("RC/27", "RC/27", True),
     ("ISOP", "ISO", True),
@@ -85,8 +80,6 @@ _PITCHING_LEADER_SPECS = (
     ("WHIP", "WHIP", False),
 )
 _PITCHING_ADVANCED_LEADER_SPECS = (
-    ("FIP", "FIP", False),
-    ("xFIP", "xFIP", False),
     ("K/9", "K/9", True),
     ("QS", "QS", True),
     ("OOPS", "OPP OPS", False),
@@ -99,8 +92,10 @@ _FIELDING_LEADER_SPECS = (
     ("doublePlays", "DP", True),
 )
 
+_PITCHER_POSITIONS = frozenset({"P", "SP", "RP", "CP", "CL", "LR", "MR", "SU"})
 _LEADER_TOP_N = 5
-_PITCHING_RATE_STATS_REQUIRING_IP = frozenset({"ERA", "WHIP", "FIP", "xFIP", "OOPS"})
+_LEADER_FETCH_WORKERS = 20
+_PITCHING_RATE_STATS_REQUIRING_IP = frozenset({"ERA", "WHIP", "OOPS"})
 _MIN_PITCHING_LEADER_IP = 5.0
 
 _BATTING_DETAIL_SPECS = (
@@ -742,124 +737,72 @@ def _espn_category_season_row(
     return {}
 
 
-def _get_fangraphs_batting_lookup(season_year: int) -> dict[str, dict[str, Any]]:
-    cached = _fangraphs_batting_cache.get(season_year)
-    now = time.time()
-    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
-        return cached[1]
-
-    lookup: dict[str, dict[str, Any]] = {}
-    try:
-        from pybaseball import batting_stats
-
-        frame = batting_stats(season_year, qual=0)
-        for _, row in frame.iterrows():
-            name = row.get("Name")
-            if not name or not isinstance(name, str):
-                continue
-            key = _normalize_player_name(name)
-            if not key:
-                continue
-            lookup[key] = {
-                "OPS+": row.get("OPS+"),
-                "wOBA": row.get("wOBA"),
-            }
-    except Exception:
-        lookup = {}
-
-    _fangraphs_batting_cache[season_year] = (now, lookup)
-    return lookup
-
-
-def _get_fangraphs_pitching_lookup(season_year: int) -> dict[str, dict[str, Any]]:
-    cached = _fangraphs_pitching_cache.get(season_year)
-    now = time.time()
-    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
-        return cached[1]
-
-    lookup: dict[str, dict[str, Any]] = {}
-    try:
-        from pybaseball import pitching_stats
-
-        frame = pitching_stats(season_year, season_year, qual=0)
-        for _, row in frame.iterrows():
-            name = row.get("Name")
-            if not name or not isinstance(name, str):
-                continue
-            key = _normalize_player_name(name)
-            if not key:
-                continue
-            lookup[key] = {
-                "FIP": row.get("FIP"),
-                "xFIP": row.get("xFIP"),
-            }
-    except Exception:
-        lookup = {}
-
-    _fangraphs_pitching_cache[season_year] = (now, lookup)
-    return lookup
+_BATTING_ESPN_ROW_MAP = {
+    "AVG": "avg",
+    "OPS": "OPS",
+    "HR": "homeRuns",
+    "RBI": "RBIs",
+    "SB": "stolenBases",
+    "WAR": "WAR",
+}
+_PITCHING_ESPN_ROW_MAP = {
+    "ERA": "ERA",
+    "WHIP": "WHIP",
+    "IP": "innings",
+    "W": "wins",
+    "L": "losses",
+    "SV": "saves",
+    "K": "strikeouts",
+    "SO": "strikeouts",
+    "BB": "walks",
+    "WAR": "WAR",
+}
+_FIELDING_ESPN_ROW_MAP = {
+    "FLD%": "fieldingPct",
+    "PO": "putouts",
+    "A": "assists",
+    "E": "errors",
+    "DP": "doublePlays",
+    "TC": "totalChances",
+    "INN": "fullInningsPlayed",
+}
 
 
-def _get_bwar_season_lookup(season_year: int, *, pitching: bool = False) -> dict[str, float]:
-    """Total bWAR by player name for a season (same source as player pages)."""
-    cache_key = (season_year, pitching)
-    cached = _bwar_season_cache.get(cache_key)
-    now = time.time()
-    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
-        return cached[1]
-
-    lookup: dict[str, float] = {}
-    try:
-        from player_stats import _load_bwar_bat, _load_bwar_pitch
-
-        frame = _load_bwar_pitch() if pitching else _load_bwar_bat()
-        season_rows = frame[frame["year_ID"] == season_year]
-        for name, group in season_rows.groupby("name_common"):
-            lookup[str(name)] = float(group["WAR"].sum())
-    except Exception:
-        lookup = {}
-
-    _bwar_season_cache[cache_key] = (now, lookup)
-    return lookup
+def _espn_row_has_value(value: Any) -> bool:
+    if value is None:
+        return False
+    return str(value).strip() not in {"", "—", "--", "-"}
 
 
-def _bwar_for_player_name(name: str, lookup: dict[str, float]) -> float | None:
-    if name in lookup:
-        return lookup[name]
-
-    try:
-        from player_stats import _parse_player_name
-    except Exception:
-        return None
-
-    last_name, first_name = _parse_player_name(name)
-    if not last_name:
-        return None
-
-    for common_name, war in lookup.items():
-        common_lower = common_name.lower()
-        if last_name.lower() not in common_lower:
-            continue
-        if first_name and first_name.lower() not in common_lower:
-            continue
-        return war
-    return None
+def _apply_espn_row(
+    stats: dict[str, Any],
+    row: dict[str, str],
+    mapping: dict[str, str],
+) -> None:
+    for espn_label, stat_key in mapping.items():
+        value = row.get(espn_label)
+        if _espn_row_has_value(value):
+            stats[stat_key] = value
 
 
-def _merge_espn_advanced_stats(
+def _merge_espn_batting_stats(
     stats: dict[str, Any],
     categories: dict[str, dict[str, Any]],
     *,
     season_year: int,
 ) -> None:
+    career_row = _espn_category_season_row(
+        categories.get("career-batting"),
+        season_year,
+    )
     advanced_row = _espn_category_season_row(
         categories.get("advanced-batting"),
         season_year,
     )
-
-    for label in ("RC", "RC/27", "ISOP"):
+    _apply_espn_row(stats, career_row, _BATTING_ESPN_ROW_MAP)
+    for label in ("WAR", "RC", "RC/27", "ISOP"):
         value = advanced_row.get(label)
-        if value is not None:
+        if _espn_row_has_value(value):
             stats[label] = value
 
 
@@ -882,126 +825,78 @@ def _merge_espn_pitching_stats(
         season_year,
     )
 
-    pitching_map = {
-        "ERA": "ERA",
-        "WHIP": "WHIP",
-        "W": "wins",
-        "SV": "saves",
-        "K": "strikeouts",
-        "IP": "innings",
-    }
-    for espn_label, stat_key in pitching_map.items():
-        value = pitching_row.get(espn_label)
-        if value is not None:
-            stats[stat_key] = value
+    _apply_espn_row(stats, pitching_row, _PITCHING_ESPN_ROW_MAP)
 
     for label in ("K/9", "QS"):
         value = expanded_row.get(label)
-        if value is not None:
+        if _espn_row_has_value(value):
             stats[label] = value
 
     oops = opponent_row.get("OOPS")
-    if oops is not None:
+    if _espn_row_has_value(oops):
         stats["OOPS"] = oops
 
 
-def _enrich_athlete_batting_advanced(
-    athlete: dict[str, Any],
-    fangraphs_lookup: dict[str, dict[str, Any]],
+def _merge_espn_fielding_stats(
+    stats: dict[str, Any],
+    categories: dict[str, dict[str, Any]],
     *,
-    bwar_lookup: dict[str, float],
+    season_year: int,
 ) -> None:
-    stats = athlete.get("stats") or {}
-    player_name = athlete.get("name") or ""
-    key = _normalize_player_name(player_name)
-    fg_stats = fangraphs_lookup.get(key) or {}
-    for stat_name in ("OPS+", "wOBA"):
-        value = fg_stats.get(stat_name)
-        if value is not None:
-            stats[stat_name] = value
-
-    war = _bwar_for_player_name(player_name, bwar_lookup)
-    if war is not None:
-        stats["WAR"] = war
-
-    athlete["stats"] = stats
+    fielding_row = _espn_category_season_row(
+        categories.get("fielding"),
+        season_year,
+    )
+    _apply_espn_row(stats, fielding_row, _FIELDING_ESPN_ROW_MAP)
 
 
-def _enrich_athlete_pitching_advanced(
-    athlete: dict[str, Any],
-    fangraphs_lookup: dict[str, dict[str, Any]],
+def _fetch_athlete_leader_stats(
+    player: dict[str, Any],
     *,
-    bwar_lookup: dict[str, float],
-) -> None:
-    stats = athlete.get("stats") or {}
-    player_name = athlete.get("name") or ""
-    key = _normalize_player_name(player_name)
-    fg_stats = fangraphs_lookup.get(key) or {}
-    for stat_name in ("FIP", "xFIP"):
-        value = fg_stats.get(stat_name)
-        if value is not None:
-            stats[stat_name] = value
+    season_year: int,
+) -> dict[str, Any] | None:
+    player_id = str(player.get("id") or "")
+    if not player_id:
+        return None
 
-    war = _bwar_for_player_name(player_name, bwar_lookup)
-    if war is not None:
-        stats["WAR"] = war
-
-    athlete["stats"] = stats
-
-
-def _fetch_athlete_season_stats(player_id: str, *, season_year: int) -> dict[str, Any] | None:
     cache_key = f"{player_id}:{season_year}"
     cached = _athlete_season_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
         return cached[1]
 
+    position = str(player.get("position") or "").upper()
+    is_pitcher = position in _PITCHER_POSITIONS
+    stats: dict[str, Any] = {}
+
     try:
-        response = requests.get(
-            ESPN_ATHLETE_URL.format(player_id=player_id),
+        stats_response = requests.get(
+            ESPN_ATHLETE_STATS_URL.format(player_id=player_id),
             timeout=15,
         )
-        response.raise_for_status()
-        athlete = (response.json().get("athlete") or {})
-        position = ((athlete.get("position") or {}).get("abbreviation") or "").upper()
-        headshot = athlete.get("headshot") or {}
-        headshot_href = headshot if isinstance(headshot, str) else headshot.get("href")
-        stats_summary = athlete.get("statsSummary") or {}
-        stats: dict[str, Any] = {}
-        for stat in stats_summary.get("statistics") or []:
-            name = stat.get("name") or ""
-            if name:
-                stats[name] = stat.get("value")
-
-        categories: dict[str, dict[str, Any]] = {}
-        try:
-            stats_response = requests.get(
-                ESPN_ATHLETE_STATS_URL.format(player_id=player_id),
-                timeout=15,
-            )
-            stats_response.raise_for_status()
-            categories = {
-                category.get("name"): category
-                for category in stats_response.json().get("categories") or []
-                if category.get("name")
-            }
-        except Exception:
-            categories = {}
-
-        is_pitcher = position in {"P", "SP", "RP", "CP", "CL", "LR", "MR", "SU"}
+        stats_response.raise_for_status()
+        categories = {
+            category.get("name"): category
+            for category in stats_response.json().get("categories") or []
+            if category.get("name")
+        }
         if is_pitcher:
             _merge_espn_pitching_stats(stats, categories, season_year=season_year)
         else:
-            _merge_espn_advanced_stats(stats, categories, season_year=season_year)
+            _merge_espn_batting_stats(stats, categories, season_year=season_year)
+            _merge_espn_fielding_stats(stats, categories, season_year=season_year)
 
-        result = {
-            "id": str(player_id),
-            "name": athlete.get("displayName") or "",
-            "position": position,
-            "headshot": headshot_href,
-            "stats": stats,
-            "pitching": is_pitcher,
-        }
+        if not stats:
+            result = None
+        else:
+            result = {
+                "id": player_id,
+                "name": player.get("name") or "",
+                "position": position,
+                "headshot": player.get("headshot"),
+                "stats": stats,
+                "pitching": is_pitcher,
+            }
     except Exception:
         result = None
 
@@ -1063,46 +958,28 @@ def _leader_team_meta(team: dict[str, Any] | None, side: str) -> dict[str, str]:
     }
 
 
-def _fetch_and_enrich_leader_athletes(
-    player_ids: list[str],
+def _fetch_leader_athletes(
+    players: list[dict[str, Any]],
     *,
     season_year: int,
 ) -> list[dict[str, Any]]:
     athletes: list[dict[str, Any]] = []
-    if not player_ids:
+    if not players:
         return athletes
 
-    with ThreadPoolExecutor(max_workers=8) as executor:
+    with ThreadPoolExecutor(max_workers=_LEADER_FETCH_WORKERS) as executor:
         futures = {
             executor.submit(
-                _fetch_athlete_season_stats,
-                player_id,
+                _fetch_athlete_leader_stats,
+                player,
                 season_year=season_year,
-            ): player_id
-            for player_id in player_ids
+            ): player
+            for player in players
         }
         for future in as_completed(futures):
             athlete = future.result()
             if athlete and athlete.get("stats"):
                 athletes.append(athlete)
-
-    fangraphs_batting_lookup = _get_fangraphs_batting_lookup(season_year)
-    fangraphs_pitching_lookup = _get_fangraphs_pitching_lookup(season_year)
-    bwar_bat_lookup = _get_bwar_season_lookup(season_year, pitching=False)
-    bwar_pitch_lookup = _get_bwar_season_lookup(season_year, pitching=True)
-    for athlete in athletes:
-        if athlete.get("pitching"):
-            _enrich_athlete_pitching_advanced(
-                athlete,
-                fangraphs_pitching_lookup,
-                bwar_lookup=bwar_pitch_lookup,
-            )
-        else:
-            _enrich_athlete_batting_advanced(
-                athlete,
-                fangraphs_batting_lookup,
-                bwar_lookup=bwar_bat_lookup,
-            )
     return athletes
 
 
@@ -1135,13 +1012,13 @@ def _build_leader_views(
     *,
     season_year: int,
 ) -> list[dict[str, Any]]:
-    player_ids: list[str] = []
+    players: list[dict[str, Any]] = []
     for section in roster_sections:
         for player in section.get("players") or []:
             if player.get("id"):
-                player_ids.append(player["id"])
+                players.append(player)
 
-    athletes = _fetch_and_enrich_leader_athletes(player_ids, season_year=season_year)
+    athletes = _fetch_leader_athletes(players, season_year=season_year)
     return _leader_views_from_athletes(athletes)
 
 
@@ -1485,7 +1362,7 @@ def fetch_team_leaders_stat_panel(
     season_year: int | None = None,
 ) -> dict[str, Any] | None:
     year = season_year or date.today().year
-    cache_key = f"{team_id}:{year}:panels:leaders:v1"
+    cache_key = f"{team_id}:{year}:panels:leaders:v3"
     cached = _team_leaders_panel_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
@@ -1512,7 +1389,7 @@ def build_matchup_leaders_panel(
     season_year: int | None = None,
 ) -> dict[str, Any] | None:
     year = season_year or date.today().year
-    cache_key = f"{away_id}:{home_id}:{year}:matchup-leaders:v1"
+    cache_key = f"{away_id}:{home_id}:{year}:matchup-leaders:v2"
     cached = _matchup_leaders_panel_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
@@ -1522,7 +1399,7 @@ def build_matchup_leaders_panel(
     try:
         away_roster = _get_cached_team_roster(away_id, year)
         home_roster = _get_cached_team_roster(home_id, year)
-        player_ids: list[str] = []
+        roster_players: list[dict[str, Any]] = []
         team_meta_by_id: dict[str, dict[str, str]] = {}
         for side, team, roster in (
             ("away", away_team, away_roster),
@@ -1536,10 +1413,10 @@ def build_matchup_leaders_panel(
                         continue
                     player_id = str(player_id)
                     if player_id not in team_meta_by_id:
-                        player_ids.append(player_id)
+                        roster_players.append(player)
                         team_meta_by_id[player_id] = meta
 
-        athletes = _fetch_and_enrich_leader_athletes(player_ids, season_year=year)
+        athletes = _fetch_leader_athletes(roster_players, season_year=year)
         for athlete in athletes:
             meta = team_meta_by_id.get(str(athlete.get("id") or ""))
             if meta:
