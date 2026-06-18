@@ -4679,14 +4679,15 @@ def fetch_player_stat_panels(
         position=position,
         season_year=year,
     ))
-    percentile_panel = fetch_player_percentile_stat_panel(
-        player_id,
-        player_name=player_name,
-        position=position,
-        season_year=year,
-    )
-    if percentile_panel:
-        panels.append(percentile_panel)
+    # Percentile Rankings disabled — coming soon.
+    # percentile_panel = fetch_player_percentile_stat_panel(
+    #     player_id,
+    #     player_name=player_name,
+    #     position=position,
+    #     season_year=year,
+    # )
+    # if percentile_panel:
+    #     panels.append(percentile_panel)
     splits_panel = fetch_player_splits_stat_panel(
         player_id,
         player_name=player_name,

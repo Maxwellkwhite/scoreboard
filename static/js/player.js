@@ -480,6 +480,26 @@
     );
   }
 
+  function buildPercentileComingSoonHtml() {
+    var metrics = ['Exit Velo', 'Barrel%', 'Hard Hit%', 'xBA', 'xwOBA', 'Sprint Speed'];
+    var chips = metrics.map(function (metric) {
+      return '<span class="player-season-stats__coming-soon-chip">' + escapeHtml(metric) + '</span>';
+    }).join('');
+
+    return (
+      '<div class="player-season-stats__coming-soon" role="status">' +
+        '<div class="player-season-stats__coming-soon-icon" aria-hidden="true">' +
+          '<span class="player-season-stats__coming-soon-radar"></span>' +
+        '</div>' +
+        '<p class="player-season-stats__coming-soon-title">Percentile Rankings coming soon</p>' +
+        '<p class="player-season-stats__coming-soon-copy">' +
+          'Statcast percentile ranks compared to qualified MLB players are on the way.' +
+        '</p>' +
+        '<div class="player-season-stats__coming-soon-chips" aria-hidden="true">' + chips + '</div>' +
+      '</div>'
+    );
+  }
+
   function buildSeasonStatsNestedHtml(nestedPanel) {
     var views = nestedPanel.views || [];
     var defaultView = nestedPanel.default_view || (views[0] && views[0].id) || 'standard';
@@ -1306,6 +1326,7 @@
     );
   }
 
+  /*
   function percentileFillColor(pct) {
     var p = Math.max(0, Math.min(100, Number(pct) || 0));
     if (p >= 90) return '#d4183d';
@@ -1472,6 +1493,7 @@
       });
     });
   }
+  */
 
   function buildPanelInnerHtml(panel) {
     if (panel.panel_kind === 'toggle_stat_bars') {
@@ -1530,8 +1552,14 @@
       return '<div class="player-panel-body">' + buildHitProfileHtml(panel) + '</div>';
     }
 
+    /*
     if (panel.panel_kind === 'percentile_ranks') {
       return buildPercentileRankingsHtml(panel);
+    }
+    */
+
+    if (panel.panel_kind === 'percentile_coming_soon') {
+      return '<div class="player-panel-body">' + buildPercentileComingSoonHtml() + '</div>';
     }
 
     if (panel.panel_kind === 'split_groups') {
@@ -1609,24 +1637,28 @@
 
   function panelClassFor(panel) {
     var panelClass = 'game-detail-section game-detail-panel player-stats-panel';
+    /*
     if (panel.panel_kind === 'percentile_ranks') {
       panelClass += ' player-stats-panel--percentile';
     }
+    */
     if (panel.panel_kind === 'toggle_stat_bars') {
       panelClass += ' team-stats-panel';
     }
     return panelClass;
   }
 
-  var PANEL_ORDER = ['player_stats', visualPanelId, 'percentile_ranks', 'splits'];
+  var PANEL_ORDER = ['player_stats', visualPanelId, 'splits', 'percentile_ranks'];
   var activePanelId = null;
   var tabNavigationBound = false;
   var LAZY_PANEL_CONFIG = {
+    /*
     percentile_ranks: {
       label: 'Percentile Rankings',
       path: '/stats/percentiles',
       payloadKey: 'stat_panel',
     },
+    */
     splits: {
       label: 'Splits',
       path: '/stats/splits',
@@ -1706,7 +1738,7 @@
   function wirePanelElement(panelEl) {
     if (!panelEl) return;
     initPanelToggles(panelEl);
-    initPercentileYearSelects();
+    // initPercentileYearSelects();
     initSeasonStatsPanels(panelEl);
   }
 
@@ -1792,8 +1824,8 @@
     if (!profileLoaded) {
       upsertPanel({ id: visualPanelId, label: visualPanelLabel, panel_kind: 'loading' });
     }
-    registerLazyPanelTab('percentile_ranks');
     registerLazyPanelTab('splits');
+    registerPercentileComingSoonTab();
 
     if (activePanelId) {
       setActivePanel(activePanelId);
@@ -1831,6 +1863,14 @@
       id: panelId,
       label: config.label,
       panel_kind: 'lazy',
+    });
+  }
+
+  function registerPercentileComingSoonTab() {
+    upsertPanel({
+      id: 'percentile_ranks',
+      label: 'Percentile Rankings',
+      panel_kind: 'percentile_coming_soon',
     });
   }
 
