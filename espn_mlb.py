@@ -2235,6 +2235,34 @@ def fetch_team_core_stat_panels(
         return []
 
 
+def fetch_team_team_stats_panel(
+    team_id: str,
+    *,
+    season_year: str | int | None = None,
+) -> dict[str, Any] | None:
+    try:
+        from team_stats import fetch_team_team_stats_panel as _fetch_panel
+
+        year = _coerce_season_year(season_year)
+        return _fetch_panel(team_id, season_year=year)
+    except Exception:
+        return None
+
+
+def fetch_team_schedule_stat_panel(
+    team_id: str,
+    *,
+    season_year: str | int | None = None,
+) -> dict[str, Any] | None:
+    try:
+        from team_stats import fetch_team_schedule_stat_panel as _fetch_panel
+
+        year = _coerce_season_year(season_year)
+        return _fetch_panel(team_id, season_year=year)
+    except Exception:
+        return None
+
+
 def fetch_team_roster_stat_panel(
     team_id: str,
     *,

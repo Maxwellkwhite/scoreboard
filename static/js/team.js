@@ -808,6 +808,9 @@
     if (panel.panel_kind === 'loading') {
       return buildPanelLoadingHtml();
     }
+    if (panel.panel_kind === 'lazy') {
+      return '<div class="team-panel-body team-panel-body--lazy"></div>';
+    }
     if (panel.panel_kind === 'season_table' && panel.stats_table) {
       return '<div class="team-panel-body">' + buildSeasonTableHtml(panel.stats_table) + '</div>';
     }
@@ -817,6 +820,24 @@
   var PANEL_ORDER = ['team_stats', 'leaders', 'roster', 'schedule'];
   var activePanelId = null;
   var tabNavigationBound = false;
+  var LAZY_PANEL_CONFIG = {
+    leaders: {
+      label: 'Team Leaders',
+      path: '/stats/leaders',
+      payloadKey: 'stat_panel',
+    },
+    roster: {
+      label: 'Roster',
+      path: '/stats/roster',
+      payloadKey: 'stat_panel',
+    },
+    schedule: {
+      label: 'Schedule',
+      path: '/stats/schedule',
+      payloadKey: 'stat_panel',
+    },
+  };
+  var lazyPanelState = {};
 
   function panelSortIndex(panelId) {
     var idx = PANEL_ORDER.indexOf(panelId);
@@ -920,6 +941,7 @@
       if (!panelId) return;
 
       setActivePanel(panelId);
+      ensureLazyPanelLoaded(panelId);
       requestAnimationFrame(function () {
         var panel = panelsEl.querySelector('.team-stats-panel[data-panel="' + panelId + '"]');
         if (panel && !panel.hidden) {
@@ -969,7 +991,9 @@
       wirePanelElement(insertPanelSection(panel, index === 0));
     });
 
-    upsertPanel({ id: 'roster', label: 'Roster', panel_kind: 'loading' });
+    registerLazyPanelTab('leaders');
+    registerLazyPanelTab('roster');
+    registerLazyPanelTab('schedule');
 
     if (activePanelId) {
       setActivePanel(activePanelId);
@@ -999,13 +1023,47 @@
     });
   }
 
-  function loadStagedPanels() {
-    fetchTeamStats('/stats/roster')
+  function registerLazyPanelTab(panelId) {
+    var config = LAZY_PANEL_CONFIG[panelId];
+    if (!config) return;
+    lazyPanelState[panelId] = 'idle';
+    upsertPanel({
+      id: panelId,
+      label: config.label,
+      panel_kind: 'lazy',
+    });
+  }
+
+  function ensureLazyPanelLoaded(panelId) {
+    var config = LAZY_PANEL_CONFIG[panelId];
+    if (!config) return;
+
+    var state = lazyPanelState[panelId];
+    if (state === 'loading' || state === 'loaded') return;
+
+    lazyPanelState[panelId] = 'loading';
+    var existingPanel = panelsEl.querySelector('.team-stats-panel[data-panel="' + panelId + '"]');
+    if (existingPanel) {
+      existingPanel.innerHTML = buildPanelLoadingHtml();
+    }
+
+    fetchTeamStats(config.path)
       .then(function (payload) {
-        fulfillStagedPanel('roster', payload.stat_panel);
+        var panel = payload[config.payloadKey];
+        if (panel) {
+          lazyPanelState[panelId] = 'loaded';
+          upsertPanel(panel);
+          if (activePanelId === panelId) {
+            setActivePanel(panelId);
+          }
+          return;
+        }
+        lazyPanelState[panelId] = 'error';
+        fulfillStagedPanel(panelId, null);
       })
       .catch(function () {
-        fulfillStagedPanel('roster', null);
+        lazyPanelState[panelId] = 'error';
+        fulfillStagedPanel(panelId, null);
       });
   }
 
@@ -1075,7 +1133,6 @@
     }
 
     finishLoading();
-    loadStagedPanels();
   }
 
   fetchTeamStats('/stats')

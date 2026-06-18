@@ -441,10 +441,21 @@ def _ensure_season_entry(season_year: int, cache_date: str) -> dict[str, Any]:
         _release_build_lock()
 
 
+def _read_season_entry(season_year: int, cache_date: str) -> dict[str, Any] | None:
+    """Return a cached season entry without triggering a pybaseball build."""
+    key = str(season_year)
+    entry = (_load_store().get("seasons") or {}).get(key)
+    if entry is None or not _payload_has_data(entry):
+        return None
+    if _season_needs_refresh(season_year, entry, cache_date):
+        return None
+    return entry
+
+
 def warm_league_cache_for_today(season_year: int | None = None) -> bool:
     """Refresh the current season in the master cache if today's data is missing."""
     year = season_year or date.today().year
-    result = get_league_player_stats_by_category(year)
+    result = get_league_player_stats_by_category(year, allow_build=True)
     has_data = bool((result.get("batting") or {}) or (result.get("pitching") or {}))
     if has_data:
         logger.info("League cache ready for season %s", year)
@@ -457,12 +468,17 @@ def get_league_player_stats_by_category(
     season_year: int,
     *,
     cache_date: str | None = None,
+    allow_build: bool = False,
 ) -> dict[str, dict[str, list[float]]]:
     """Qualified MLB player distributions for stat-bar comparisons.
 
     All seasons live in data/league_player_averages/league_player_averages.json.
     The current calendar year is refreshed once per day; older seasons are built
     only when missing and then kept permanently.
+
+    Web requests should use the default ``allow_build=False`` and rely on the app
+    startup warm-up (or a pre-built JSON file). Only background warm-up/build
+    jobs should pass ``allow_build=True``.
     """
     cache_date = cache_date or date.today().isoformat()
     mem_key = (
@@ -476,11 +492,16 @@ def get_league_player_stats_by_category(
         return cached[1]
 
     try:
-        entry = _ensure_season_entry(season_year, cache_date)
+        if allow_build:
+            entry = _ensure_season_entry(season_year, cache_date)
+        else:
+            entry = _read_season_entry(season_year, cache_date)
+            if entry is None:
+                return {"batting": {}, "pitching": {}}
         result = _league_stats_from_payload(entry)
     except Exception:
         logger.exception(
-            "Failed to build league player cache for season %s",
+            "Failed to load league player cache for season %s",
             season_year,
         )
         return {"batting": {}, "pitching": {}}

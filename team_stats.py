@@ -1299,6 +1299,56 @@ def _build_leaders_panel(
     }
 
 
+def fetch_team_team_stats_panel(
+    team_id: str,
+    *,
+    season_year: int | None = None,
+) -> dict[str, Any] | None:
+    year = season_year or date.today().year
+    cache_key = f"{team_id}:{year}:panels:team-stats:v1"
+    cached = _team_core_panels_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    panel: dict[str, Any] | None = None
+    try:
+        stats_by_category = _fetch_team_statistics(team_id)
+        league_stats = _get_league_stats_by_category(year)
+        panel = _build_team_stats_panel(
+            stats_by_category,
+            season_year=year,
+            league_stats=league_stats,
+        )
+    except Exception:
+        panel = None
+
+    _team_core_panels_cache[cache_key] = (now, panel)
+    return panel
+
+
+def fetch_team_schedule_stat_panel(
+    team_id: str,
+    *,
+    season_year: int | None = None,
+) -> dict[str, Any] | None:
+    year = season_year or date.today().year
+    cache_key = f"{team_id}:{year}:panels:schedule:v1"
+    cached = _team_core_panels_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    panel: dict[str, Any] | None = None
+    try:
+        panel = _build_schedule_panel(team_id)
+    except Exception:
+        panel = None
+
+    _team_core_panels_cache[cache_key] = (now, panel)
+    return panel
+
+
 def fetch_team_core_stat_panels(
     team_id: str,
     *,
@@ -1312,22 +1362,13 @@ def fetch_team_core_stat_panels(
         return cached[1]
 
     panels: list[dict[str, Any]] = []
-    try:
-        stats_by_category = _fetch_team_statistics(team_id)
-        league_stats = _get_league_stats_by_category(year)
-        team_stats_panel = _build_team_stats_panel(
-            stats_by_category,
-            season_year=year,
-            league_stats=league_stats,
-        )
-        if team_stats_panel:
-            panels.append(team_stats_panel)
+    team_stats_panel = fetch_team_team_stats_panel(team_id, season_year=year)
+    if team_stats_panel:
+        panels.append(team_stats_panel)
 
-        schedule_panel = _build_schedule_panel(team_id)
-        if schedule_panel:
-            panels.append(schedule_panel)
-    except Exception:
-        panels = []
+    schedule_panel = fetch_team_schedule_stat_panel(team_id, season_year=year)
+    if schedule_panel:
+        panels.append(schedule_panel)
 
     _team_core_panels_cache[cache_key] = (now, panels)
     return panels
