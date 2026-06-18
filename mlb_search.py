@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date
+import logging
 from typing import Any
 
-from espn_mlb import _fetch_mlb_teams_lookup
-from team_stats import _get_cached_team_roster, _normalize_player_name
+import requests
 
-_INDEX_CACHE: tuple[float, list[dict[str, Any]]] | None = None
-_INDEX_CACHE_TTL_SECONDS = 300
+from espn_mlb import _fetch_mlb_teams_lookup
+from team_stats import _normalize_player_name
+
+logger = logging.getLogger(__name__)
+
+ESPN_SEARCH_URL = "https://site.api.espn.com/apis/common/v3/search"
 
 
 def _match_score(query: str, *candidates: str) -> int:
@@ -34,67 +35,65 @@ def _match_score(query: str, *candidates: str) -> int:
     return best
 
 
-def _unique_team_ids(teams_lookup: dict[str, dict[str, Any]]) -> list[str]:
-    seen: set[str] = set()
-    team_ids: list[str] = []
-    for meta in teams_lookup.values():
-        team_id = meta.get("id")
-        if team_id and team_id not in seen:
-            seen.add(team_id)
-            team_ids.append(team_id)
-    return team_ids
+def _team_color_hex(raw: str | None) -> str:
+    color = (raw or "").strip()
+    if not color:
+        return "#1a2332"
+    if not color.startswith("#"):
+        color = f"#{color}"
+    return color
 
 
-def _build_player_index(season_year: int) -> list[dict[str, Any]]:
-    teams_lookup = _fetch_mlb_teams_lookup()
-    team_ids = _unique_team_ids(teams_lookup)
+def _parse_player_search_item(item: dict[str, Any]) -> dict[str, Any] | None:
+    if item.get("type") != "player" or item.get("league") != "mlb":
+        return None
+    player_id = item.get("id")
+    name = item.get("displayName") or ""
+    if not player_id or not name:
+        return None
+
+    team_abbr = ""
+    team_color = "#1a2332"
+    for relationship in item.get("teamRelationships") or []:
+        if relationship.get("type") != "team":
+            continue
+        core = relationship.get("core") or {}
+        team_abbr = str(core.get("abbreviation") or "")
+        team_color = _team_color_hex(core.get("color"))
+        break
+
+    return {
+        "id": str(player_id),
+        "name": name,
+        "position": "",
+        "team_abbr": team_abbr,
+        "team_color": team_color,
+    }
+
+
+def _search_players_espn(query: str, *, limit: int = 8) -> list[dict[str, Any]]:
+    try:
+        response = requests.get(
+            ESPN_SEARCH_URL,
+            params={"query": query, "limit": max(limit * 2, 12), "type": "player"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.RequestException:
+        logger.exception("ESPN player search failed for query %r", query)
+        return []
+
     players: list[dict[str, Any]] = []
-    seen_players: set[str] = set()
-
-    def collect(team_id: str) -> list[dict[str, Any]]:
-        roster = _get_cached_team_roster(team_id, season_year)
-        meta = teams_lookup.get(team_id) or {}
-        out: list[dict[str, Any]] = []
-        for section in roster.get("sections") or []:
-            for player in section.get("players") or []:
-                player_id = player.get("id")
-                if not player_id:
-                    continue
-                out.append(
-                    {
-                        "id": player_id,
-                        "name": player.get("name") or "",
-                        "position": player.get("position") or "",
-                        "team_id": team_id,
-                        "team_abbr": meta.get("abbr") or "",
-                        "team_color": meta.get("color") or "#1a2332",
-                    }
-                )
-        return out
-
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = [executor.submit(collect, team_id) for team_id in team_ids]
-        for future in as_completed(futures):
-            try:
-                for player in future.result():
-                    player_id = player["id"]
-                    if player_id in seen_players:
-                        continue
-                    seen_players.add(player_id)
-                    players.append(player)
-            except Exception:
-                continue
-    return players
-
-
-def _get_player_index() -> list[dict[str, Any]]:
-    global _INDEX_CACHE
-    now = time.time()
-    season_year = date.today().year
-    if _INDEX_CACHE and now - _INDEX_CACHE[0] < _INDEX_CACHE_TTL_SECONDS:
-        return _INDEX_CACHE[1]
-    players = _build_player_index(season_year)
-    _INDEX_CACHE = (now, players)
+    seen_ids: set[str] = set()
+    for item in payload.get("items") or []:
+        player = _parse_player_search_item(item)
+        if not player or player["id"] in seen_ids:
+            continue
+        seen_ids.add(player["id"])
+        players.append(player)
+        if len(players) >= limit:
+            break
     return players
 
 
@@ -134,25 +133,6 @@ def search_mlb(
 
     team_results.sort(key=lambda item: (-item[0], item[1]["name"]))
     teams = [team for _, team in team_results[:limit_teams]]
-
-    player_results: list[tuple[int, dict[str, Any]]] = []
-    for player in _get_player_index():
-        score = _match_score(q, player.get("name") or "")
-        if score:
-            player_results.append(
-                (
-                    score,
-                    {
-                        "id": player["id"],
-                        "name": player["name"],
-                        "position": player.get("position") or "",
-                        "team_abbr": player.get("team_abbr") or "",
-                        "team_color": player.get("team_color") or "#1a2332",
-                    },
-                )
-            )
-
-    player_results.sort(key=lambda item: (-item[0], item[1]["name"]))
-    players = [player for _, player in player_results[:limit_players]]
+    players = _search_players_espn(q, limit=limit_players)
 
     return {"teams": teams, "players": players}

@@ -35,6 +35,7 @@
     var activeIndex = -1;
     var items = [];
     var requestId = 0;
+    var activeController = null;
 
     function closeResults() {
       resultsEl.hidden = true;
@@ -143,12 +144,22 @@
     function runSearch() {
       var query = input.value.trim();
       if (query.length < MIN_QUERY_LENGTH) {
+        if (activeController) {
+          activeController.abort();
+          activeController = null;
+        }
         closeResults();
         return;
       }
 
+      if (activeController) {
+        activeController.abort();
+      }
+      activeController = typeof AbortController !== "undefined" ? new AbortController() : null;
+      var signal = activeController ? activeController.signal : undefined;
       var currentRequest = ++requestId;
-      fetch(apiUrl + "?q=" + encodeURIComponent(query))
+
+      fetch(apiUrl + "?q=" + encodeURIComponent(query), signal ? { signal: signal } : undefined)
         .then(function (response) {
           if (!response.ok) {
             throw new Error("search failed");
@@ -161,7 +172,10 @@
           }
           renderResults(data);
         })
-        .catch(function () {
+        .catch(function (error) {
+          if (error && error.name === "AbortError") {
+            return;
+          }
           if (currentRequest !== requestId) {
             return;
           }
@@ -174,6 +188,12 @@
     var debouncedSearch = debounce(runSearch, DEBOUNCE_MS);
 
     input.addEventListener("input", debouncedSearch);
+
+    input.addEventListener("focus", function () {
+      if (input.value.trim().length >= MIN_QUERY_LENGTH) {
+        runSearch();
+      }
+    });
 
     input.addEventListener("keydown", function (event) {
       var options = resultsEl.querySelectorAll(".scoreboard-search__option");
