@@ -1152,149 +1152,6 @@
     return '<div class="player-splits-groups">' + groups.join('') + '</div>';
   }
 
-  var PITCH_COLORS = {
-    FF: '#e74c3c',
-    SI: '#e67e22',
-    FC: '#f1c40f',
-    SL: '#3498db',
-    CU: '#9b59b6',
-    CH: '#2ecc71',
-    FS: '#1abc9c',
-    ST: '#e91e63',
-    KN: '#95a5a6',
-    SV: '#16a085',
-    EP: '#8e44ad',
-    SC: '#34495e'
-  };
-  var PITCH_PALETTE = [
-    '#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#e67e22',
-    '#1abc9c', '#e91e63', '#f1c40f', '#16a085', '#34495e'
-  ];
-
-  function pitchColor(pitch, index) {
-    var code = (pitch.pitch_type || '').toUpperCase();
-    if (PITCH_COLORS[code]) return PITCH_COLORS[code];
-    return PITCH_PALETTE[index % PITCH_PALETTE.length];
-  }
-
-  function buildDonutGradient(pitches) {
-    var total = 0;
-    pitches.forEach(function (p) {
-      total += Number(p.usage) || 0;
-    });
-    if (total <= 0) return '#eef1f5';
-
-    var cursor = 0;
-    var stops = [];
-    pitches.forEach(function (pitch, index) {
-      var usage = Number(pitch.usage) || 0;
-      if (usage <= 0) return;
-      var start = (cursor / total) * 100;
-      cursor += usage;
-      var end = (cursor / total) * 100;
-      stops.push(pitchColor(pitch, index) + ' ' + start.toFixed(2) + '% ' + end.toFixed(2) + '%');
-    });
-    return 'conic-gradient(' + stops.join(', ') + ')';
-  }
-
-  function formatPitchMetricValue(metric, value) {
-    if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) {
-      return '—';
-    }
-    var num = Number(value);
-    if (metric.id === 'velo') return num.toFixed(1);
-    if (metric.id === 'spin') return String(Math.round(num));
-    if (metric.unit === '%') return num.toFixed(1);
-    if (metric.id === 'xwoba' || metric.id === 'ba' || metric.id === 'slg') {
-      var rateText = num.toFixed(3);
-      return rateText.startsWith('0.') ? rateText.slice(1) : rateText;
-    }
-    return String(num);
-  }
-
-  function metricBarWidth(metric, value, pitches) {
-    var num = Number(value);
-    if (!num && num !== 0) return 0;
-    var max = Number(metric.max) || 100;
-    var dataMax = 0;
-    pitches.forEach(function (pitch) {
-      var v = Number(pitch[metric.id]);
-      if (!Number.isNaN(v) && v > dataMax) dataMax = v;
-    });
-    var scaleMax = Math.max(max, dataMax * 1.05);
-    return Math.min(100, (num / scaleMax) * 100);
-  }
-
-  var BB_TYPE_COLORS = {
-    ground_ball: '#c9956a',
-    line_drive: '#e74c3c',
-    fly_ball: '#3498db',
-    popup: '#95a5a6'
-  };
-  var BB_TYPE_PALETTE = ['#c9956a', '#e74c3c', '#3498db', '#95a5a6', '#2ecc71', '#9b59b6'];
-
-  function bbTypeColor(bbType, index) {
-    if (BB_TYPE_COLORS[bbType]) return BB_TYPE_COLORS[bbType];
-    return BB_TYPE_PALETTE[index % BB_TYPE_PALETTE.length];
-  }
-
-  function buildUsageDonutGradient(items, colorFn) {
-    var total = 0;
-    items.forEach(function (item) {
-      total += Number(item.usage) || 0;
-    });
-    if (total <= 0) return '#eef1f5';
-
-    var cursor = 0;
-    var stops = [];
-    items.forEach(function (item, index) {
-      var usage = Number(item.usage) || 0;
-      if (usage <= 0) return;
-      var start = (cursor / total) * 100;
-      cursor += usage;
-      var end = (cursor / total) * 100;
-      stops.push(colorFn(item, index) + ' ' + start.toFixed(2) + '% ' + end.toFixed(2) + '%');
-    });
-    return 'conic-gradient(' + stops.join(', ') + ')';
-  }
-
-  function formatSprayMetricValue(metric, value) {
-    if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) {
-      return '—';
-    }
-    var num = Number(value);
-    if (metric.id === 'ev' || metric.id === 'launch_angle' || metric.id === 'distance') {
-      return num.toFixed(1);
-    }
-    if (metric.unit === '%') return num.toFixed(1);
-    if (metric.id === 'xwoba') {
-      var rateText = num.toFixed(3);
-      return rateText.startsWith('0.') ? rateText.slice(1) : rateText;
-    }
-    return String(num);
-  }
-
-  function formatSpraySummaryRate(value) {
-    if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) {
-      return '—';
-    }
-    var rateText = Number(value).toFixed(3);
-    return rateText.startsWith('0.') ? rateText.slice(1) : rateText;
-  }
-
-  function sprayMetricBarWidth(metric, value, types) {
-    var num = Number(value);
-    if (!num && num !== 0) return 0;
-    var max = Number(metric.max) || 100;
-    var dataMax = 0;
-    types.forEach(function (item) {
-      var v = Number(item[metric.id]);
-      if (!Number.isNaN(v) && v > dataMax) dataMax = v;
-    });
-    var scaleMax = Math.max(max, dataMax * 1.05);
-    return Math.min(100, (num / scaleMax) * 100);
-  }
-
   function buildHitProfileHtml(panel) {
     var pillars = panel.pillars || [];
     var groups = panel.groups || [];
@@ -1445,179 +1302,6 @@
         archetypeHtml +
         bodyHtml +
         (groupsHtml ? '<div class="hit-profile__groups">' + groupsHtml + '</div>' : '') +
-      '</div>'
-    );
-  }
-
-  function buildSprayChartHtml(panel) {
-    var types = panel.types || [];
-    var metrics = panel.metrics || [];
-    var summary = panel.summary || {};
-    if (!summary.total && !types.length) {
-      return '<p class="player-splits-empty">No batted-ball data available.</p>';
-    }
-
-    var summaryItems = [
-      { label: 'Batted Balls', value: summary.total },
-      { label: 'Avg EV', value: summary.avg_ev !== null && summary.avg_ev !== undefined ? summary.avg_ev + ' mph' : null },
-      { label: 'Avg LA', value: summary.avg_launch_angle !== null && summary.avg_launch_angle !== undefined ? summary.avg_launch_angle + '°' : null },
-      { label: 'Avg Dist', value: summary.avg_distance !== null && summary.avg_distance !== undefined ? summary.avg_distance + ' ft' : null },
-      { label: 'xwOBA', value: summary.avg_xwoba !== null && summary.avg_xwoba !== undefined ? formatSpraySummaryRate(summary.avg_xwoba) : null },
-      { label: 'Hard Hit%', value: summary.hard_hit_pct !== null && summary.hard_hit_pct !== undefined ? summary.hard_hit_pct + '%' : null },
-      { label: 'Barrel%', value: summary.barrel_pct !== null && summary.barrel_pct !== undefined ? summary.barrel_pct + '%' : null }
-    ];
-
-    var summaryHtml = summaryItems.map(function (item) {
-      var value = item.value === null || item.value === undefined ? '—' : String(item.value);
-      return (
-        '<div class="spray-chart-stat">' +
-          '<span class="spray-chart-stat__value">' + escapeHtml(value) + '</span>' +
-          '<span class="spray-chart-stat__label">' + escapeHtml(item.label) + '</span>' +
-        '</div>'
-      );
-    }).join('');
-
-    var donutHtml = '';
-    var typeLegendHtml = '';
-    if (types.length) {
-      var donutStyle = 'background:' + buildUsageDonutGradient(types, function (item, index) {
-        return bbTypeColor(item.bb_type, index);
-      });
-      typeLegendHtml = types.map(function (item, index) {
-        var usage = Number(item.usage);
-        var usageText = Number.isNaN(usage) ? '—' : usage.toFixed(1) + '%';
-        return (
-          '<li class="pitch-mix-legend__item">' +
-            '<span class="pitch-mix-legend__swatch" style="background:' + bbTypeColor(item.bb_type, index) + '"></span>' +
-            '<span class="pitch-mix-legend__label">' + escapeHtml(item.label) + '</span>' +
-            '<span class="pitch-mix-legend__value">' + escapeHtml(usageText) + '</span>' +
-          '</li>'
-        );
-      }).join('');
-      donutHtml =
-        '<div class="pitch-mix-donut-wrap">' +
-          '<div class="pitch-mix-donut" style="' + donutStyle + '" role="img" aria-label="Batted ball type breakdown">' +
-            '<div class="pitch-mix-donut__hole"></div>' +
-          '</div>' +
-          '<p class="pitch-mix-donut__caption">' + escapeHtml(panel.season_year || 'Season') + ' Batted Ball Types</p>' +
-        '</div>';
-    }
-
-    var metricsHtml = metrics.length && types.length ? metrics.map(function (metric) {
-      var metricTypes = types.filter(function (item) {
-        return item.bb_type !== 'popup';
-      });
-      var barsHtml = metricTypes.map(function (item) {
-        var typeIndex = types.findIndex(function (entry) {
-          return entry.bb_type === item.bb_type;
-        });
-        var value = item[metric.id];
-        var display = formatSprayMetricValue(metric, value);
-        var width = sprayMetricBarWidth(metric, value, metricTypes);
-        var suffix = '';
-        if (display !== '—') {
-          if (metric.unit === '%') suffix = '%';
-          else if (metric.unit) suffix = ' ' + metric.unit;
-        }
-        return (
-          '<div class="pitch-mix-bar-row">' +
-            '<span class="pitch-mix-bar-row__label" title="' + escapeHtml(item.label) + '">' +
-              escapeHtml(item.label) +
-            '</span>' +
-            '<div class="pitch-mix-bar-row__track" aria-hidden="true">' +
-              '<span class="pitch-mix-bar-row__fill" style="width:' + width.toFixed(1) + '%;background:' +
-              bbTypeColor(item.bb_type, typeIndex === -1 ? 0 : typeIndex) + '"></span>' +
-            '</div>' +
-            '<span class="pitch-mix-bar-row__value">' + escapeHtml(display + suffix) + '</span>' +
-          '</div>'
-        );
-      }).join('');
-
-      return (
-        '<section class="pitch-mix-metric">' +
-          '<h4 class="pitch-mix-metric__title">' + escapeHtml(metric.label) + '</h4>' +
-          '<div class="pitch-mix-metric__bars">' + barsHtml + '</div>' +
-        '</section>'
-      );
-    }).join('') : '';
-
-    return (
-      '<div class="spray-chart">' +
-        (types.length ?
-          '<div class="pitch-mix__top">' +
-            donutHtml +
-            '<ul class="pitch-mix-legend">' + typeLegendHtml + '</ul>' +
-          '</div>' : '') +
-        '<div class="spray-chart__summary">' + summaryHtml + '</div>' +
-        (metricsHtml ? '<div class="pitch-mix__metrics">' + metricsHtml + '</div>' : '') +
-      '</div>'
-    );
-  }
-
-  function buildPitchMixHtml(panel) {
-    var pitches = panel.pitches || [];
-    var metrics = panel.metrics || [];
-    if (!pitches.length) {
-      return '<p class="player-splits-empty">No pitch mix data available.</p>';
-    }
-
-    var donutStyle = 'background:' + buildDonutGradient(pitches);
-    var legendHtml = pitches.map(function (pitch, index) {
-      var usage = Number(pitch.usage);
-      var usageText = Number.isNaN(usage) ? '—' : usage.toFixed(1) + '%';
-      return (
-        '<li class="pitch-mix-legend__item">' +
-          '<span class="pitch-mix-legend__swatch" style="background:' + pitchColor(pitch, index) + '"></span>' +
-          '<span class="pitch-mix-legend__label">' + escapeHtml(pitch.label) + '</span>' +
-          '<span class="pitch-mix-legend__value">' + escapeHtml(usageText) + '</span>' +
-        '</li>'
-      );
-    }).join('');
-
-    var metricsHtml = metrics.map(function (metric) {
-      var barsHtml = pitches.map(function (pitch, index) {
-        var value = pitch[metric.id];
-        var display = formatPitchMetricValue(metric, value);
-        var width = metricBarWidth(metric, value, pitches);
-        var suffix = '';
-        if (display !== '—') {
-          if (metric.unit === '%') suffix = '%';
-          else if (metric.unit) suffix = ' ' + metric.unit;
-        }
-        return (
-          '<div class="pitch-mix-bar-row">' +
-            '<span class="pitch-mix-bar-row__label" title="' + escapeHtml(pitch.label) + '">' +
-              escapeHtml(pitch.label) +
-            '</span>' +
-            '<div class="pitch-mix-bar-row__track" aria-hidden="true">' +
-              '<span class="pitch-mix-bar-row__fill" style="width:' + width.toFixed(1) + '%;background:' +
-              pitchColor(pitch, index) + '"></span>' +
-            '</div>' +
-            '<span class="pitch-mix-bar-row__value">' + escapeHtml(display + suffix) + '</span>' +
-          '</div>'
-        );
-      }).join('');
-
-      return (
-        '<section class="pitch-mix-metric">' +
-          '<h4 class="pitch-mix-metric__title">' + escapeHtml(metric.label) + '</h4>' +
-          '<div class="pitch-mix-metric__bars">' + barsHtml + '</div>' +
-        '</section>'
-      );
-    }).join('');
-
-    return (
-      '<div class="pitch-mix">' +
-        '<div class="pitch-mix__top">' +
-          '<div class="pitch-mix-donut-wrap">' +
-            '<div class="pitch-mix-donut" style="' + donutStyle + '" role="img" aria-label="Pitch usage breakdown">' +
-              '<div class="pitch-mix-donut__hole"></div>' +
-            '</div>' +
-            '<p class="pitch-mix-donut__caption">' + escapeHtml(panel.season_year || 'Season') + ' Usage</p>' +
-          '</div>' +
-          '<ul class="pitch-mix-legend">' + legendHtml + '</ul>' +
-        '</div>' +
-        '<div class="pitch-mix__metrics">' + metricsHtml + '</div>' +
       '</div>'
     );
   }
@@ -1842,16 +1526,8 @@
       );
     }
 
-    if (panel.panel_kind === 'pitch_mix') {
-      return '<div class="player-panel-body">' + buildPitchMixHtml(panel) + '</div>';
-    }
-
     if (panel.panel_kind === 'hit_profile') {
       return '<div class="player-panel-body">' + buildHitProfileHtml(panel) + '</div>';
-    }
-
-    if (panel.panel_kind === 'spray_chart') {
-      return '<div class="player-panel-body">' + buildSprayChartHtml(panel) + '</div>';
     }
 
     if (panel.panel_kind === 'percentile_ranks') {
@@ -1890,6 +1566,10 @@
 
     if (panel.panel_kind === 'loading') {
       return buildPanelLoadingHtml();
+    }
+
+    if (panel.panel_kind === 'lazy') {
+      return '<div class="team-panel-body team-panel-body--lazy"></div>';
     }
 
     if (panel.stats_table) {
@@ -1941,6 +1621,19 @@
   var PANEL_ORDER = ['player_stats', visualPanelId, 'percentile_ranks', 'splits'];
   var activePanelId = null;
   var tabNavigationBound = false;
+  var LAZY_PANEL_CONFIG = {
+    percentile_ranks: {
+      label: 'Percentile Rankings',
+      path: '/stats/percentiles',
+      payloadKey: 'stat_panel',
+    },
+    splits: {
+      label: 'Splits',
+      path: '/stats/splits',
+      payloadKey: 'stat_panel',
+    },
+  };
+  var lazyPanelState = {};
 
   function panelSortIndex(panelId) {
     var idx = PANEL_ORDER.indexOf(panelId);
@@ -2042,6 +1735,7 @@
       if (!panelId) return;
 
       setActivePanel(panelId);
+      ensureLazyPanelLoaded(panelId);
       requestAnimationFrame(function () {
         var panel = panelsEl.querySelector('.player-stats-panel[data-panel="' + panelId + '"]');
         if (panel && !panel.hidden) {
@@ -2098,8 +1792,8 @@
     if (!profileLoaded) {
       upsertPanel({ id: visualPanelId, label: visualPanelLabel, panel_kind: 'loading' });
     }
-    upsertPanel({ id: 'percentile_ranks', label: 'Percentile Rankings', panel_kind: 'loading' });
-    upsertPanel({ id: 'splits', label: 'Splits', panel_kind: 'loading' });
+    registerLazyPanelTab('percentile_ranks');
+    registerLazyPanelTab('splits');
 
     if (activePanelId) {
       setActivePanel(activePanelId);
@@ -2129,21 +1823,47 @@
     });
   }
 
-  function loadStagedPanels() {
-    fetchPlayerStats('/stats/percentiles')
-      .then(function (payload) {
-        fulfillStagedPanel('percentile_ranks', payload.stat_panel);
-      })
-      .catch(function () {
-        fulfillStagedPanel('percentile_ranks', null);
-      });
+  function registerLazyPanelTab(panelId) {
+    var config = LAZY_PANEL_CONFIG[panelId];
+    if (!config) return;
+    lazyPanelState[panelId] = 'idle';
+    upsertPanel({
+      id: panelId,
+      label: config.label,
+      panel_kind: 'lazy',
+    });
+  }
 
-    fetchPlayerStats('/stats/splits')
+  function ensureLazyPanelLoaded(panelId) {
+    var config = LAZY_PANEL_CONFIG[panelId];
+    if (!config) return;
+
+    var state = lazyPanelState[panelId];
+    if (state === 'loading' || state === 'loaded') return;
+
+    lazyPanelState[panelId] = 'loading';
+    var existingPanel = panelsEl.querySelector('.player-stats-panel[data-panel="' + panelId + '"]');
+    if (existingPanel) {
+      existingPanel.innerHTML = buildPanelLoadingHtml();
+    }
+
+    fetchPlayerStats(config.path)
       .then(function (payload) {
-        fulfillStagedPanel('splits', payload.stat_panel);
+        var panel = payload[config.payloadKey];
+        if (panel) {
+          lazyPanelState[panelId] = 'loaded';
+          upsertPanel(panel);
+          if (activePanelId === panelId) {
+            setActivePanel(panelId);
+          }
+          return;
+        }
+        lazyPanelState[panelId] = 'error';
+        fulfillStagedPanel(panelId, null);
       })
       .catch(function () {
-        fulfillStagedPanel('splits', null);
+        lazyPanelState[panelId] = 'error';
+        fulfillStagedPanel(panelId, null);
       });
   }
 
@@ -2169,7 +1889,6 @@
     }
     initCorePanels(panels);
     finishLoading();
-    loadStagedPanels();
   }
 
   panelsEl.innerHTML = buildPanelLoadingHtml();

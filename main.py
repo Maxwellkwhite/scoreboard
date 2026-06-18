@@ -1393,31 +1393,6 @@ def api_mlb_player_stats_summary(player_id):
 
 
 @app.route(
-    '/api/mlb/player/<player_id>/stats/visual',
-    methods=['GET'],
-    endpoint='api_mlb_player_stats_visual',
-)
-def api_mlb_player_stats_visual(player_id):
-    from espn_mlb import fetch_player, fetch_player_visual_stat_panel
-
-    try:
-        player = fetch_player(str(player_id), include_stats=False)
-    except (requests.RequestException, ValueError):
-        return jsonify({'error': 'Player not found'}), 404
-
-    stat_panel = fetch_player_visual_stat_panel(
-        str(player_id),
-        player_name=player.get('name') or '',
-        position=player.get('position'),
-        season_year=player.get('season_year'),
-    )
-    if not stat_panel:
-        return jsonify({'error': 'Visual stats unavailable'}), 404
-
-    return jsonify({'stat_panel': stat_panel})
-
-
-@app.route(
     '/api/mlb/player/<player_id>/stats/percentiles',
     methods=['GET'],
     endpoint='api_mlb_player_stats_percentiles',

@@ -63,26 +63,15 @@ _PITCHER_POSITIONS = frozenset({"P", "SP", "RP", "CP", "CL", "LR", "MR", "SU"})
 ESPN_ATHLETE_STATS_URL = (
     "https://site.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{player_id}/stats"
 )
-_PITCHER_MIX_METRICS = (
-    ("velo", "Velo", "mph", 105.0),
-    ("spin", "Spin", "rpm", 3200.0),
-    ("whiff", "Whiff%", "%", 100.0),
-    ("k", "K%", "%", 100.0),
-    ("put_away", "Put Away%", "%", 100.0),
-    ("xwoba", "xwOBA", "", 0.600),
+ESPN_ATHLETE_SPLITS_URL = (
+    "https://site.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{player_id}/splits"
 )
-_SPRAY_BB_TYPE_LABELS = {
-    "ground_ball": "Ground Ball",
-    "line_drive": "Line Drive",
-    "fly_ball": "Fly Ball",
-    "popup": "Popup",
+_ESPN_SPLIT_MONTH_NAMES = frozenset({
+    "March", "April", "May", "June", "July", "August", "September", "October",
+})
+_ESPN_SPLIT_COLUMN_SOURCES: dict[str, tuple[str, ...]] = {
+    "BA": ("AVG",),
 }
-_SPRAY_BB_TYPE_RATE_COLUMNS = (
-    ("ground_ball", "gb_rate"),
-    ("line_drive", "ld_rate"),
-    ("fly_ball", "fb_rate"),
-    ("popup", "pu_rate"),
-)
 _PERCENTILE_MIN_YEAR = 2015
 _BATTER_PERCENTILE_GROUPS = (
     ("Expected Stats", (
@@ -150,39 +139,11 @@ _SAVANT_DISCIPLINE_URL = (
     "&selections=player_id%2Ck_percent%2Cbb_percent%2Cwhiff_percent%2Cchase_percent"
     "&csv=true"
 )
-_SAVANT_BATTED_BALL_URL = (
-    "https://baseballsavant.mlb.com/leaderboard/batted-ball?year={year}&min=0&csv=true"
-)
 _SAVANT_PLAYER_PAGE_URL = (
     "https://baseballsavant.mlb.com/savant-player/{player_id}"
     "?stats=statcast-r-{kind}-mlb"
 )
 _savant_career_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
-_BATTING_SPLIT_REGULAR = (
-    ("Platoon Splits", ("vs RHP", "vs LHP")),
-    ("Home or Away", ("Home", "Away")),
-    ("Months", None),
-)
-_BATTING_SPLIT_ADVANCED = (
-    ("Leverage", None),
-    ("Clutch Stats", None),
-    ("Hit Trajectory", None),
-)
-_PITCHING_SPLIT_REGULAR_MAIN = (
-    ("Platoon Splits", ("vs RHB", "vs LHB")),
-)
-_PITCHING_SPLIT_REGULAR_LEVEL = (
-    ("Home or Away -- Game-Level", ("Home", "Away")),
-    ("Months -- Game-Level", None),
-)
-_PITCHING_SPLIT_ADVANCED_MAIN = (
-    ("Leverage", None),
-    ("Clutch Stats", None),
-)
-_PITCHING_SPLIT_ADVANCED_LEVEL = (
-    ("Run Support -- Game-Level", None),
-    ("Days of Rest -- Game-Level", None),
-)
 _BATTING_SPLIT_REGULAR_COLUMNS = ("PA", "AB", "H", "HR", "RBI", "BB", "SO", "BA", "OBP", "SLG", "OPS")
 _BATTING_SPLIT_ADVANCED_COLUMNS = ("PA", "AB", "H", "2B", "3B", "HR", "RBI", "BB", "SO", "BA", "OBP", "SLG", "OPS", "BAbip", "tOPS+")
 _PITCHING_SPLIT_OPPONENT_COLUMNS = ("PA", "H", "HR", "BB", "SO", "BA", "OBP", "SLG", "OPS", "BAbip")
@@ -210,7 +171,6 @@ _stats_table_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _stat_panels_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _espn_categories_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _player_core_panels_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
-_player_visual_panel_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _player_percentile_panel_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _player_splits_panel_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _bbref_splits_cache: dict[str, tuple[float, pd.DataFrame | None]] = {}
@@ -219,9 +179,7 @@ _pitcher_percentile_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = 
 _discipline_table_cache: dict[tuple[int, str], tuple[float, pd.DataFrame | None]] = {}
 _bat_tracking_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
 _sprint_speed_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
-_batted_ball_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
-_exitvelo_batter_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
-_expected_batter_table_cache: dict[int, tuple[float, pd.DataFrame | None]] = {}
+_espn_splits_payload_cache: dict[str, tuple[float, tuple[dict[str, Any], str] | None]] = {}
 _pitching_bref_season_cache: dict[int, pd.DataFrame] = {}
 _ESPN_SEASON_PITCHING_CATEGORY = "pitching"
 _ESPN_SEASON_BATTING_CATEGORY = "career-batting"
@@ -2607,30 +2565,6 @@ def _espn_advanced_table(
     return table
 
 
-def _pitch_arsenal_wide_value(
-    wide_row: pd.Series | None,
-    pitch_type: str,
-    stat: str,
-) -> Any:
-    if wide_row is None:
-        return None
-    key = f"{pitch_type.lower()}_{stat}"
-    if key not in wide_row.index:
-        return None
-    return wide_row.get(key)
-
-
-def _pitch_mix_numeric(value: Any) -> float | None:
-    number = _parse_number(value)
-    return number
-
-
-def _table_row_value(row: pd.Series | None, key: str) -> Any:
-    if row is None:
-        return None
-    return row.get(key)
-
-
 def _espn_advanced_batting_row(
     categories: dict[str, Any],
     *,
@@ -3329,253 +3263,6 @@ def _build_pitch_profile_panel(
     }
 
 
-def _spray_empty_panel(*, season_year: int) -> dict[str, Any]:
-    return {
-        "id": "spray_chart",
-        "label": "Batting Metrics",
-        "panel_kind": "spray_chart",
-        "season_year": str(season_year),
-        "summary": {},
-        "legend": [],
-        "types": [],
-        "metrics": [],
-        "points": [],
-    }
-
-
-def _spray_rate_percent(value: Any) -> float | None:
-    number = _parse_number(value)
-    if number is None:
-        return None
-    if number <= 1.0:
-        return round(number * 100, 1)
-    return round(number, 1)
-
-
-def _get_batter_exitvelo_table(season_year: int) -> pd.DataFrame | None:
-    cached = _exitvelo_batter_table_cache.get(season_year)
-    now = time.time()
-    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
-        return cached[1]
-    try:
-        table = statcast_batter_exitvelo_barrels(season_year, minBBE=0)
-        result = table if table is not None and not table.empty else None
-    except Exception:
-        result = None
-    _exitvelo_batter_table_cache[season_year] = (now, result)
-    return result
-
-
-def _get_batter_expected_table(season_year: int) -> pd.DataFrame | None:
-    cached = _expected_batter_table_cache.get(season_year)
-    now = time.time()
-    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
-        return cached[1]
-    try:
-        table = statcast_batter_expected_stats(season_year, minPA=0)
-        result = table if table is not None and not table.empty else None
-    except Exception:
-        result = None
-    _expected_batter_table_cache[season_year] = (now, result)
-    return result
-
-
-def _get_batted_ball_table(season_year: int) -> pd.DataFrame | None:
-    cached = _batted_ball_table_cache.get(season_year)
-    now = time.time()
-    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
-        return cached[1]
-    try:
-        response = requests.get(
-            _SAVANT_BATTED_BALL_URL.format(year=season_year),
-            timeout=20,
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
-        response.raise_for_status()
-        table = pd.read_csv(pd.io.common.StringIO(response.text))
-        result = table if not table.empty else None
-    except Exception:
-        result = None
-    _batted_ball_table_cache[season_year] = (now, result)
-    return result
-
-
-def _fetch_spray_chart_panel(
-    *,
-    mlbam_id: int | None,
-    season_year: int,
-) -> dict[str, Any]:
-    empty = _spray_empty_panel(season_year=season_year)
-    if not mlbam_id:
-        return empty
-
-    try:
-        exitvelo_table = _get_batter_exitvelo_table(season_year)
-        expected_table = _get_batter_expected_table(season_year)
-        batted_ball_table = _get_batted_ball_table(season_year)
-
-        ev_row = (
-            exitvelo_table[exitvelo_table["player_id"] == mlbam_id]
-            if exitvelo_table is not None
-            else pd.DataFrame()
-        )
-        exp_row = (
-            expected_table[expected_table["player_id"] == mlbam_id]
-            if expected_table is not None
-            else pd.DataFrame()
-        )
-        bb_row = (
-            batted_ball_table[batted_ball_table["id"] == mlbam_id]
-            if batted_ball_table is not None
-            else pd.DataFrame()
-        )
-
-        if ev_row.empty and bb_row.empty:
-            return empty
-
-        ev_record = ev_row.iloc[0] if not ev_row.empty else None
-        bb_record = bb_row.iloc[0] if not bb_row.empty else None
-        exp_record = exp_row.iloc[0] if not exp_row.empty else None
-
-        total = 0
-        if bb_record is not None:
-            total = int(_parse_number(_table_row_value(bb_record, "bbe")) or 0)
-        if not total and ev_record is not None:
-            total = int(_parse_number(_table_row_value(ev_record, "attempts")) or 0)
-        if not total:
-            return empty
-
-        avg_xwoba = _parse_number(_table_row_value(exp_record, "est_woba"))
-        if avg_xwoba is None:
-            avg_xwoba = _parse_number(_table_row_value(exp_record, "woba"))
-
-        summary = {
-            "total": total,
-            "avg_ev": _parse_number(_table_row_value(ev_record, "avg_hit_speed")),
-            "avg_launch_angle": _parse_number(_table_row_value(ev_record, "avg_hit_angle")),
-            "avg_distance": _parse_number(_table_row_value(ev_record, "avg_distance")),
-            "avg_xwoba": avg_xwoba,
-            "hard_hit_pct": _parse_number(_table_row_value(ev_record, "ev95percent")),
-            "barrel_pct": _parse_number(_table_row_value(ev_record, "brl_percent")),
-        }
-
-        gb_ev = _parse_number(_table_row_value(ev_record, "gb"))
-        fbld_ev = _parse_number(_table_row_value(ev_record, "fbld"))
-        types: list[dict[str, Any]] = []
-        if bb_record is not None:
-            for bb_type, rate_column in _SPRAY_BB_TYPE_RATE_COLUMNS:
-                usage = _spray_rate_percent(_table_row_value(bb_record, rate_column))
-                if not usage:
-                    continue
-                count = round(total * usage / 100) if total else 0
-                if not count:
-                    continue
-                type_entry: dict[str, Any] = {
-                    "label": _SPRAY_BB_TYPE_LABELS[bb_type],
-                    "bb_type": bb_type,
-                    "usage": usage,
-                    "count": count,
-                }
-                if bb_type == "ground_ball" and gb_ev is not None:
-                    type_entry["ev"] = gb_ev
-                elif bb_type in {"line_drive", "fly_ball"} and fbld_ev is not None:
-                    type_entry["ev"] = fbld_ev
-                types.append(type_entry)
-
-        metrics: list[dict[str, Any]] = []
-        if any("ev" in item for item in types):
-            metrics = [
-                {"id": "ev", "label": "Exit Velo", "unit": "mph", "max": 115.0},
-            ]
-
-        return {
-            "id": "spray_chart",
-            "label": "Batting Metrics",
-            "panel_kind": "spray_chart",
-            "season_year": str(season_year),
-            "summary": summary,
-            "legend": [],
-            "types": types,
-            "metrics": metrics,
-            "points": [],
-        }
-    except Exception:
-        return empty
-
-
-def _fetch_pitch_mix_panel(
-    *,
-    mlbam_id: int | None,
-    season_year: int,
-) -> dict[str, Any]:
-    empty: dict[str, Any] = {
-        "id": "pitch_mix",
-        "label": "Pitch Mix",
-        "panel_kind": "pitch_mix",
-        "pitching": True,
-        "season_year": str(season_year),
-        "pitches": [],
-        "metrics": [],
-    }
-    if not mlbam_id:
-        return empty
-
-    pitches: list[dict[str, Any]] = []
-    try:
-        stats = statcast_pitcher_arsenal_stats(season_year, minPA=1)
-        player_rows = stats[stats["player_id"] == mlbam_id].copy()
-        if player_rows.empty:
-            return empty
-
-        velo_df = statcast_pitcher_pitch_arsenal(season_year, minP=1, arsenal_type="avg_speed")
-        spin_df = statcast_pitcher_pitch_arsenal(season_year, minP=1, arsenal_type="avg_spin")
-        velo_row = velo_df[velo_df["pitcher"] == mlbam_id]
-        spin_row = spin_df[spin_df["pitcher"] == mlbam_id]
-        velo_series = velo_row.iloc[0] if not velo_row.empty else None
-        spin_series = spin_row.iloc[0] if not spin_row.empty else None
-
-        player_rows = player_rows.sort_values("pitch_usage", ascending=False)
-        for _, row in player_rows.iterrows():
-            pitch_count = _parse_number(row.get("pitches"))
-            if not pitch_count:
-                continue
-            pitch_type = str(row.get("pitch_type") or "")
-            pitches.append({
-                "label": str(row.get("pitch_name") or pitch_type),
-                "pitch_type": pitch_type,
-                "usage": _pitch_mix_numeric(row.get("pitch_usage")),
-                "velo": _pitch_mix_numeric(
-                    _pitch_arsenal_wide_value(velo_series, pitch_type, "avg_speed")
-                ),
-                "spin": _pitch_mix_numeric(
-                    _pitch_arsenal_wide_value(spin_series, pitch_type, "avg_spin")
-                ),
-                "whiff": _pitch_mix_numeric(row.get("whiff_percent")),
-                "k": _pitch_mix_numeric(row.get("k_percent")),
-                "put_away": _pitch_mix_numeric(row.get("put_away")),
-                "xwoba": _pitch_mix_numeric(row.get("est_woba")),
-            })
-    except Exception:
-        return empty
-
-    if not pitches:
-        return empty
-
-    metrics = [
-        {"id": key, "label": label, "unit": unit, "max": max_val}
-        for key, label, unit, max_val in _PITCHER_MIX_METRICS
-    ]
-    return {
-        "id": "pitch_mix",
-        "label": "Pitch Mix",
-        "panel_kind": "pitch_mix",
-        "pitching": True,
-        "season_year": str(season_year),
-        "pitches": pitches,
-        "metrics": metrics,
-    }
-
-
 def _get_batter_percentile_table(season_year: int) -> pd.DataFrame | None:
     cached = _batter_percentile_table_cache.get(season_year)
     now = time.time()
@@ -4087,7 +3774,7 @@ def fetch_pitcher_percentile_panel(
 
 
 def _split_cell_value(label: str, value: Any) -> str:
-    if label in {"BA", "OBP", "SLG", "OPS", "BAbip"}:
+    if label in {"BA", "AVG", "OBP", "SLG", "OPS", "BAbip"}:
         return _format_rate(value)
     if label == "ERA":
         number = _parse_number(value)
@@ -4108,161 +3795,310 @@ def _split_cell_value(label: str, value: Any) -> str:
     return _format_count(value)
 
 
-def _split_group_table(
-    frame: pd.DataFrame,
+def _espn_splits_labels(payload: dict[str, Any]) -> list[str]:
+    return [str(label) for label in (payload.get("labels") or []) if label]
+
+
+def _espn_split_stat_value(
+    stats: list[Any],
+    labels: list[str],
+    column: str,
+) -> Any:
+    sources = _ESPN_SPLIT_COLUMN_SOURCES.get(column, (column,))
+    for source in sources:
+        if source not in labels:
+            continue
+        index = labels.index(source)
+        if index < len(stats):
+            return stats[index]
+    return None
+
+
+def _espn_split_available_columns(
+    labels: list[str],
+    columns: tuple[str, ...],
+) -> tuple[str, ...]:
+    available: list[str] = []
+    for column in columns:
+        sources = _ESPN_SPLIT_COLUMN_SOURCES.get(column, (column,))
+        if any(source in labels for source in sources):
+            available.append(column)
+    return tuple(available)
+
+
+def _espn_split_category(payload: dict[str, Any], name: str) -> dict[str, Any] | None:
+    for category in payload.get("splitCategories") or []:
+        if category.get("name") == name:
+            return category
+    return None
+
+
+def _espn_splits_has_data(payload: dict[str, Any]) -> bool:
+    for category in payload.get("splitCategories") or []:
+        if category.get("name") == "split":
+            continue
+        if category.get("splits"):
+            return True
+    return False
+
+
+def _fetch_espn_splits_payload(
+    player_id: str,
     *,
-    split_type: str,
+    season_year: int,
+    pitching: bool,
+) -> tuple[dict[str, Any], str] | None:
+    cache_key = f"{player_id}:{season_year}:{'pitch' if pitching else 'bat'}"
+    cached = _espn_splits_payload_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+        return cached[1]
+
+    categories = ("pitching", "batting") if pitching else ("batting",)
+    result: tuple[dict[str, Any], str] | None = None
+    url = ESPN_ATHLETE_SPLITS_URL.format(player_id=player_id)
+    for category in categories:
+        try:
+            response = requests.get(
+                url,
+                params={"season": str(season_year), "category": category},
+                timeout=15,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except Exception:
+            continue
+        if _espn_splits_has_data(payload):
+            result = (payload, category)
+            break
+
+    _espn_splits_payload_cache[cache_key] = (now, result)
+    return result
+
+
+def _espn_split_group(
+    payload: dict[str, Any],
+    *,
+    category_name: str,
+    title: str,
     row_names: tuple[str, ...] | None,
     columns: tuple[str, ...],
+    row_filter: Any | None = None,
 ) -> dict[str, Any] | None:
-    if frame is None or frame.empty:
-        return None
-    if split_type not in frame.index.get_level_values("Split Type"):
-        return None
-
-    section = frame.loc[split_type]
-    if section.empty:
+    category = _espn_split_category(payload, category_name)
+    if not category:
         return None
 
-    available_columns = [col for col in columns if col in section.columns]
+    labels = _espn_splits_labels(payload)
+    available_columns = _espn_split_available_columns(labels, columns)
     if not available_columns:
         return None
 
+    splits = category.get("splits") or []
+    split_by_name = {
+        str(split.get("displayName") or ""): split
+        for split in splits
+        if split.get("displayName")
+    }
+    candidate_names = list(row_names) if row_names else list(split_by_name.keys())
     rows: list[dict[str, Any]] = []
-    names = list(row_names) if row_names else list(section.index)
-    for name in names:
-        if name not in section.index:
+    for name in candidate_names:
+        if row_filter is not None and not row_filter(name):
             continue
-        row = section.loc[name]
+        split = split_by_name.get(name)
+        if not split:
+            continue
+        stats = split.get("stats") or []
         rows.append({
-            "label": str(name),
+            "label": name,
             "cells": [
-                {"label": col, "value": _split_cell_value(col, row.get(col))}
-                for col in available_columns
+                {
+                    "label": column,
+                    "value": _split_cell_value(
+                        column,
+                        _espn_split_stat_value(stats, labels, column),
+                    ),
+                }
+                for column in available_columns
             ],
         })
 
-    if not rows and row_names is None:
-        for name, row in section.iterrows():
-            rows.append({
-                "label": str(name),
-                "cells": [
-                    {"label": col, "value": _split_cell_value(col, row.get(col))}
-                    for col in available_columns
-                ],
-            })
-
     if not rows:
         return None
-
     return {
-        "title": split_type.replace(" -- Game-Level", ""),
+        "title": title,
         "columns": available_columns,
         "rows": rows,
     }
 
 
-def _build_split_view(
-    main_splits: pd.DataFrame | None,
-    level_splits: pd.DataFrame | None,
+def _espn_month_split_group(
+    payload: dict[str, Any],
     *,
-    main_specs: tuple[tuple[str, tuple[str, ...] | None], ...] = (),
-    level_specs: tuple[tuple[str, tuple[str, ...] | None], ...] = (),
     columns: tuple[str, ...],
-) -> list[dict[str, Any]]:
-    groups: list[dict[str, Any]] = []
-    for split_type, row_names in main_specs:
-        if main_splits is None:
-            continue
-        group = _split_group_table(
-            main_splits,
-            split_type=split_type,
-            row_names=row_names,
-            columns=columns,
-        )
-        if group:
-            groups.append(group)
-    for split_type, row_names in level_specs:
-        if level_splits is None:
-            continue
-        group = _split_group_table(
-            level_splits,
-            split_type=split_type,
-            row_names=row_names,
-            columns=columns,
-        )
-        if group:
-            groups.append(group)
-    return groups
+) -> dict[str, Any] | None:
+    return _espn_split_group(
+        payload,
+        category_name="byDayMonth",
+        title="Months",
+        row_names=None,
+        columns=columns,
+        row_filter=lambda name: name in _ESPN_SPLIT_MONTH_NAMES,
+    )
 
 
-def _fetch_splits_panels(
-    bbref_id: str,
+def _fetch_espn_splits_panels(
+    player_id: str,
     *,
     pitching: bool,
     season_year: int,
 ) -> dict[str, Any]:
     empty_view = {"id": "regular", "label": "Regular", "groups": []}
     empty_advanced = {"id": "advanced", "label": "Advanced", "groups": []}
-    try:
-        result = get_splits(bbref_id, season_year, pitching_splits=pitching)
-        if pitching:
-            main_splits = _normalize_splits_df(result)
-            level_splits = result[1] if isinstance(result, tuple) and len(result) > 1 else None
-        else:
-            main_splits = _normalize_splits_df(result)
-            level_splits = None
-    except Exception:
-        return {
-            "id": "splits",
-            "label": "Splits",
-            "panel_kind": "toggle_splits",
-            "default_view": "regular",
-            "views": [empty_view, empty_advanced],
-        }
+    empty_panel = {
+        "id": "splits",
+        "label": "Splits",
+        "panel_kind": "toggle_splits",
+        "default_view": "regular",
+        "views": [empty_view, empty_advanced],
+    }
 
-    if pitching:
-        regular_groups = _build_split_view(
-            main_splits,
-            None,
-            main_specs=_PITCHING_SPLIT_REGULAR_MAIN,
-            columns=_PITCHING_SPLIT_OPPONENT_COLUMNS,
-        )
-        regular_groups.extend(
-            _build_split_view(
-                None,
-                level_splits,
-                level_specs=_PITCHING_SPLIT_REGULAR_LEVEL,
-                columns=_PITCHING_SPLIT_LEVEL_REGULAR_COLUMNS,
+    fetched = _fetch_espn_splits_payload(
+        player_id,
+        season_year=season_year,
+        pitching=pitching,
+    )
+    if not fetched:
+        return empty_panel
+
+    payload, espn_category = fetched
+    opponent_mode = pitching and espn_category == "batting"
+
+    if opponent_mode:
+        regular_columns = _PITCHING_SPLIT_OPPONENT_COLUMNS
+        advanced_columns = _PITCHING_SPLIT_OPPONENT_COLUMNS
+        regular_groups = [
+            group
+            for group in (
+                _espn_split_group(
+                    payload,
+                    category_name="byBreakdown",
+                    title="Platoon Splits",
+                    row_names=("vs. Left", "vs. Right"),
+                    columns=regular_columns,
+                ),
+                _espn_split_group(
+                    payload,
+                    category_name="byBreakdown",
+                    title="Home or Away",
+                    row_names=("Home", "Away"),
+                    columns=regular_columns,
+                ),
+                _espn_month_split_group(payload, columns=regular_columns),
             )
-        )
-        advanced_groups = _build_split_view(
-            main_splits,
-            None,
-            main_specs=_PITCHING_SPLIT_ADVANCED_MAIN,
-            columns=_PITCHING_SPLIT_OPPONENT_COLUMNS,
-        )
-        advanced_groups.extend(
-            _build_split_view(
-                None,
-                level_splits,
-                level_specs=_PITCHING_SPLIT_ADVANCED_LEVEL,
-                columns=_PITCHING_SPLIT_LEVEL_ADVANCED_COLUMNS,
+            if group
+        ]
+        advanced_groups = [
+            group
+            for group in (
+                _espn_split_group(
+                    payload,
+                    category_name="bySituation",
+                    title="Situation",
+                    row_names=None,
+                    columns=advanced_columns,
+                ),
+                _espn_split_group(
+                    payload,
+                    category_name="byCount",
+                    title="Count",
+                    row_names=None,
+                    columns=advanced_columns,
+                ),
             )
-        )
+            if group
+        ]
+    elif pitching:
+        regular_columns = _PITCHING_SPLIT_LEVEL_REGULAR_COLUMNS
+        advanced_columns = _PITCHING_SPLIT_LEVEL_ADVANCED_COLUMNS
+        regular_groups = [
+            group
+            for group in (
+                _espn_split_group(
+                    payload,
+                    category_name="byBreakdown",
+                    title="Home or Away",
+                    row_names=("Home", "Away"),
+                    columns=regular_columns,
+                ),
+                _espn_month_split_group(payload, columns=regular_columns),
+            )
+            if group
+        ]
+        advanced_groups = [
+            group
+            for group in (
+                _espn_split_group(
+                    payload,
+                    category_name="bySituation",
+                    title="Situation",
+                    row_names=None,
+                    columns=advanced_columns,
+                ),
+                _espn_split_group(
+                    payload,
+                    category_name="byCount",
+                    title="Count",
+                    row_names=None,
+                    columns=advanced_columns,
+                ),
+            )
+            if group
+        ]
     else:
-        regular_groups = _build_split_view(
-            main_splits,
-            None,
-            main_specs=_BATTING_SPLIT_REGULAR,
-            columns=_BATTING_SPLIT_REGULAR_COLUMNS,
-        )
-        advanced_groups = _build_split_view(
-            main_splits,
-            None,
-            main_specs=_BATTING_SPLIT_ADVANCED,
-            columns=_BATTING_SPLIT_ADVANCED_COLUMNS,
-        )
+        regular_columns = _BATTING_SPLIT_REGULAR_COLUMNS
+        advanced_columns = _BATTING_SPLIT_ADVANCED_COLUMNS
+        regular_groups = [
+            group
+            for group in (
+                _espn_split_group(
+                    payload,
+                    category_name="byBreakdown",
+                    title="Platoon Splits",
+                    row_names=("vs. Left", "vs. Right"),
+                    columns=regular_columns,
+                ),
+                _espn_split_group(
+                    payload,
+                    category_name="byBreakdown",
+                    title="Home or Away",
+                    row_names=("Home", "Away"),
+                    columns=regular_columns,
+                ),
+                _espn_month_split_group(payload, columns=regular_columns),
+            )
+            if group
+        ]
+        advanced_groups = [
+            group
+            for group in (
+                _espn_split_group(
+                    payload,
+                    category_name="bySituation",
+                    title="Situation",
+                    row_names=None,
+                    columns=advanced_columns,
+                ),
+                _espn_split_group(
+                    payload,
+                    category_name="byCount",
+                    title="Count",
+                    row_names=None,
+                    columns=advanced_columns,
+                ),
+            )
+            if group
+        ]
 
     return {
         "id": "splits",
@@ -4369,19 +4205,6 @@ def _empty_player_stats_panel(*, pitching: bool, season_year: int) -> dict[str, 
                 "label": "Season Stats",
                 "stats_table": _empty_stats_table(column_labels, season_year),
             },
-        ],
-    }
-
-
-def _empty_splits_panel() -> dict[str, Any]:
-    return {
-        "id": "splits",
-        "label": "Splits",
-        "panel_kind": "toggle_splits",
-        "default_view": "regular",
-        "views": [
-            {"id": "regular", "label": "Regular", "groups": []},
-            {"id": "advanced", "label": "Advanced", "groups": []},
         ],
     }
 
@@ -4767,36 +4590,6 @@ def fetch_player_season_stats_view(
     return view
 
 
-def fetch_player_visual_stat_panel(
-    player_id: str,
-    *,
-    player_name: str,
-    position: str | None,
-    season_year: str | int | None = None,
-) -> dict[str, Any] | None:
-    if not player_id:
-        return None
-
-    year = _resolve_panel_year(season_year)
-    pitching = is_pitcher_position(position)
-    kind = "pitching" if pitching else "batting"
-    cache_key = f"{player_id}:{year}:{kind}:visual:v2"
-    cached = _player_visual_panel_cache.get(cache_key)
-    now = time.time()
-    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
-        return cached[1]
-
-    player_record = _lookup_player_record(player_name) if player_name else None
-    mlbam_id = (player_record or {}).get("mlbam_id")
-    panel = (
-        _fetch_pitch_mix_panel(mlbam_id=mlbam_id, season_year=year)
-        if pitching
-        else _fetch_spray_chart_panel(mlbam_id=mlbam_id, season_year=year)
-    )
-    _player_visual_panel_cache[cache_key] = (now, panel)
-    return panel
-
-
 def fetch_player_percentile_stat_panel(
     player_id: str,
     *,
@@ -4845,18 +4638,16 @@ def fetch_player_splits_stat_panel(
     year = _resolve_panel_year(season_year)
     pitching = is_pitcher_position(position)
     kind = "pitching" if pitching else "batting"
-    cache_key = f"{player_id}:{year}:{kind}:splits:v1"
+    cache_key = f"{player_id}:{year}:{kind}:splits:v2"
     cached = _player_splits_panel_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
         return cached[1]
 
-    player_record = _lookup_player_record(player_name) if player_name else None
-    bbref_id = (player_record or {}).get("bbref_id")
-    panel = (
-        _fetch_splits_panels(bbref_id, pitching=pitching, season_year=year)
-        if bbref_id
-        else _empty_splits_panel()
+    panel = _fetch_espn_splits_panels(
+        player_id,
+        pitching=pitching,
+        season_year=year,
     )
     _player_splits_panel_cache[cache_key] = (now, panel)
     return panel
@@ -4888,14 +4679,6 @@ def fetch_player_stat_panels(
         position=position,
         season_year=year,
     ))
-    visual_panel = fetch_player_visual_stat_panel(
-        player_id,
-        player_name=player_name,
-        position=position,
-        season_year=year,
-    )
-    if visual_panel:
-        panels.append(visual_panel)
     percentile_panel = fetch_player_percentile_stat_panel(
         player_id,
         player_name=player_name,
