@@ -37,8 +37,13 @@
 
     <p class="probable-pitchers-matchup__label">Season Statistics</p>
 
-    <div id="game-probable-pitchers-stats-mount" class="game-preview-panel-mount" aria-busy="true">
+    {% set has_probable_season_stats = (away_pitcher and away_pitcher.season_stats) or (home_pitcher and home_pitcher.season_stats) %}
+    <div id="game-probable-pitchers-stats-mount" class="game-preview-panel-mount" aria-busy="{{ 'false' if has_probable_season_stats else 'true' }}"{% if has_probable_season_stats %} data-probable-stats-ready="true"{% endif %}>
+      {% if has_probable_season_stats %}
+      {% include 'partials/game_probable_pitchers_stats.html' %}
+      {% else %}
       {% include 'partials/game_preview_loading.html' %}
+      {% endif %}
     </div>
   </div>
   {% endif %}

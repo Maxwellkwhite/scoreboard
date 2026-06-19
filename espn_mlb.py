@@ -428,6 +428,8 @@ def _probable_stat_categories(statistics: Any) -> list[dict[str, Any]]:
 
 
 _SKIP_PROBABLE_STAT_KEYS = frozenset({"HT", "HEIGHT", "HGT", "H"})
+_PROBABLE_SEASON_CELL_KEYS = ("IP", "G", "GS", "SO", "BB", "W", "L", "ERA", "WHIP", "HR")
+_PROBABLE_SEASON_CORE_KEYS = ("ERA", "IP", "WHIP", "SO", "W", "L", "G", "GS")
 
 
 def _parse_probable(competitor: dict[str, Any]) -> dict[str, Any] | None:
@@ -460,7 +462,7 @@ def _parse_probable(competitor: dict[str, Any]) -> dict[str, Any] | None:
         ):
             throws_display = None
         stats = _normalize_probable_pitcher_stats(stats)
-        return {
+        pitcher = {
             "id": _athlete_id(athlete),
             "name": athlete.get("displayName", ""),
             "headshot": headshot_href,
@@ -468,6 +470,8 @@ def _parse_probable(competitor: dict[str, Any]) -> dict[str, Any] | None:
             "throws": throws_display,
             "stats": stats,
         }
+        _apply_probable_season_stats_from_summary(pitcher)
+        return pitcher
     return None
 
 
@@ -1541,7 +1545,54 @@ def _normalize_probable_pitcher_stats(stats: dict[str, str]) -> dict[str, str]:
     strikeouts = normalized.get("SO") or normalized.get("K")
     if strikeouts and not normalized.get("SO"):
         normalized["SO"] = strikeouts
+    games = normalized.get("G") or normalized.get("GP")
+    if games and not normalized.get("G"):
+        normalized["G"] = games
     return normalized
+
+
+def _probable_pitcher_cells_from_summary_stats(stats: dict[str, str]) -> dict[str, str]:
+    summary = _normalize_probable_pitcher_stats(stats or {})
+    cells: dict[str, str] = {}
+    aliases = {
+        "G": ("GP",),
+        "SO": ("K",),
+    }
+    for key in _PROBABLE_SEASON_CELL_KEYS:
+        value = summary.get(key)
+        if value in (None, "", "—"):
+            for alias in aliases.get(key, ()):
+                value = summary.get(alias)
+                if value not in (None, "", "—"):
+                    break
+        if value not in (None, "", "—"):
+            cells[key] = str(value)
+    return cells
+
+
+def _probable_summary_stats_sufficient(cells: dict[str, str]) -> bool:
+    filled = sum(
+        1
+        for key in _PROBABLE_SEASON_CORE_KEYS
+        if cells.get(key) not in (None, "", "—")
+    )
+    return filled >= 2
+
+
+def _probable_pitcher_season_stats_from_cells(cells: dict[str, str]) -> dict[str, Any] | None:
+    if not cells:
+        return None
+    return {
+        "columns": list(cells.keys()),
+        "cells": cells,
+    }
+
+
+def _apply_probable_season_stats_from_summary(pitcher: dict[str, Any]) -> None:
+    cells = _probable_pitcher_cells_from_summary_stats(pitcher.get("stats") or {})
+    season_stats = _probable_pitcher_season_stats_from_cells(cells)
+    if season_stats:
+        pitcher["season_stats"] = season_stats
 
 
 def _probable_pitcher_cells_from_espn_categories(
@@ -1611,21 +1662,21 @@ def parse_innings_stat_value(value: Any) -> float | None:
 
 def _enrich_probable_pitcher_season_stats(pitcher: dict[str, Any]) -> None:
     player_id = pitcher.get("id")
-    if not player_id:
-        return
+    summary_stats = pitcher.get("stats") or {}
+    cells = _probable_pitcher_cells_from_summary_stats(summary_stats)
 
-    from datetime import date
+    if not _probable_summary_stats_sufficient(cells) and player_id:
+        from datetime import date
 
-    year = date.today().year
-    cells = _probable_pitcher_cells_from_espn_categories(str(player_id), year)
-    cells = _merge_probable_pitcher_cells(cells, pitcher.get("stats") or {})
-    if not cells:
-        return
+        year = date.today().year
+        espn_cells = _probable_pitcher_cells_from_espn_categories(str(player_id), year)
+        cells = _merge_probable_pitcher_cells(espn_cells, summary_stats)
+    else:
+        cells = _merge_probable_pitcher_cells(cells, summary_stats)
 
-    pitcher["season_stats"] = {
-        "columns": list(cells.keys()),
-        "cells": cells,
-    }
+    season_stats = _probable_pitcher_season_stats_from_cells(cells)
+    if season_stats:
+        pitcher["season_stats"] = season_stats
 
 
 def _enrich_probable_pitchers(game: dict[str, Any]) -> None:

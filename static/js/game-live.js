@@ -1372,21 +1372,24 @@
   function loadPreviewPanels() {
     if (initialStatus !== 'pre') return;
 
-    fetch(apiUrl + '/preview/pitchers')
-      .then(function (response) {
-        if (!response.ok) throw new Error('Pitcher preview unavailable');
-        return response.json();
-      })
-      .then(function (data) {
-        fulfillPreviewMount(
-          'game-probable-pitchers-stats-mount',
-          data.probable_stats_html,
-          'Season stats'
-        );
-      })
-      .catch(function () {
-        fulfillPreviewMount('game-probable-pitchers-stats-mount', '', 'Season stats');
-      });
+    var pitchersMount = document.getElementById('game-probable-pitchers-stats-mount');
+    if (!pitchersMount || pitchersMount.getAttribute('data-probable-stats-ready') !== 'true') {
+      fetch(apiUrl + '/preview/pitchers')
+        .then(function (response) {
+          if (!response.ok) throw new Error('Pitcher preview unavailable');
+          return response.json();
+        })
+        .then(function (data) {
+          fulfillPreviewMount(
+            'game-probable-pitchers-stats-mount',
+            data.probable_stats_html,
+            'Season stats'
+          );
+        })
+        .catch(function () {
+          fulfillPreviewMount('game-probable-pitchers-stats-mount', '', 'Season stats');
+        });
+    }
 
     fetch(apiUrl + '/preview/team-stats')
       .then(function (response) {
