@@ -77,11 +77,6 @@ SUPPORT_EMAIL = os.environ.get('SUPPORT_EMAIL', 'support@example.com')
 def _is_production_env() -> bool:
     return os.environ.get('APP_ENV', '').strip().upper() == 'PROD'
 
-
-def _require_world_cup():
-    if _is_production_env():
-        abort(404)
-
 #done on max@emailsconfirmed.com
 #os.environ.get('DOMAIN', 'http://127.0.0.1:5002')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
@@ -416,7 +411,6 @@ def home_page():
 
 @app.route('/world-cup', methods=['GET'], endpoint='world_cup_scoreboard')
 def world_cup_scoreboard():
-    _require_world_cup()
     from espn_world_cup import fetch_standings, scoreboard_snapshot
 
     snapshot = scoreboard_snapshot()
@@ -435,7 +429,6 @@ def world_cup_scoreboard():
 
 @app.route('/api/world-cup/scoreboard', methods=['GET'], endpoint='api_world_cup_scoreboard')
 def api_world_cup_scoreboard():
-    _require_world_cup()
     from espn_world_cup import fetch_scoreboard
 
     date_param = request.args.get('date')
@@ -460,7 +453,6 @@ def api_world_cup_scoreboard():
     endpoint='api_world_cup_scoreboard_today',
 )
 def api_world_cup_scoreboard_today():
-    _require_world_cup()
     from espn_world_cup import fetch_scoreboard
 
     today = date.today()
@@ -474,7 +466,6 @@ def api_world_cup_scoreboard_today():
 
 @app.route('/world-cup/match/<match_id>', methods=['GET'], endpoint='world_cup_match_page')
 def world_cup_match_page(match_id):
-    _require_world_cup()
     from espn_world_cup import fetch_match_summary
 
     try:
