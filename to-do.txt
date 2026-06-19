@@ -4,6 +4,3 @@ Individual Game page:
 Player pages
 - advanced stats add helper for player prototype
 - 2 pitching stats missing averages
-
-Game preview
-- Loading pages incredibly slow

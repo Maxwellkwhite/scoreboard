@@ -128,8 +128,6 @@ _PITCHING_DETAIL_SPECS = (
     ("earnedRuns", "ER"),
     ("homeRuns", "HR"),
     ("strikeoutsPerNineInnings", "K/9"),
-    ("opponentAvg", "OPP AVG"),
-    ("qualityStarts", "QS"),
 )
 _FIELDING_DETAIL_SPECS = (
     ("fieldingPct", "FLD%"),
