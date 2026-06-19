@@ -2,6 +2,8 @@ Individual Game page:
 - Connection to ticket sales for upcoming games would be cool
 
 Player pages
-- Splits page simple
-- percentile rankings simple
 - advanced stats add helper for player prototype
+- 2 pitching stats missing averages
+
+Game preview
+- Loading pages incredibly slow

@@ -85,14 +85,8 @@ def _save_store(store: dict[str, Any]) -> None:
     logger.info("Wrote team league cache to %s (%d bytes)", _MASTER_CACHE_PATH, len(encoded))
 
 
-def _season_needs_refresh(season_year: int, entry: dict[str, Any] | None, cache_date: str) -> bool:
-    if entry is None or not _payload_has_data(entry):
-        return True
-    if season_year < date.today().year:
-        return False
-    if season_year > date.today().year:
-        return False
-    return entry.get("date") != cache_date
+def _season_needs_refresh(entry: dict[str, Any] | None) -> bool:
+    return entry is None or not _payload_has_data(entry)
 
 
 def _try_acquire_build_lock() -> bool:
@@ -118,21 +112,19 @@ def _release_build_lock() -> None:
         pass
 
 
-def _wait_for_store_season(season_year: int, cache_date: str) -> dict[str, Any] | None:
+def _wait_for_store_season(season_year: int) -> dict[str, Any] | None:
     deadline = time.time() + _BUILD_WAIT_SECONDS
     key = str(season_year)
     while time.time() < deadline:
         entry = (_load_store().get("seasons") or {}).get(key)
         if entry is not None and _payload_has_data(entry):
-            if not _season_needs_refresh(season_year, entry, cache_date):
-                return entry
+            return entry
         if not _MASTER_LOCK_PATH.exists():
             return None
         time.sleep(_BUILD_POLL_SECONDS)
     entry = (_load_store().get("seasons") or {}).get(key)
     if entry is not None and _payload_has_data(entry):
-        if not _season_needs_refresh(season_year, entry, cache_date):
-            return entry
+        return entry
     logger.warning(
         "Timed out waiting for team league cache season %s in %s",
         season_year,
@@ -188,17 +180,22 @@ def _build_season_entry(season_year: int, cache_date: str) -> dict[str, Any]:
     return payload
 
 
-def _ensure_season_entry(season_year: int, cache_date: str) -> dict[str, Any]:
+def _ensure_season_entry(
+    season_year: int,
+    cache_date: str,
+    *,
+    force_rebuild: bool = False,
+) -> dict[str, Any]:
     key = str(season_year)
     store = _load_store()
     seasons = store.setdefault("seasons", {})
     entry = seasons.get(key)
 
-    if not _season_needs_refresh(season_year, entry, cache_date):
+    if not force_rebuild and not _season_needs_refresh(entry):
         return entry
 
     if not _try_acquire_build_lock():
-        waited = _wait_for_store_season(season_year, cache_date)
+        waited = _wait_for_store_season(season_year)
         if waited is not None:
             return waited
         raise RuntimeError(f"Another worker is building team league cache at {_MASTER_CACHE_PATH}")
@@ -207,7 +204,7 @@ def _ensure_season_entry(season_year: int, cache_date: str) -> dict[str, Any]:
         store = _load_store()
         seasons = store.setdefault("seasons", {})
         entry = seasons.get(key)
-        if not _season_needs_refresh(season_year, entry, cache_date):
+        if not force_rebuild and not _season_needs_refresh(entry):
             return entry
 
         entry = _build_season_entry(season_year, cache_date)
@@ -218,21 +215,23 @@ def _ensure_season_entry(season_year: int, cache_date: str) -> dict[str, Any]:
         _release_build_lock()
 
 
-def _read_season_entry(season_year: int, cache_date: str) -> dict[str, Any] | None:
-    """Return a cached season entry without triggering an ESPN build."""
+def _read_season_entry(season_year: int) -> dict[str, Any] | None:
+    """Return the latest cached season entry without triggering a build."""
     key = str(season_year)
     entry = (_load_store().get("seasons") or {}).get(key)
     if entry is None or not _payload_has_data(entry):
-        return None
-    if _season_needs_refresh(season_year, entry, cache_date):
         return None
     return entry
 
 
 def warm_league_team_cache_for_today(season_year: int | None = None) -> bool:
-    """Refresh the current season in the master cache if today's data is missing."""
+    """Rebuild the current season cache on app startup (e.g. after deploy)."""
     year = season_year or date.today().year
-    result = get_league_team_stats_by_category(year, allow_build=True)
+    result = get_league_team_stats_by_category(
+        year,
+        allow_build=True,
+        force_rebuild=True,
+    )
     has_data = any((result.get(category) or {}) for category in ("batting", "pitching", "fielding"))
     if has_data:
         logger.info("Team league cache ready for season %s", year)
@@ -246,23 +245,18 @@ def get_league_team_stats_by_category(
     *,
     cache_date: str | None = None,
     allow_build: bool = False,
+    force_rebuild: bool = False,
 ) -> dict[str, dict[str, list[float]]]:
     """All-30-team ESPN stat distributions for team stat-bar comparisons.
 
     All seasons live in data/league_team_averages/league_team_averages.json.
-    The current calendar year is refreshed once per day; older seasons are built
-    only when missing and then kept permanently.
-
-    Web requests should use the default ``allow_build=False`` and rely on the app
-    startup warm-up (or a pre-built JSON file). Only background warm-up/build
-    jobs should pass ``allow_build=True``.
+    Web requests read the most recent cached pull (``allow_build=False``).
+    Startup warm-up rebuilds the current season on each deploy
+    (``allow_build=True``, ``force_rebuild=True``). Missing past seasons are
+    built once when explicitly requested with ``allow_build=True``.
     """
     cache_date = cache_date or date.today().isoformat()
-    mem_key = (
-        f"{season_year}:{cache_date}"
-        if season_year == date.today().year
-        else str(season_year)
-    )
+    mem_key = str(season_year)
     cached = _memory_cache.get(mem_key)
     now = time.time()
     if cached and now - cached[0] < _MEMORY_TTL_SECONDS:
@@ -271,9 +265,13 @@ def get_league_team_stats_by_category(
     empty = {"batting": {}, "pitching": {}, "fielding": {}}
     try:
         if allow_build:
-            entry = _ensure_season_entry(season_year, cache_date)
+            entry = _ensure_season_entry(
+                season_year,
+                cache_date,
+                force_rebuild=force_rebuild,
+            )
         else:
-            entry = _read_season_entry(season_year, cache_date)
+            entry = _read_season_entry(season_year)
             if entry is None:
                 return empty
         result = _league_stats_from_payload(entry)
