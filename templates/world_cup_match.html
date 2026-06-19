@@ -3,58 +3,111 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ game.name }} — World Cup</title>
+  <title>{{ game.away.abbr }} @ {{ game.home.abbr }} — World Cup</title>
   {% include "partials/scoreboard_head_icons.html" %}
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/scoreboard.css') }}">
 </head>
-<body class="scoreboard-page game-preview-page">
+<body class="scoreboard-page game-live-page{% if game.status_state == 'pre' %} game-preview-page{% endif %}" data-game-api="/api/world-cup/match/{{ game.id }}" data-game-status="{{ game.status_state }}">
   {% include "partials/desktop_only_gate.html" %}
   {% include "partials/scoreboard_nav.html" %}
 
   <main class="scoreboard-main game-detail-main">
-    <p class="game-detail-back">
-      <a href="{{ url_for('world_cup_scoreboard') }}">&larr; World Cup scoreboard</a>
-    </p>
+    {% include "partials/world_cup_live_strip.html" %}
 
     <header class="game-detail-header">
-      <p class="game-detail-kicker">
-        {% if game.status_state == 'pre' %}Match Preview
-        {% elif game.status_state == 'in' %}Live Match
-        {% else %}Match Summary{% endif %}
-      </p>
-      <h1>{{ game.away.abbr }} @ {{ game.home.abbr }}</h1>
-      <p class="game-detail-start">
-        <span class="status-pill status-pill--{{ game.status_state }}"{% if game.start_time %} data-start-time="{{ game.start_time }}"{% endif %}>{{ game.status_detail }}</span>
-      </p>
+      <p class="game-detail-kicker">{% if game.status_state == 'pre' %}Match Preview{% elif game.status_state == 'in' %}Live Match{% else %}Match Summary{% endif %}</p>
     </header>
 
-    <section class="game-detail-matchup">
-      <div class="matchup-team">
-        {% if game.away.logo %}
-        <img src="{{ game.away.logo }}" alt="" class="matchup-logo" width="72" height="72">
-        {% endif %}
-        <h2>{{ game.away.name }}</h2>
-        {% if game.away.record %}<p class="matchup-record">{{ game.away.record }}</p>{% endif %}
-        {% if game.status_state != 'pre' and game.away.score is not none %}
-        <p class="matchup-score">{{ game.away.score }}</p>
-        {% endif %}
-      </div>
-      <div class="matchup-vs">@</div>
-      <div class="matchup-team">
-        {% if game.home.logo %}
-        <img src="{{ game.home.logo }}" alt="" class="matchup-logo" width="72" height="72">
-        {% endif %}
-        <h2>{{ game.home.name }}</h2>
-        {% if game.home.record %}<p class="matchup-record">{{ game.home.record }}</p>{% endif %}
-        {% if game.status_state != 'pre' and game.home.score is not none %}
-        <p class="matchup-score">{{ game.home.score }}</p>
-        {% endif %}
-      </div>
-    </section>
+    {% set is_pre = game.status_state == 'pre' %}
+    {% set has_match_info = game.preview.venue or game.preview.broadcasts or game.preview.spread is not none or game.preview.over_under is not none or game.preview.away_moneyline or game.preview.home_moneyline or game.preview.draw_moneyline or game.preview.venue_image %}
+    {% set has_last_five = game.preview.last_five %}
+    {% set has_head_to_head = game.preview.head_to_head %}
+    {% set has_group_standings = game.preview.group_standings %}
 
-    <section class="game-detail-section game-detail-facts">
+    <div class="game-hero-layout game-hero-layout--solo">
+      <section class="game-card game-card--{{ game.status_state }} game-detail-hero" id="game-matchup">
+        <div class="game-card-status">
+          <span id="game-status-pill" class="status-pill status-pill--{{ game.status_state }}"{% if is_pre and game.start_time %} data-start-time="{{ game.start_time }}"{% endif %}>{{ game.status_detail }}</span>
+        </div>
+
+        {% set has_winner = game.away.winner or game.home.winner %}
+        <div class="game-detail-hero-main">
+          <div class="game-detail-matchup-row{% if is_pre %} game-detail-matchup-row--no-scores{% endif %}">
+            <div id="game-team-away" class="game-card-team game-card-team--away game-detail-matchup-team game-detail-matchup-team--away{% if game.away.winner %} game-card-team--winner{% elif game.status_state == 'post' and has_winner %} game-card-team--loser{% endif %}" style="--team-color: {{ game.away.win_color or game.away.color or '#1a2332' }};">
+              <div class="game-detail-matchup-team-mark">
+                {% if game.away.logo %}
+                <img class="game-card-logo" src="{{ game.away.logo }}" alt="" width="48" height="48" loading="lazy">
+                {% else %}
+                <div class="game-card-logo game-card-logo--placeholder">{{ game.away.abbr }}</div>
+                {% endif %}
+              </div>
+              <div class="game-card-team-meta">
+                <span class="game-card-abbr">{{ game.away.abbr }}</span>
+                <span class="game-card-name">{{ game.away.short_name or game.away.name }}</span>
+                {% if game.away.record %}<span class="game-card-record">{{ game.away.record }}</span>{% endif %}
+              </div>
+            </div>
+
+            {% if not is_pre %}
+            <div class="game-detail-matchup-scores">
+              <div class="game-detail-matchup-score game-detail-matchup-score--away" style="--team-color: {{ game.away.win_color or game.away.color or '#1a2332' }};">
+                <span class="game-card-score" id="game-away-score">{{ game.away.score if game.away.score is not none else '0' }}</span>
+              </div>
+              <span class="game-detail-matchup-score-sep" aria-hidden="true">–</span>
+              <div class="game-detail-matchup-score game-detail-matchup-score--home" style="--team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};">
+                <span class="game-card-score" id="game-home-score">{{ game.home.score if game.home.score is not none else '0' }}</span>
+              </div>
+            </div>
+            {% endif %}
+
+            <div id="game-team-home" class="game-card-team game-card-team--home game-detail-matchup-team game-detail-matchup-team--home{% if game.home.winner %} game-card-team--winner{% elif game.status_state == 'post' and has_winner %} game-card-team--loser{% endif %}" style="--team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};">
+              <div class="game-card-team-meta">
+                <span class="game-card-abbr">{{ game.home.abbr }}</span>
+                <span class="game-card-name">{{ game.home.short_name or game.home.name }}</span>
+                {% if game.home.record %}<span class="game-card-record">{{ game.home.record }}</span>{% endif %}
+              </div>
+              <div class="game-detail-matchup-team-mark">
+                {% if game.home.logo %}
+                <img class="game-card-logo" src="{{ game.home.logo }}" alt="" width="48" height="48" loading="lazy">
+                {% else %}
+                <div class="game-card-logo game-card-logo--placeholder">{{ game.home.abbr }}</div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    {% set tab_ns = namespace(first=true) %}
+    {% if has_match_info or has_last_five or has_head_to_head or has_group_standings %}
+    <nav class="game-detail-tabs" id="game-detail-tabs" aria-label="Match details">
+      {% if has_match_info %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="match-info" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Match Info</button>
+      {% set tab_ns.first = false %}
+      {% endif %}
+      {% if has_last_five %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="last-five" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Last 5</button>
+      {% set tab_ns.first = false %}
+      {% endif %}
+      {% if has_head_to_head %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="head-to-head" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Head to Head</button>
+      {% set tab_ns.first = false %}
+      {% endif %}
+      {% if has_group_standings %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="group-standings" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Standings</button>
+      {% set tab_ns.first = false %}
+      {% endif %}
+    </nav>
+    {% endif %}
+
+    {% set panel_ns = namespace(first=true) %}
+    {% if has_match_info %}
+    <section class="game-detail-section game-detail-panel game-detail-facts" id="game-match-info-section" data-panel="match-info"{% if not panel_ns.first %} hidden{% endif %}>
+      <h3>Match Information</h3>
+    {% set panel_ns.first = false %}
       {% if game.preview.venue %}
       <div class="fact-item">
         <span class="fact-label">Venue</span>
@@ -86,11 +139,18 @@
         </span>
       </div>
       {% endif %}
+      {% if game.preview.venue_image %}
+      <div class="game-preview-venue-image-wrap">
+        <img src="{{ game.preview.venue_image }}" alt="{{ game.preview.venue }}" class="venue-image">
+      </div>
+      {% endif %}
     </section>
+    {% endif %}
 
-    {% if game.preview.last_five %}
-    <section class="game-detail-section">
+    {% if has_last_five %}
+    <section class="game-detail-section game-detail-panel" id="game-last-five-section" data-panel="last-five"{% if not panel_ns.first %} hidden{% endif %}>
       <h3>Last 5 Games</h3>
+    {% set panel_ns.first = false %}
       <div class="last-five-grid">
         {% for block in game.preview.last_five %}
         <div class="last-five-block">
@@ -109,9 +169,10 @@
     </section>
     {% endif %}
 
-    {% if game.preview.head_to_head %}
-    <section class="game-detail-section">
+    {% if has_head_to_head %}
+    <section class="game-detail-section game-detail-panel" id="game-head-to-head-section" data-panel="head-to-head"{% if not panel_ns.first %} hidden{% endif %}>
       <h3>Head to Head</h3>
+    {% set panel_ns.first = false %}
       <div class="last-five-grid">
         {% for block in game.preview.head_to_head %}
         <div class="last-five-block">
@@ -131,38 +192,18 @@
     </section>
     {% endif %}
 
-    {% if game.preview.group_standings %}
-    <section class="game-detail-section">
+    {% if has_group_standings %}
+    <section class="game-detail-section game-detail-panel" id="game-group-standings-section" data-panel="group-standings"{% if not panel_ns.first %} hidden{% endif %}>
       <h3>Group Standings</h3>
+    {% set panel_ns.first = false %}
       {% with standings=game.preview.group_standings %}
         {% include "partials/world_cup_standings_panel.html" %}
       {% endwith %}
     </section>
     {% endif %}
 
-    {% if game.preview.venue_image %}
-    <section class="game-detail-section">
-      <img src="{{ game.preview.venue_image }}" alt="{{ game.preview.venue }}" class="venue-image">
-    </section>
-    {% endif %}
   </main>
 
-  <script>
-    (function () {
-      document.querySelectorAll('[data-start-time]').forEach(function (el) {
-        var iso = el.getAttribute('data-start-time');
-        if (!iso) return;
-        var d = new Date(iso);
-        if (isNaN(d.getTime())) return;
-        el.textContent = d.toLocaleString(undefined, {
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit'
-        });
-      });
-    })();
-  </script>
+  <script src="{{ url_for('static', filename='js/world-cup-match.js') }}"></script>
 </body>
 </html>

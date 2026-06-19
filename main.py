@@ -466,18 +466,35 @@ def api_world_cup_scoreboard_today():
 
 @app.route('/world-cup/match/<match_id>', methods=['GET'], endpoint='world_cup_match_page')
 def world_cup_match_page(match_id):
-    from espn_world_cup import fetch_match_summary
+    from espn_world_cup import fetch_match_summary, fetch_scoreboard, strip_initial_page
 
     try:
         match = fetch_match_summary(str(match_id))
     except (requests.RequestException, ValueError):
         abort(404)
 
+    strip_games = fetch_scoreboard(date.today())
     return render_template(
         'world_cup_match.html',
         game=match,
+        strip_games=strip_games,
+        current_game_id=str(match_id),
+        strip_initial_page=strip_initial_page(strip_games, str(match_id)),
         active_sport='world_cup',
     )
+
+
+@app.route('/api/world-cup/match/<match_id>', methods=['GET'], endpoint='api_world_cup_match')
+def api_world_cup_match(match_id):
+    from espn_world_cup import fetch_match_summary, fetch_scoreboard
+
+    try:
+        game = fetch_match_summary(str(match_id), force_refresh=True)
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'match not found'}), 404
+
+    strip_games = fetch_scoreboard(date.today(), force_refresh=True)
+    return jsonify({'game': game, 'strip_games': strip_games})
 
 
 @app.route('/api/mlb/search', methods=['GET'], endpoint='api_mlb_search')

@@ -2,36 +2,42 @@
   {% if standings %}
   <div class="world-cup-standings__grid">
     {% for group in standings %}
-    <section class="standings-division standings-card world-cup-standings__group">
-      <h4 class="standings-division__title">{{ group.name }}</h4>
-      <table class="world-cup-standings__table">
-        <thead>
-          <tr>
-            <th scope="col">Team</th>
-            <th scope="col">GP</th>
-            <th scope="col">W-D-L</th>
-            <th scope="col">GD</th>
-            <th scope="col">Pts</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for team in group.teams %}
-          <tr class="world-cup-standings__row" style="--team-color: {{ team.color or '#1a2332' }};">
-            <td class="world-cup-standings__team">
-              {% if team.logo %}
-              <img class="world-cup-standings__logo" src="{{ team.logo }}" alt="" width="24" height="24" loading="lazy">
-              {% endif %}
-              <span class="world-cup-standings__abbr">{{ team.abbr }}</span>
-              <span class="world-cup-standings__name">{{ team.name }}</span>
-            </td>
-            <td>{{ team.gp or '—' }}</td>
-            <td>{{ team.record or '—' }}</td>
-            <td>{{ team.gd or '—' }}</td>
-            <td class="world-cup-standings__pts">{{ team.pts or '—' }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <section class="world-cup-standings__group">
+      <header class="world-cup-standings__group-header">
+        <h4 class="world-cup-standings__group-title">{{ group.name }}</h4>
+      </header>
+      <div class="world-cup-standings__table-wrap">
+        <table class="world-cup-standings__table">
+          <thead>
+            <tr>
+              <th scope="col" class="world-cup-standings__col-pts">Pts</th>
+              <th scope="col" class="world-cup-standings__col-team">Team</th>
+              <th scope="col" class="world-cup-standings__col-record">W-D-L</th>
+              <th scope="col" class="world-cup-standings__col-gd">GD</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for team in group.teams %}
+            <tr class="world-cup-standings__row" style="--team-color: {{ team.color or '#1a2332' }};">
+              <td class="world-cup-standings__pts">{{ team.pts or '—' }}</td>
+              <td class="world-cup-standings__team">
+                <div class="world-cup-standings__team-inner">
+                  {% if team.logo %}
+                  <img class="world-cup-standings__logo" src="{{ team.logo }}" alt="" width="28" height="28" loading="lazy">
+                  {% else %}
+                  <span class="world-cup-standings__logo world-cup-standings__logo--fallback" aria-hidden="true">{{ team.abbr }}</span>
+                  {% endif %}
+                  <span class="world-cup-standings__abbr">{{ team.abbr }}</span>
+                  <span class="world-cup-standings__name">{{ team.name }}</span>
+                </div>
+              </td>
+              <td class="world-cup-standings__record">{{ team.record or '—' }}</td>
+              <td class="world-cup-standings__gd">{{ team.gd or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </section>
     {% endfor %}
   </div>

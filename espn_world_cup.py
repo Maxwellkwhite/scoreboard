@@ -58,15 +58,27 @@ def _normalize_hex(color: Any) -> str | None:
     return None
 
 
+def _color_luminance(color: str) -> float:
+    red = int(color[1:3], 16)
+    green = int(color[3:5], 16)
+    blue = int(color[5:7], 16)
+    return 0.299 * red + 0.587 * green + 0.114 * blue
+
+
+def _usable_team_color(color: str | None) -> str | None:
+    if not color or color in _WIN_COLOR_SKIP:
+        return None
+    if _color_luminance(color) > 185:
+        return None
+    return color
+
+
 def _team_color(team: dict[str, Any]) -> str | None:
-    return _normalize_hex(team.get("color"))
+    return _usable_team_color(_normalize_hex(team.get("color")))
 
 
 def _team_alternate_color(team: dict[str, Any]) -> str | None:
-    alternate = _normalize_hex(team.get("alternateColor"))
-    if alternate in _WIN_COLOR_SKIP:
-        return None
-    return alternate
+    return _usable_team_color(_normalize_hex(team.get("alternateColor")))
 
 
 def _color_distance(left: str, right: str) -> float:
@@ -99,8 +111,12 @@ def _resolve_win_colors(away: dict[str, Any], home: dict[str, Any]) -> None:
         {"color": home.get("color"), "alternateColor": home.get("alternate_color")}
     )
 
-    away_win = away.get("color") or (away_candidates[0] if away_candidates else "#56b6c6")
-    home_win = home.get("color") or (home_candidates[0] if home_candidates else "#22a06b")
+    away_win = _usable_team_color(away.get("color")) or (
+        away_candidates[0] if away_candidates else "#56b6c6"
+    )
+    home_win = _usable_team_color(home.get("color")) or (
+        home_candidates[0] if home_candidates else "#22a06b"
+    )
 
     if not _colors_too_similar(away_win, home_win):
         away["win_color"] = away_win
@@ -406,6 +422,35 @@ def _parse_standings_entry(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _standings_pts_value(team: dict[str, Any]) -> int:
+    pts = team.get("pts")
+    try:
+        return int(pts)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _standings_gd_value(team: dict[str, Any]) -> int:
+    gd = team.get("gd")
+    if gd in (None, ""):
+        return 0
+    try:
+        return int(str(gd).replace("+", ""))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _sort_standings_teams(teams: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        teams,
+        key=lambda team: (
+            -_standings_pts_value(team),
+            -_standings_gd_value(team),
+            team.get("name") or "",
+        ),
+    )
+
+
 def _parse_group_standings_from_summary(payload: dict[str, Any]) -> list[dict[str, Any]]:
     standings_root = payload.get("standings") or {}
     groups: list[dict[str, Any]] = []
@@ -421,11 +466,11 @@ def _parse_group_standings_from_summary(payload: dict[str, Any]) -> list[dict[st
         if not isinstance(entries_block, dict):
             entries_block = {}
         entries = entries_block.get("entries") or []
-        teams = [
+        teams = _sort_standings_teams([
             _parse_standings_entry(entry)
             for entry in entries
             if isinstance(entry, dict)
-        ]
+        ])
         groups.append({
             "name": group_name,
             "teams": teams,
@@ -543,7 +588,9 @@ def parse_standings(payload: dict[str, Any]) -> list[dict[str, Any]]:
         groups.append({
             "name": child.get("name") or child.get("abbreviation") or "Group",
             "abbr": child.get("abbreviation"),
-            "teams": [_parse_standings_entry(entry) for entry in entries],
+            "teams": _sort_standings_teams([
+                _parse_standings_entry(entry) for entry in entries
+            ]),
         })
     return groups
 

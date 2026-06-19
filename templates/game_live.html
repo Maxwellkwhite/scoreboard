@@ -20,9 +20,6 @@
 
     <header class="game-detail-header">
       <p class="game-detail-kicker">{% if game.status_state == 'pre' %}Game Preview{% elif game.status_state == 'in' %}Live Game{% else %}Game Summary{% endif %}</p>
-      {% if game.status_state == 'pre' %}
-      <h1 class="game-detail-title">{{ team_link(game.away.id, game.away.abbr) }} @ {{ team_link(game.home.id, game.home.abbr) }}</h1>
-      {% endif %}
     </header>
 
     {% set is_pre = game.status_state == 'pre' %}

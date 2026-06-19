@@ -1,0 +1,33 @@
+{% set has_winner = game.away.winner or game.home.winner %}
+{% set is_current = game.id == current_game_id %}
+{% if game.status_state == 'pre' and game.start_time %}
+  {% set status_label = '' %}
+{% else %}
+  {% set status_label = game.status_detail %}
+{% endif %}
+{% if is_current %}
+<div class="game-mini-card game-mini-card--{{ game.status_state }} game-mini-card--active" data-game-id="{{ game.id }}" aria-current="page">
+{% else %}
+<div class="game-mini-card game-mini-card--{{ game.status_state }} game-mini-card--link" role="link" tabindex="0" data-game-id="{{ game.id }}" data-game-href="/world-cup/match/{{ game.id }}">
+{% endif %}
+  <span class="status-pill status-pill--{{ game.status_state }}"
+    {% if game.status_state == 'pre' and game.start_time %}data-start-time="{{ game.start_time }}"{% endif %}>{{ status_label }}</span>
+  <div class="game-mini-card__teams">
+    {% for side in [('away', game.away), ('home', game.home)] %}
+    {% set team = side[1] %}
+    <div class="game-mini-card__team{% if team.winner %} game-mini-card__team--winner{% elif game.status_state == 'post' and has_winner %} game-mini-card__team--loser{% endif %}" style="--team-color: {{ team.win_color or team.color or '#1a2332' }};">
+      {% if team.logo %}
+      <img class="game-mini-card__logo" src="{{ team.logo }}" alt="" width="24" height="24" loading="lazy">
+      {% else %}
+      <span class="game-mini-card__logo-fallback">{{ team.abbr }}</span>
+      {% endif %}
+      <span class="game-mini-card__abbr">{{ team.abbr }}</span>
+      <span class="game-mini-card__score">{% if game.status_state == 'pre' %}—{% else %}{{ team.score if team.score is not none else '0' }}{% endif %}</span>
+    </div>
+    {% endfor %}
+  </div>
+{% if is_current %}
+</div>
+{% else %}
+</div>
+{% endif %}
