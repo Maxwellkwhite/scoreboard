@@ -258,7 +258,7 @@ def _get_mlb_team_ids() -> list[str]:
 
 
 def _get_league_stats_by_category(season_year: int) -> dict[str, dict[str, list[float]]]:
-    from league_team_averages import get_league_team_stats_by_category
+    from league_player_averages import get_league_team_stats_by_category
 
     return get_league_team_stats_by_category(season_year)
 

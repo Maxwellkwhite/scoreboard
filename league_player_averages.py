@@ -1,4 +1,4 @@
-"""Qualified MLB player league stat pools via pybaseball (single JSON cache file)."""
+"""League-average stat pools for player and team comparison bars (JSON cache files)."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -442,7 +443,7 @@ def _ensure_season_entry(
 
 
 def _read_season_entry(season_year: int) -> dict[str, Any] | None:
-    """Return the latest cached season entry without triggering a build."""
+    """Return a cached player season entry without triggering a build."""
     key = str(season_year)
     entry = (_load_store().get("seasons") or {}).get(key)
     if entry is None or not _payload_has_data(entry):
@@ -450,20 +451,62 @@ def _read_season_entry(season_year: int) -> dict[str, Any] | None:
     return entry
 
 
-def warm_league_cache_for_today(season_year: int | None = None) -> bool:
-    """Rebuild the current season cache on app startup (e.g. after deploy)."""
+def _read_best_season_entry(
+    season_year: int,
+    store: dict[str, Any],
+    *,
+    has_data: Any,
+) -> dict[str, Any] | None:
+    """Prefer the requested season; otherwise use the newest cached season with data."""
+    key = str(season_year)
+    entry = (store.get("seasons") or {}).get(key)
+    if entry is not None and has_data(entry):
+        return entry
+
+    best_entry: dict[str, Any] | None = None
+    best_year: int | None = None
+    for year_key, payload in (store.get("seasons") or {}).items():
+        if not has_data(payload):
+            continue
+        try:
+            year_num = int(year_key)
+        except (TypeError, ValueError):
+            continue
+        if best_year is None or year_num > best_year:
+            best_year = year_num
+            best_entry = payload
+    return best_entry
+
+
+def warm_league_caches(season_year: int | None = None) -> bool:
+    """Rebuild league comparison caches on every app startup."""
     year = season_year or date.today().year
-    result = get_league_player_stats_by_category(
+    player = get_league_player_stats_by_category(
         year,
         allow_build=True,
         force_rebuild=True,
     )
-    has_data = bool((result.get("batting") or {}) or (result.get("pitching") or {}))
-    if has_data:
-        logger.info("League cache ready for season %s", year)
+    team = get_league_team_stats_by_category(
+        year,
+        allow_build=True,
+        force_rebuild=True,
+    )
+    player_ok = bool((player.get("batting") or {}) or (player.get("pitching") or {}))
+    team_ok = any((team.get(category) or {}) for category in ("batting", "pitching", "fielding"))
+    if player_ok and team_ok:
+        logger.info("League caches ready for season %s", year)
     else:
-        logger.warning("League cache warm-up produced no data for season %s", year)
-    return has_data
+        logger.warning(
+            "League cache warm-up incomplete for season %s (player=%s team=%s)",
+            year,
+            player_ok,
+            team_ok,
+        )
+    return player_ok and team_ok
+
+
+def warm_league_cache_for_today(season_year: int | None = None) -> bool:
+    return warm_league_caches(season_year)
 
 
 def get_league_player_stats_by_category(
@@ -475,11 +518,9 @@ def get_league_player_stats_by_category(
 ) -> dict[str, dict[str, list[float]]]:
     """Qualified MLB player distributions for stat-bar comparisons.
 
-    All seasons live in data/league_player_averages/league_player_averages.json.
-    Web requests read the most recent cached pull (``allow_build=False``).
-    Startup warm-up rebuilds the current season on each deploy
-    (``allow_build=True``, ``force_rebuild=True``). Missing past seasons are
-    built once when explicitly requested with ``allow_build=True``.
+    Cached in data/league_player_averages/league_player_averages.json.
+    Startup always rebuilds the current season; web requests read the cached file
+    and use the most recent season entry available (date on the entry is ignored).
     """
     cache_date = cache_date or date.today().isoformat()
     mem_key = str(season_year)
@@ -496,7 +537,11 @@ def get_league_player_stats_by_category(
                 force_rebuild=force_rebuild,
             )
         else:
-            entry = _read_season_entry(season_year)
+            entry = _read_best_season_entry(
+                season_year,
+                _load_store(),
+                has_data=_payload_has_data,
+            )
             if entry is None:
                 return {"batting": {}, "pitching": {}}
         result = _league_stats_from_payload(entry)
@@ -509,3 +554,253 @@ def get_league_player_stats_by_category(
 
     _memory_cache[mem_key] = (time.time(), result)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Team league averages (ESPN, 30-team pools for team stat bars)
+# ---------------------------------------------------------------------------
+
+_TEAM_DATA_DIR = Path(__file__).resolve().parent / "data" / "league_team_averages"
+_TEAM_MASTER_CACHE_PATH = _TEAM_DATA_DIR / "league_team_averages.json"
+_TEAM_MASTER_LOCK_PATH = _TEAM_DATA_DIR / "league_team_averages.lock"
+
+_team_memory_cache: dict[str, tuple[float, dict[str, dict[str, list[float]]]]] = {}
+
+
+def _team_payload_has_data(payload: dict[str, Any]) -> bool:
+    for category in ("batting", "pitching", "fielding"):
+        bucket = payload.get(category) or {}
+        for values in bucket.values():
+            if values:
+                return True
+    return False
+
+
+def _team_payload_from_league_stats(
+    season_year: int,
+    cache_date: str,
+    league_stats: dict[str, Any],
+) -> dict[str, Any]:
+    meta = league_stats.pop("_meta", {})
+    return {
+        "date": cache_date,
+        "season_year": season_year,
+        "built_at": datetime.now(timezone.utc).isoformat(),
+        "meta": meta,
+        "batting": league_stats.get("batting") or {},
+        "pitching": league_stats.get("pitching") or {},
+        "fielding": league_stats.get("fielding") or {},
+    }
+
+
+def _team_league_stats_from_payload(payload: dict[str, Any]) -> dict[str, dict[str, list[float]]]:
+    result: dict[str, dict[str, list[float]]] = {}
+    for category in ("batting", "pitching", "fielding"):
+        result[category] = {
+            stat: [float(value) for value in values]
+            for stat, values in (payload.get(category) or {}).items()
+        }
+    return result
+
+
+def _team_empty_store() -> dict[str, Any]:
+    return {"seasons": {}}
+
+
+def _team_load_store() -> dict[str, Any]:
+    if not _TEAM_MASTER_CACHE_PATH.is_file():
+        return _team_empty_store()
+    try:
+        store = json.loads(_TEAM_MASTER_CACHE_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, TypeError, ValueError) as exc:
+        logger.warning("Failed to read team league cache %s: %s", _TEAM_MASTER_CACHE_PATH, exc)
+        return _team_empty_store()
+    if not isinstance(store.get("seasons"), dict):
+        return _team_empty_store()
+    return store
+
+
+def _team_save_store(store: dict[str, Any]) -> None:
+    _TEAM_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tmp_path = _TEAM_MASTER_CACHE_PATH.with_suffix(".json.tmp")
+    encoded = json.dumps(store, separators=(",", ":"))
+    tmp_path.write_text(encoded, encoding="utf-8")
+    os.replace(tmp_path, _TEAM_MASTER_CACHE_PATH)
+    logger.info("Wrote team league cache to %s (%d bytes)", _TEAM_MASTER_CACHE_PATH, len(encoded))
+
+
+def _team_season_needs_refresh(entry: dict[str, Any] | None) -> bool:
+    return entry is None or not _team_payload_has_data(entry)
+
+
+def _team_try_acquire_build_lock() -> bool:
+    _TEAM_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        fd = os.open(str(_TEAM_MASTER_LOCK_PATH), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        return False
+    with os.fdopen(fd, "w", encoding="utf-8") as lock_file:
+        lock_file.write(
+            json.dumps({
+                "pid": os.getpid(),
+                "started_at": datetime.now(timezone.utc).isoformat(),
+            })
+        )
+    return True
+
+
+def _team_release_build_lock() -> None:
+    try:
+        _TEAM_MASTER_LOCK_PATH.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _team_wait_for_store_season(season_year: int) -> dict[str, Any] | None:
+    deadline = time.time() + _BUILD_WAIT_SECONDS
+    key = str(season_year)
+    while time.time() < deadline:
+        entry = (_team_load_store().get("seasons") or {}).get(key)
+        if entry is not None and _team_payload_has_data(entry):
+            return entry
+        if not _TEAM_MASTER_LOCK_PATH.exists():
+            return None
+        time.sleep(_BUILD_POLL_SECONDS)
+    entry = (_team_load_store().get("seasons") or {}).get(key)
+    if entry is not None and _team_payload_has_data(entry):
+        return entry
+    logger.warning(
+        "Timed out waiting for team league cache season %s in %s",
+        season_year,
+        _TEAM_MASTER_CACHE_PATH,
+    )
+    return None
+
+
+def _build_team_league_stats(season_year: int) -> dict[str, Any]:
+    from team_stats import _fetch_team_statistics, _get_mlb_team_ids, _parse_number
+
+    league_stats: dict[str, dict[str, list[float]]] = {
+        "batting": {},
+        "pitching": {},
+        "fielding": {},
+    }
+    team_ids = _get_mlb_team_ids()
+    team_count = 0
+    if team_ids:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {
+                executor.submit(_fetch_team_statistics, team_id): team_id
+                for team_id in team_ids
+            }
+            for future in as_completed(futures):
+                try:
+                    stats_by_category = future.result()
+                except Exception:
+                    continue
+                team_count += 1
+                for category_name, category_stats in stats_by_category.items():
+                    bucket = league_stats.setdefault(category_name, {})
+                    for stat_name, raw_value in category_stats.items():
+                        number = _parse_number(raw_value)
+                        if number is None:
+                            continue
+                        bucket.setdefault(stat_name, []).append(number)
+
+    league_stats["_meta"] = {
+        "source": "espn",
+        "season_year": season_year,
+        "team_count": team_count,
+    }
+    return league_stats
+
+
+def _team_build_season_entry(season_year: int, cache_date: str) -> dict[str, Any]:
+    logger.info("Building team league cache for season %s", season_year)
+    built = _build_team_league_stats(season_year)
+    payload = _team_payload_from_league_stats(season_year, cache_date, built)
+    if not _team_payload_has_data(payload):
+        raise RuntimeError("Team league stats build returned no data")
+    return payload
+
+
+def _team_ensure_season_entry(
+    season_year: int,
+    cache_date: str,
+    *,
+    force_rebuild: bool = False,
+) -> dict[str, Any]:
+    key = str(season_year)
+    store = _team_load_store()
+    seasons = store.setdefault("seasons", {})
+    entry = seasons.get(key)
+
+    if not force_rebuild and not _team_season_needs_refresh(entry):
+        return entry
+
+    if not _team_try_acquire_build_lock():
+        waited = _team_wait_for_store_season(season_year)
+        if waited is not None:
+            return waited
+        raise RuntimeError(f"Another worker is building team league cache at {_TEAM_MASTER_CACHE_PATH}")
+
+    try:
+        store = _team_load_store()
+        seasons = store.setdefault("seasons", {})
+        entry = seasons.get(key)
+        if not force_rebuild and not _team_season_needs_refresh(entry):
+            return entry
+
+        entry = _team_build_season_entry(season_year, cache_date)
+        seasons[key] = entry
+        _team_save_store(store)
+        return entry
+    finally:
+        _team_release_build_lock()
+
+
+def get_league_team_stats_by_category(
+    season_year: int,
+    *,
+    cache_date: str | None = None,
+    allow_build: bool = False,
+    force_rebuild: bool = False,
+) -> dict[str, dict[str, list[float]]]:
+    """All-30-team ESPN stat distributions for team stat-bar comparisons."""
+    cache_date = cache_date or date.today().isoformat()
+    mem_key = f"team:{season_year}"
+    cached = _team_memory_cache.get(mem_key)
+    now = time.time()
+    if cached and now - cached[0] < _MEMORY_TTL_SECONDS:
+        return cached[1]
+
+    empty = {"batting": {}, "pitching": {}, "fielding": {}}
+    try:
+        if allow_build:
+            entry = _team_ensure_season_entry(
+                season_year,
+                cache_date,
+                force_rebuild=force_rebuild,
+            )
+        else:
+            entry = _read_best_season_entry(
+                season_year,
+                _team_load_store(),
+                has_data=_team_payload_has_data,
+            )
+            if entry is None:
+                return empty
+        result = _team_league_stats_from_payload(entry)
+    except Exception:
+        logger.exception(
+            "Failed to load team league cache for season %s",
+            season_year,
+        )
+        return empty
+
+    _team_memory_cache[mem_key] = (time.time(), result)
+    return result
+
+
+def warm_league_team_cache_for_today(season_year: int | None = None) -> bool:
+    return warm_league_caches(season_year)

@@ -2,4 +2,6 @@
 /.venv
 /__pycache__
 /data/league_player_averages/**/*.json
+!/data/league_player_averages/league_player_averages.json
 /data/league_team_averages/**/*.json
+!/data/league_team_averages/league_team_averages.json

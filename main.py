@@ -71,27 +71,12 @@ Bootstrap5(app)
 
 
 def _start_league_cache_warmup() -> None:
-    import threading
+    try:
+        from league_player_averages import warm_league_caches
 
-    def _warm() -> None:
-        try:
-            from league_player_averages import warm_league_cache_for_today
-
-            warm_league_cache_for_today()
-        except Exception:
-            logging.getLogger(__name__).exception("League player cache warm-up failed")
-        try:
-            from league_team_averages import warm_league_team_cache_for_today
-
-            warm_league_team_cache_for_today()
-        except Exception:
-            logging.getLogger(__name__).exception("League team cache warm-up failed")
-
-    threading.Thread(
-        target=_warm,
-        name="league-cache-warmup",
-        daemon=True,
-    ).start()
+        warm_league_caches()
+    except Exception:
+        logging.getLogger(__name__).exception("League cache warm-up failed")
 
 
 _start_league_cache_warmup()
