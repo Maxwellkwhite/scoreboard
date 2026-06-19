@@ -2594,6 +2594,27 @@ _ARCHETYPE_THEMES = {
     "Balanced hitter": "balanced",
 }
 
+_HIT_ARCHETYPE_CRITERIA = {
+    "Patient masher": "BB/K ≥ 0.50 and ISOP ≥ 0.18",
+    "Power-first": "ISOP ≥ 0.22 and AB/HR ≤ 18",
+    "Ground-ball contact": "GO/FO ≥ 1.15",
+    "Fly-ball threat": "GO/FO ≤ 0.75 and ISOP ≥ 0.16",
+    "Contact run producer": "SECA ≥ 0.33",
+    "Balanced hitter": "Default when no other rule matches",
+}
+
+_HIT_PROFILE_GUIDE = {
+    "intro": (
+        "These labels are a quick read on a hitter's offensive shape using ESPN "
+        "advanced batting stats for this season. We apply the first rule below "
+        "that matches (top to bottom)."
+    ),
+    "rules": [
+        {"label": label, "criteria": criteria}
+        for label, criteria in _HIT_ARCHETYPE_CRITERIA.items()
+    ],
+}
+
 
 def _isop_context(isop: float | None) -> str | None:
     if isop is None:
@@ -2717,6 +2738,7 @@ def _build_hit_archetype(
         "theme": _ARCHETYPE_THEMES.get(label, "balanced"),
         "drivers": drivers,
         "signals": signals,
+        "match_criteria": _HIT_ARCHETYPE_CRITERIA.get(label),
     }
 
 
@@ -2920,6 +2942,7 @@ def _build_hit_profile_panel(
         "pillars": pillars,
         "contact_tendency": contact_tendency,
         "groups": groups,
+        "profile_guide": _HIT_PROFILE_GUIDE,
     }
 
 
@@ -2952,6 +2975,27 @@ _PITCH_ARCHETYPE_THEMES = {
     "Fly-ball pitcher": "fly_ball",
     "Command arm": "command_arm",
     "Balanced arm": "balanced",
+}
+
+_PITCH_ARCHETYPE_CRITERIA = {
+    "Strikeout artist": "K/9 ≥ 10.0 and K/BB ≥ 4.0",
+    "Run suppressor": "ERA ≤ 3.25 and WAR ≥ 2.0",
+    "Ground-ball pitcher": "G/F ≥ 1.15",
+    "Fly-ball pitcher": "G/F ≤ 0.75",
+    "Command arm": "WHIP ≤ 1.10 and K/BB ≥ 3.5",
+    "Balanced arm": "Default when no other rule matches",
+}
+
+_PITCH_PROFILE_GUIDE = {
+    "intro": (
+        "These labels summarize a pitcher's profile using ESPN advanced pitching "
+        "stats for this season. We apply the first rule below that matches "
+        "(top to bottom)."
+    ),
+    "rules": [
+        {"label": label, "criteria": criteria}
+        for label, criteria in _PITCH_ARCHETYPE_CRITERIA.items()
+    ],
 }
 
 
@@ -3105,6 +3149,7 @@ def _build_pitch_archetype(
         "theme": _PITCH_ARCHETYPE_THEMES.get(label, "balanced"),
         "drivers": drivers,
         "signals": signals,
+        "match_criteria": _PITCH_ARCHETYPE_CRITERIA.get(label),
     }
 
 
@@ -3259,6 +3304,7 @@ def _build_pitch_profile_panel(
         "pillars": pillars,
         "contact_tendency": contact_tendency,
         "groups": groups,
+        "profile_guide": _PITCH_PROFILE_GUIDE,
     }
 
 

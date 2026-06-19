@@ -1172,6 +1172,96 @@
     return '<div class="player-splits-groups">' + groups.join('') + '</div>';
   }
 
+  function buildProfileGuideButtonHtml(modalId) {
+    if (!modalId) {
+      return '';
+    }
+    return (
+      '<button type="button" class="hit-profile__guide-btn" aria-label="How profiles work" aria-haspopup="dialog" aria-controls="' + escapeHtml(modalId) + '">' +
+        '<i class="bi bi-info-circle" aria-hidden="true"></i>' +
+      '</button>'
+    );
+  }
+
+  function buildProfileGuideModalHtml(guide, archetype, modalId) {
+    if (!guide || !modalId) {
+      return '';
+    }
+    var matchCriteria = archetype && archetype.match_criteria ? archetype.match_criteria : null;
+    var rules = guide.rules || [];
+    var rulesHtml = rules.map(function (rule) {
+      var isActive = archetype && archetype.label && rule.label === archetype.label;
+      return (
+        '<li class="hit-profile__guide-rule' + (isActive ? ' hit-profile__guide-rule--active' : '') + '">' +
+          '<span class="hit-profile__guide-rule-label">' + escapeHtml(rule.label) + '</span>' +
+          '<span class="hit-profile__guide-rule-criteria">' + escapeHtml(rule.criteria) + '</span>' +
+        '</li>'
+      );
+    }).join('');
+    var titleId = modalId + '-title';
+
+    return (
+      '<dialog class="hit-profile__guide-modal" id="' + escapeHtml(modalId) + '" aria-labelledby="' + escapeHtml(titleId) + '">' +
+        '<div class="hit-profile__guide-modal-panel">' +
+          '<header class="hit-profile__guide-modal-header">' +
+            '<h4 id="' + escapeHtml(titleId) + '" class="hit-profile__guide-modal-title">How profiles work</h4>' +
+            '<button type="button" class="hit-profile__guide-modal-close" aria-label="Close">' +
+              '<i class="bi bi-x-lg" aria-hidden="true"></i>' +
+            '</button>' +
+          '</header>' +
+          '<div class="hit-profile__guide-modal-body">' +
+            '<p class="hit-profile__guide-intro">' + escapeHtml(guide.intro) + '</p>' +
+            (matchCriteria
+              ? (
+                '<p class="hit-profile__guide-match">' +
+                  '<span class="hit-profile__guide-match-label">This label matches</span>' +
+                  escapeHtml(matchCriteria) +
+                '</p>'
+              )
+              : '') +
+            '<h5 class="hit-profile__guide-rules-title">All profile labels</h5>' +
+            '<ol class="hit-profile__guide-rules">' + rulesHtml + '</ol>' +
+          '</div>' +
+        '</div>' +
+      '</dialog>'
+    );
+  }
+
+  function initProfileGuideModals(root) {
+    if (!root) {
+      return;
+    }
+    root.querySelectorAll('.hit-profile__guide-btn').forEach(function (btn) {
+      if (btn.dataset.profileGuideWired === 'true') {
+        return;
+      }
+      var modalId = btn.getAttribute('aria-controls');
+      var modal = modalId ? document.getElementById(modalId) : null;
+      if (!modal || typeof modal.showModal !== 'function') {
+        return;
+      }
+      btn.dataset.profileGuideWired = 'true';
+
+      btn.addEventListener('click', function () {
+        modal.showModal();
+      });
+
+      var closeBtn = modal.querySelector('.hit-profile__guide-modal-close');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', function () {
+          modal.close();
+        });
+      }
+
+      modal.addEventListener('click', function (event) {
+        var panel = modal.querySelector('.hit-profile__guide-modal-panel');
+        if (panel && !panel.contains(event.target)) {
+          modal.close();
+        }
+      });
+    });
+  }
+
   function buildHitProfileHtml(panel) {
     var pillars = panel.pillars || [];
     var groups = panel.groups || [];
@@ -1185,6 +1275,8 @@
     var archetypeTheme = archetype && archetype.theme ? archetype.theme : 'balanced';
     var archetypeDrivers = archetype && archetype.drivers ? archetype.drivers : [];
     var archetypeSignals = archetype && archetype.signals ? archetype.signals : [];
+    var profileGuide = panel.profile_guide;
+    var guideModalId = profileGuide && panel.id ? 'hit-profile-guide-' + panel.id : null;
 
     if (!archetypeLabel && !pillars.length && !groups.length) {
       return '<p class="player-splits-empty">Advanced stats unavailable.</p>';
@@ -1194,10 +1286,14 @@
       ? (
         '<section class="hit-profile__hero hit-profile__hero--' + escapeHtml(archetypeTheme) + '">' +
           '<span class="hit-profile__hero-kicker">' + escapeHtml(profileKicker) + '</span>' +
-          '<h3 class="hit-profile__hero-title">' + escapeHtml(archetypeLabel) + '</h3>' +
+          '<div class="hit-profile__hero-title-row">' +
+            '<h3 class="hit-profile__hero-title">' + escapeHtml(archetypeLabel) + '</h3>' +
+            buildProfileGuideButtonHtml(guideModalId) +
+          '</div>' +
           (archetypeDrivers.length
             ? '<p class="hit-profile__hero-copy">' + escapeHtml(archetypeDrivers[0]) + '</p>'
             : '') +
+          buildProfileGuideModalHtml(profileGuide, archetype, guideModalId) +
           (archetypeSignals.length
             ? (
               '<ul class="hit-profile__signals" aria-label="Profile inputs">' +
@@ -1738,6 +1834,7 @@
   function wirePanelElement(panelEl) {
     if (!panelEl) return;
     initPanelToggles(panelEl);
+    initProfileGuideModals(panelEl);
     // initPercentileYearSelects();
     initSeasonStatsPanels(panelEl);
   }
