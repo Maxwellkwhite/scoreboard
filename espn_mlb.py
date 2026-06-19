@@ -41,6 +41,13 @@ _teams_cache: tuple[float, dict[str, dict[str, Any]]] | None = None
 _athlete_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _team_detail_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _espn_stat_categories_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_PITCHER_POSITIONS = frozenset({"P", "SP", "RP", "CP", "CL", "LR", "MR", "SU"})
+
+
+def is_pitcher_position(position: str | None) -> bool:
+    if not position:
+        return False
+    return position.strip().upper() in _PITCHER_POSITIONS
 
 
 def _parse_score(value: Any) -> int | None:
@@ -2059,7 +2066,6 @@ def fetch_player_percentile_ranks(
         from player_stats import (
             fetch_batter_percentile_panel,
             fetch_pitcher_percentile_panel,
-            is_pitcher_position,
         )
 
         year = None

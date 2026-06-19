@@ -12,26 +12,20 @@ import warnings
 
 import pandas as pd
 import requests
-from pybaseball import (
-    bwar_bat,
-    bwar_pitch,
-    cache,
-    get_splits,
-    pitching_stats_bref,
-    playerid_lookup,
-    statcast_batter_expected_stats,
-    statcast_batter_exitvelo_barrels,
-    statcast_batter_percentile_ranks,
-    statcast_pitcher_arsenal_stats,
-    statcast_pitcher_exitvelo_barrels,
-    statcast_pitcher_expected_stats,
-    statcast_pitcher_percentile_ranks,
-    statcast_pitcher_pitch_arsenal,
-)
-from pybaseball.playerid_lookup import get_closest_names, get_lookup_table
+from espn_mlb import is_pitcher_position
 
-cache.enable()
-warnings.filterwarnings("ignore", category=UserWarning, module="pybaseball.split_stats")
+_pybaseball_ready = False
+
+
+def _ensure_pybaseball() -> None:
+    global _pybaseball_ready
+    if _pybaseball_ready:
+        return
+    from pybaseball import cache
+
+    cache.enable()
+    warnings.filterwarnings("ignore", category=UserWarning, module="pybaseball.split_stats")
+    _pybaseball_ready = True
 
 _BATTING_COLUMNS = (
     ("AB", "AB"),
@@ -59,7 +53,6 @@ _PITCHING_COLUMNS = (
     ("WHIP", "WHIP"),
     ("WAR", "WAR"),
 )
-_PITCHER_POSITIONS = frozenset({"P", "SP", "RP", "CP", "CL", "LR", "MR", "SU"})
 ESPN_ATHLETE_STATS_URL = (
     "https://site.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{player_id}/stats"
 )
@@ -237,6 +230,10 @@ def _fold_name(value: str) -> str:
 
 
 def _playerid_matches(last_name: str, first_name: str) -> pd.DataFrame:
+    _ensure_pybaseball()
+    from pybaseball import playerid_lookup
+    from pybaseball.playerid_lookup import get_closest_names, get_lookup_table
+
     try:
         matches = playerid_lookup(last_name, first_name)
         if matches is not None and not matches.empty:
@@ -274,13 +271,6 @@ def _parse_player_name(name: str) -> tuple[str, str]:
     if len(parts) == 1:
         return parts[0], ""
     return parts[-1], parts[0]
-
-
-def is_pitcher_position(position: str | None) -> bool:
-    if not position:
-        return False
-    pos = position.strip().upper()
-    return pos in _PITCHER_POSITIONS
 
 
 def _lookup_player_record(player_name: str) -> dict[str, Any] | None:
@@ -336,6 +326,9 @@ def _cached_get_splits(
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
         return cached[1]
 
+    _ensure_pybaseball()
+    from pybaseball import get_splits
+
     try:
         if year is None:
             result = get_splits(bbref_id, pitching_splits=pitching_splits)
@@ -354,6 +347,9 @@ def _get_pitching_bref_season(year: int) -> pd.DataFrame:
     cached = _pitching_bref_season_cache.get(year)
     if cached is not None:
         return cached
+    _ensure_pybaseball()
+    from pybaseball import pitching_stats_bref
+
     frame = pitching_stats_bref(year)
     _pitching_bref_season_cache[year] = frame
     return frame
@@ -450,6 +446,9 @@ def _load_bwar_bat() -> pd.DataFrame | None:
     if _bwar_bat_df is not None and now - _bwar_bat_loaded_at < _CACHE_TTL_SECONDS:
         return _bwar_bat_df
     try:
+        _ensure_pybaseball()
+        from pybaseball import bwar_bat
+
         _bwar_bat_df = bwar_bat()
         _bwar_bat_loaded_at = now
         return _bwar_bat_df
@@ -465,6 +464,7 @@ def _load_bwar_pitch() -> pd.DataFrame | None:
     try:
         import io
 
+        _ensure_pybaseball()
         from pybaseball.datasources.bref import BRefSession
 
         response = BRefSession().get("http://www.baseball-reference.com/data/war_daily_pitch.txt")
@@ -3268,6 +3268,9 @@ def _get_batter_percentile_table(season_year: int) -> pd.DataFrame | None:
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
         return cached[1]
     try:
+        _ensure_pybaseball()
+        from pybaseball import statcast_batter_percentile_ranks
+
         table = statcast_batter_percentile_ranks(season_year)
         if table is None or table.empty:
             result = None
@@ -3285,6 +3288,9 @@ def _get_pitcher_percentile_table(season_year: int) -> pd.DataFrame | None:
     if cached and now - cached[0] < _CACHE_TTL_SECONDS:
         return cached[1]
     try:
+        _ensure_pybaseball()
+        from pybaseball import statcast_pitcher_percentile_ranks
+
         table = statcast_pitcher_percentile_ranks(season_year)
         if table is None or table.empty:
             result = None
@@ -3407,6 +3413,14 @@ def _fetch_pitcher_raw_statcast_values(
     mlbam_id: int,
     season_year: int,
 ) -> dict[str, float | int]:
+    _ensure_pybaseball()
+    from pybaseball import (
+        statcast_pitcher_arsenal_stats,
+        statcast_pitcher_exitvelo_barrels,
+        statcast_pitcher_expected_stats,
+        statcast_pitcher_pitch_arsenal,
+    )
+
     values: dict[str, float | int] = {}
 
     try:
@@ -3510,6 +3524,9 @@ def _fetch_batter_raw_statcast_values(
     mlbam_id: int,
     season_year: int,
 ) -> dict[str, float | int]:
+    _ensure_pybaseball()
+    from pybaseball import statcast_batter_expected_stats, statcast_batter_exitvelo_barrels
+
     values: dict[str, float | int] = {}
 
     try:

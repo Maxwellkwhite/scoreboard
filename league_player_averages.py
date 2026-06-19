@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from pybaseball import batting_stats_bref, pitching_stats_bref
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +123,8 @@ def _get_batting_bref_season(year: int) -> pd.DataFrame:
     cached = _batting_bref_cache.get(year)
     if cached is not None:
         return cached
+    from pybaseball import batting_stats_bref
+
     frame = batting_stats_bref(year)
     _batting_bref_cache[year] = frame
     return frame
@@ -133,6 +134,8 @@ def _get_pitching_bref_season(year: int) -> pd.DataFrame:
     cached = _pitching_bref_cache.get(year)
     if cached is not None:
         return cached
+    from pybaseball import pitching_stats_bref
+
     frame = pitching_stats_bref(year)
     _pitching_bref_cache[year] = frame
     return frame

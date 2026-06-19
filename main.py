@@ -1303,8 +1303,7 @@ def api_mlb_team(team_id):
 
 @app.route('/player/<player_id>', methods=['GET'], endpoint='mlb_player_page')
 def mlb_player_page(player_id):
-    from espn_mlb import fetch_player, fetch_scoreboard, strip_initial_page_for_team
-    from player_stats import is_pitcher_position
+    from espn_mlb import fetch_player, fetch_scoreboard, is_pitcher_position, strip_initial_page_for_team
 
     try:
         player = fetch_player(str(player_id), include_stats=False)
