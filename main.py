@@ -1,38 +1,28 @@
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, session, abort, Response, stream_with_context
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, session, abort
 from flask_bootstrap import Bootstrap5
 from flask_ckeditor import CKEditor
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, SelectField, PasswordField
 from wtforms.validators import DataRequired, Email, Length
 from sqlalchemy.orm import relationship, DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.orm.attributes import flag_modified
-from sqlalchemy import Integer, String, Date, Time, JSON, Boolean, DateTime, Text, TypeDecorator, Float, and_, or_, func, inspect, text, update
+from sqlalchemy import Integer, String, Date, Time, JSON, Boolean, DateTime, Text, TypeDecorator, Float, and_, or_, func
 from sqlalchemy.types import TEXT
 from datetime import datetime, time as dt_time, timedelta
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin, login_user, LoginManager, current_user, logout_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import requests
-import random
 import stripe
 import os
-import sys
-import smtplib
 import json
 import re
 import logging
 import time
-import uuid
-import secrets
-import csv
 from flask_ckeditor import CKEditorField
 from datetime import date
 from functools import wraps
 from urllib.parse import urlparse, quote
 
-import boto3
-from botocore.client import Config
-from botocore.exceptions import ClientError
 from authlib.integrations.flask_client import OAuth
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -40,8 +30,7 @@ try:
     from pathlib import Path
     from dotenv import load_dotenv
 
-    # Load .env from this project directory whenever main is imported (web OR worker).
-    # Without this, `python worker.py` often had an empty env while Flask had keys from elsewhere.
+    # Load .env from this project directory whenever main is imported.
     load_dotenv(Path(__file__).resolve().parent / '.env')
     load_dotenv()
 except ImportError:
@@ -49,21 +38,6 @@ except ImportError:
 
 APP_NAME = 'Scoreboard'
 stripe.api_key = os.environ.get('STRIPE_API')
-
-# ============================================================================
-# DigitalOcean Spaces Configuration
-# ============================================================================
-DO_SPACES_KEY = os.environ.get('DO_SPACES_KEY')
-DO_SPACES_SECRET = os.environ.get('DO_SPACES_SECRET')
-DO_SPACES_REGION = os.environ.get('DO_SPACES_REGION', 'nyc3')
-DO_SPACES_NAME = os.environ.get('DO_SPACES_NAME')
-DO_SPACES_ENDPOINT = (
-    f'https://{DO_SPACES_NAME}.{DO_SPACES_REGION}.cdn.digitaloceanspaces.com'
-    if DO_SPACES_NAME
-    else ''
-)
-DO_SPACES_BUCKET = DO_SPACES_NAME
-
 
 app = Flask(__name__)
 ckeditor = CKEditor(app)
@@ -89,10 +63,6 @@ def linkify_players_filter(text, player_map=None):
     return linkify_player_names(text, player_map)
 
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
-
-# Bulk list validation + DigitalOcean Spaces (worker + web)
-bulk_email_logger = logging.getLogger('clawpod.bulk_email')
-_spaces_logger = logging.getLogger('clawpod.spaces')
 
 # Google OAuth Configuration
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
@@ -207,248 +177,6 @@ def inject_support_contact():
     }
 
 
-# ============================================================================
-# DigitalOcean Spaces Helper Functions
-# ============================================================================
-
-def get_spaces_client():
-    """Create and return a boto3 S3 client configured for DigitalOcean Spaces"""
-    session = boto3.session.Session()
-    client = session.client('s3',
-                            region_name=DO_SPACES_REGION,
-                            endpoint_url=f'https://{DO_SPACES_REGION}.digitaloceanspaces.com',
-                            aws_access_key_id=DO_SPACES_KEY,
-                            aws_secret_access_key=DO_SPACES_SECRET)
-    return client
-
-def upload_file_to_spaces(file_path, spaces_key, content_type=None):
-    """
-    Upload a file to DigitalOcean Spaces.
-    
-    Args:
-        file_path: Local path to the file to upload
-        spaces_key: Key (path) in Spaces (e.g., 'clips/user_id/episode_guid/{episode_title}_1.mp4')
-        content_type: MIME type of the file (optional, will be guessed if not provided)
-    
-    Returns:
-        str: URL of the uploaded file, or None if upload failed
-    """
-    try:
-        client = get_spaces_client()
-        
-        # Determine content type if not provided
-        if not content_type:
-            if file_path.endswith('.mp4'):
-                content_type = 'video/mp4'
-            elif file_path.endswith('.mp3'):
-                content_type = 'audio/mpeg'
-            elif file_path.endswith('.jpg') or file_path.endswith('.jpeg'):
-                content_type = 'image/jpeg'
-            elif file_path.endswith('.png'):
-                content_type = 'image/png'
-            else:
-                content_type = 'application/octet-stream'
-        
-        # Upload file
-        with open(file_path, 'rb') as file_data:
-            client.upload_fileobj(
-                file_data,
-                DO_SPACES_BUCKET,
-                spaces_key,
-                ExtraArgs={'ContentType': content_type, 'ACL': 'private'}
-            )
-        
-        # Return the CDN URL (for reference, but files are private)
-        return f"{DO_SPACES_ENDPOINT}/{spaces_key}"
-    except Exception as e:
-        print(f"Error uploading file to Spaces: {str(e)}")
-        return None
-
-def generate_signed_url(spaces_key, expiration=3600, download=False, filename=None):
-    """
-    Generate a signed URL for a private file in DigitalOcean Spaces.
-    
-    Args:
-        spaces_key: Key (path) in Spaces (e.g., 'clips/user_id/episode_guid/{episode_title}_1.mp4')
-        expiration: URL expiration time in seconds (default: 1 hour)
-        download: If True, add Content-Disposition header to force download
-        filename: Filename for download (if None, extracts from spaces_key)
-    
-    Returns:
-        str: Signed URL, or None if generation failed
-    """
-    try:
-        client = get_spaces_client()
-        
-        params = {'Bucket': DO_SPACES_BUCKET, 'Key': spaces_key}
-        
-        # Add download headers if requested
-        if download:
-            if not filename:
-                # Extract filename from spaces_key
-                filename = os.path.basename(spaces_key)
-            params['ResponseContentDisposition'] = f'attachment; filename="{filename}"'
-        
-        url = client.generate_presigned_url(
-            'get_object',
-            Params=params,
-            ExpiresIn=expiration
-        )
-        return url
-    except Exception as e:
-        print(f"Error generating signed URL: {str(e)}")
-        return None
-
-def file_exists_in_spaces(spaces_key):
-    """
-    Check if a file exists in DigitalOcean Spaces.
-    
-    Args:
-        spaces_key: Key (path) in Spaces
-    
-    Returns:
-        bool: True if file exists, False otherwise
-    """
-    try:
-        client = get_spaces_client()
-        client.head_object(Bucket=DO_SPACES_BUCKET, Key=spaces_key)
-        return True
-    except ClientError as e:
-        if e.response['Error']['Code'] == '404':
-            return False
-        raise
-    except Exception as e:
-        print(f"Error checking file existence in Spaces: {str(e)}")
-        return False
-
-def delete_file_from_spaces(spaces_key):
-    """
-    Delete a file from DigitalOcean Spaces.
-    
-    Args:
-        spaces_key: Key (path) in Spaces
-    
-    Returns:
-        bool: True if deletion was successful, False otherwise
-    """
-    try:
-        client = get_spaces_client()
-        client.delete_object(Bucket=DO_SPACES_BUCKET, Key=spaces_key)
-        return True
-    except Exception as e:
-        _spaces_logger.warning("🗑️ delete_object failed | key=%r | %s", spaces_key, e)
-        return False
-
-
-def upload_bytes_to_spaces_public(file_bytes, spaces_key, content_type='application/octet-stream'):
-    """
-    Upload raw bytes with public-read ACL when a URL must be fetchable without signing (e.g. CDN assets).
-    Falls back to put_object without ACL if the bucket rejects ACLs (Bucket owner enforced).
-    """
-    if not DO_SPACES_KEY or not DO_SPACES_SECRET or not DO_SPACES_BUCKET:
-        return None
-    try:
-        client = get_spaces_client()
-        try:
-            client.put_object(
-                Bucket=DO_SPACES_BUCKET,
-                Key=spaces_key,
-                Body=file_bytes,
-                ContentType=content_type,
-                ACL='public-read',
-            )
-        except ClientError as e:
-            err = (e.response.get('Error') or {}).get('Code') or ''
-            if err in ('AccessControlListNotSupported', 'InvalidRequest'):
-                client.put_object(
-                    Bucket=DO_SPACES_BUCKET,
-                    Key=spaces_key,
-                    Body=file_bytes,
-                    ContentType=content_type,
-                )
-            else:
-                raise
-        return f"{DO_SPACES_ENDPOINT}/{spaces_key}"
-    except Exception as e:
-        _spaces_logger.warning("☁️ Public upload failed | key=%r | %s", spaces_key, e)
-        return None
-
-
-def upload_bytes_to_spaces_private(file_bytes, spaces_key, content_type='application/octet-stream'):
-    """Upload raw bytes with private ACL (same pattern as upload_file_to_spaces)."""
-    if not DO_SPACES_KEY or not DO_SPACES_SECRET or not DO_SPACES_BUCKET:
-        _spaces_logger.warning(
-            "🔑 Private upload skipped — missing Spaces env | key=%r",
-            spaces_key,
-        )
-        return None
-    try:
-        client = get_spaces_client()
-        try:
-            client.put_object(
-                Bucket=DO_SPACES_BUCKET,
-                Key=spaces_key,
-                Body=file_bytes,
-                ContentType=content_type,
-                ACL='private',
-            )
-        except ClientError as e:
-            err = (e.response.get('Error') or {}).get('Code') or ''
-            if err in ('AccessControlListNotSupported', 'InvalidRequest'):
-                client.put_object(
-                    Bucket=DO_SPACES_BUCKET,
-                    Key=spaces_key,
-                    Body=file_bytes,
-                    ContentType=content_type,
-                )
-            else:
-                raise
-        return f"{DO_SPACES_ENDPOINT}/{spaces_key}"
-    except Exception as e:
-        _spaces_logger.warning("☁️ Private upload failed | key=%r | %s", spaces_key, e)
-        return None
-
-
-def get_object_bytes_from_spaces(spaces_key: str) -> tuple[bytes | None, str | None]:
-    """
-    Download object body from Spaces.
-    Returns (data, None) on success, (None, error_message) on failure.
-    """
-    if not (spaces_key and str(spaces_key).strip()):
-        _spaces_logger.error("📭 get_object called with empty key")
-        return None, '📭 Missing file location for this job (internal error).'
-    if not DO_SPACES_KEY or not DO_SPACES_SECRET or not DO_SPACES_BUCKET:
-        _spaces_logger.error(
-            "🔑 Spaces env incomplete | has_key=%s has_secret=%s has_bucket=%s",
-            bool(DO_SPACES_KEY),
-            bool(DO_SPACES_SECRET),
-            bool(DO_SPACES_BUCKET),
-        )
-        return None, (
-            '🔑 Cloud storage isn’t configured here (need DO_SPACES_KEY, DO_SPACES_SECRET, DO_SPACES_NAME). '
-            'Your background worker must use the same variables as the web app.'
-        )
-    try:
-        client = get_spaces_client()
-        obj = client.get_object(Bucket=DO_SPACES_BUCKET, Key=spaces_key)
-        data = obj['Body'].read()
-        bulk_email_logger.debug("☁️ Downloaded %s bytes from Spaces | key=%r", len(data), spaces_key)
-        return data, None
-    except ClientError as e:
-        err = e.response.get('Error') or {}
-        code = err.get('Code', '')
-        msg = err.get('Message', str(e))
-        tech = f'{code}: {msg} | region={DO_SPACES_REGION!r} bucket={DO_SPACES_BUCKET!r} key={spaces_key!r}'
-        _spaces_logger.error("☁️ Spaces get_object failed | %s", tech)
-        user = f'☁️ Couldn’t download your list from storage ({code}). If the file was just uploaded, check worker credentials and region.'
-        if code == 'NoSuchKey':
-            user = '☁️ That list file is no longer in storage (it may have been deleted or the path is wrong).'
-        return None, f'{user} — {msg}'[:2000]
-    except Exception as e:
-        tech = f'{e!s} | region={DO_SPACES_REGION!r} bucket={DO_SPACES_BUCKET!r} key={spaces_key!r}'
-        _spaces_logger.exception("☁️ Spaces download unexpected error | %s", tech)
-        return None, f'☁️ Unexpected error reading your file from storage: {e!s}'[:2000]
-
 # Create a form to register new users
 class RegisterForm(FlaskForm):
     email = StringField("Email", validators=[DataRequired() ])
@@ -532,27 +260,6 @@ class blog_posts(db.Model):
     date: Mapped[Date] = mapped_column(Date)
     content: Mapped[str] = mapped_column(String())
     author_id: Mapped[int] = mapped_column(Integer, db.ForeignKey("users.id"))
-
-# Bulk Upload Queue - async jobs (e.g. email list validation); file staged on DO Spaces
-# Statuses: pending -> processing -> completed | failed
-class BulkUploadQueue(db.Model):
-    __tablename__ = "bulk_upload_queue"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, db.ForeignKey("users.id"))
-    file_name: Mapped[str] = mapped_column(String(500))
-    file_url: Mapped[str] = mapped_column(String(1000))
-    spaces_key: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    job_type: Mapped[str] = mapped_column(String(50), default='email_list')
-    job_metadata: Mapped[dict | None] = mapped_column(SafeJSON, nullable=True)
-    progress_processed: Mapped[int] = mapped_column(Integer, default=0)
-    progress_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    result_json: Mapped[dict | None] = mapped_column(SafeJSON, nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default='pending')
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    completed_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    error_message: Mapped[str] = mapped_column(Text, nullable=True)
-    retry_count: Mapped[int] = mapped_column(Integer, default=0)
-
 
 class Notification(db.Model):
     __tablename__ = "notifications"
@@ -655,57 +362,6 @@ def _record_email_validation_run(
         print(f"Error recording email validation run: {str(e)}")
 
 
-def _detect_list_delimiter(sample_lines: list[str]) -> str | None:
-    candidates = [',', '\t', ';']
-    best = None
-    best_score = 0
-    for delim in candidates:
-        score = 0
-        for line in sample_lines:
-            score += line.count(delim)
-        if score > best_score:
-            best_score = score
-            best = delim
-    return best if best_score > 0 else None
-
-
-def _parse_email_list_file_text(text: str) -> list[list[str]]:
-    lines = [ln for ln in text.splitlines() if ln.strip()]
-    if not lines:
-        return []
-    delim = _detect_list_delimiter(lines[:8])
-    if delim is None:
-        return [[ln.strip()] for ln in lines]
-    rows = []
-    reader = csv.reader(lines, delimiter=delim)
-    for row in reader:
-        rows.append([c.strip() for c in row])
-    return [r for r in rows if any(c.strip() for c in r)]
-
-
-def _extract_emails_for_bulk_validation(
-    rows: list[list[str]],
-    has_header: bool,
-    col_index: int,
-    max_batch: int,
-):
-    start = 1 if has_header else 0
-    raw_count = 0
-    cleaned = []
-    for i in range(start, len(rows)):
-        row = rows[i]
-        if col_index >= len(row):
-            continue
-        v = row[col_index].strip()
-        if not v:
-            continue
-        raw_count += 1
-        if len(cleaned) < max_batch:
-            cleaned.append(v)
-    truncated = raw_count > len(cleaned)
-    return cleaned, raw_count, truncated
-
-
 def _validate_cleaned_email_list(cleaned_emails: list[str]):
     from email_validation import validate_single_email
 
@@ -730,261 +386,8 @@ def _validate_cleaned_email_list(cleaned_emails: list[str]):
     return counts, results
 
 
-# After each failed run, retry_count increments; retry while retry_count <= this (5 retries after first failure).
-EMAIL_LIST_BULK_MAX_RETRIES = 5
-
-
-def _fail_email_list_bulk_job(job: BulkUploadQueue, message: str) -> None:
-    job.retry_count = int(job.retry_count or 0) + 1
-    base = (message or 'Unknown error').strip()
-    rc = job.retry_count
-    if rc > EMAIL_LIST_BULK_MAX_RETRIES:
-        retry_note = (
-            f"\n\n🛑 Max automatic retries reached ({EMAIL_LIST_BULK_MAX_RETRIES}). "
-            "Please upload your list again or contact support if this keeps happening."
-        )
-        bulk_email_logger.error(
-            "🛑 Bulk job #%s permanent failure | user=%s | failures=%s | %s",
-            job.id,
-            job.user_id,
-            rc,
-            base[:800],
-        )
-    else:
-        retry_note = (
-            f"\n\n🔁 We’ll retry automatically (failure #{rc}; up to {EMAIL_LIST_BULK_MAX_RETRIES} retries)."
-        )
-        bulk_email_logger.warning(
-            "⚠️ Bulk job #%s failed | user=%s | failure #%s | %s",
-            job.id,
-            job.user_id,
-            rc,
-            base[:800],
-        )
-    _bulk_msg_prefixes = ('❌', '⚠️', '🔑', '☁️', '📭', '📧', '📄', '🛑', '🔁', '✅', 'ℹ️', '🔒', '⭐', '⏳', '📎', '⚙️')
-    if base and not base.startswith(_bulk_msg_prefixes):
-        base = f"❌ {base}"
-    job.error_message = (base + retry_note)[:2000]
-    job.completed_at = datetime.now()
-    job.status = 'failed'
-    job.result_json = None
-    flag_modified(job, 'result_json')
-    db.session.commit()
-
-
-def claim_next_email_list_job() -> int | None:
-    """
-    Atomically claim the next email_list job: pending first, then failed rows eligible for retry.
-    Returns job id, or None if no job was available or lost a race to another worker.
-    """
-    pending_id = db.session.execute(
-        db.select(BulkUploadQueue.id)
-        .where(BulkUploadQueue.job_type == 'email_list', BulkUploadQueue.status == 'pending')
-        .order_by(BulkUploadQueue.created_at.asc())
-        .limit(1)
-    ).scalar_one_or_none()
-    if pending_id is not None:
-        res = db.session.execute(
-            update(BulkUploadQueue)
-            .where(BulkUploadQueue.id == pending_id, BulkUploadQueue.status == 'pending')
-            .values(status='processing', progress_processed=0)
-        )
-        db.session.commit()
-        if res.rowcount == 1:
-            bulk_email_logger.info("📥 Claimed NEW bulk email job #%s (was pending)", pending_id)
-            return pending_id
-
-    failed_id = db.session.execute(
-        db.select(BulkUploadQueue.id)
-        .where(
-            BulkUploadQueue.job_type == 'email_list',
-            BulkUploadQueue.status == 'failed',
-            BulkUploadQueue.retry_count <= EMAIL_LIST_BULK_MAX_RETRIES,
-        )
-        .order_by(BulkUploadQueue.created_at.asc())
-        .limit(1)
-    ).scalar_one_or_none()
-    if failed_id is None:
-        return None
-    res = db.session.execute(
-        update(BulkUploadQueue)
-        .where(
-            BulkUploadQueue.id == failed_id,
-            BulkUploadQueue.status == 'failed',
-            BulkUploadQueue.retry_count <= EMAIL_LIST_BULK_MAX_RETRIES,
-        )
-        .values(
-            status='processing',
-            progress_processed=0,
-            progress_total=None,
-            error_message=None,
-            completed_at=None,
-            result_json=None,
-        )
-    )
-    db.session.commit()
-    if res.rowcount != 1:
-        return None
-    bulk_email_logger.info("🔁 Claimed RETRY bulk email job #%s (was failed, still eligible)", failed_id)
-    return failed_id
-
-
-def process_email_list_bulk_job(job_id: int) -> None:
-    """
-    Run bulk email validation for a queue row already claimed (status=processing).
-    Must be called inside Flask application context.
-    """
-    sk = None
-    job = db.session.get(BulkUploadQueue, job_id)
-    if not job or job.job_type != 'email_list':
-        bulk_email_logger.warning("⏭️ Skip job #%s — missing row or wrong job_type", job_id)
-        return
-    if job.status != 'processing':
-        bulk_email_logger.debug("⏭️ Skip job #%s — status=%r (expected processing)", job_id, job.status)
-        return
-    sk = job.spaces_key
-    if not sk:
-        bulk_email_logger.error("📭 Job #%s has no spaces_key | user=%s", job_id, job.user_id)
-        _fail_email_list_bulk_job(job, '📭 Missing file reference for this job (nothing to download).')
-        return
-    bulk_email_logger.info(
-        "▶️ Processing bulk job #%s | user=%s | file=%r | spaces_key=%r",
-        job_id,
-        job.user_id,
-        job.file_name,
-        sk,
-    )
-    meta = job.job_metadata or {}
-    has_header = bool(meta.get('has_header'))
-    col_index = int(meta.get('email_column_index', 0))
-    max_batch_size = 5000
-    try:
-        raw, dl_err = get_object_bytes_from_spaces(sk)
-        if raw is None:
-            raise RuntimeError(dl_err or '☁️ Could not download list file from storage.')
-        file_text = raw.decode('utf-8-sig', errors='replace')
-        rows = _parse_email_list_file_text(file_text)
-        if not rows:
-            raise ValueError('📄 Your file has no usable rows. Check the format and try again.')
-        emails, _raw_n, truncated = _extract_emails_for_bulk_validation(
-            rows, has_header, col_index, max_batch_size
-        )
-        if not emails:
-            raise ValueError(
-                '📧 No email addresses found in the column you mapped. Choose the column that contains emails.'
-            )
-        job.progress_total = len(emails)
-        job.progress_processed = 0
-        db.session.commit()
-
-        from email_validation import validate_single_email
-
-        counts = {'valid': 0, 'risky': 0, 'invalid': 0}
-        results = []
-        for idx, email in enumerate(emails):
-            result = validate_single_email(email)
-            status = result.get('report', {}).get('status', 'invalid')
-            if status == 'valid':
-                counts['valid'] += 1
-            elif status == 'risky':
-                counts['risky'] += 1
-            else:
-                counts['invalid'] += 1
-            results.append({
-                'input_email': email,
-                'status': status,
-                'summary': result.get('summary', ''),
-                'normalized_email': result.get('normalized_email'),
-                'result': result,
-            })
-            if (idx + 1) % 25 == 0 or (idx + 1) == len(emails):
-                job.progress_processed = idx + 1
-                db.session.commit()
-
-        export_rows = [list(r) for r in rows]
-        job.result_json = {
-            'processed': len(emails),
-            'truncated': truncated,
-            'max_batch_size': max_batch_size,
-            'counts': counts,
-            'results': results,
-            'export_rows': export_rows,
-            'export_has_header': has_header,
-            'export_email_column_index': col_index,
-        }
-        job.status = 'completed'
-        job.retry_count = 0
-        job.completed_at = datetime.now()
-        job.progress_processed = len(emails)
-        flag_modified(job, 'result_json')
-        db.session.commit()
-
-        _record_email_validation_run(
-            email_value='LIST',
-            valid_count=counts['valid'],
-            invalid_count=counts['invalid'],
-            other_count=counts['risky'],
-            total_count=len(emails),
-            user_id=job.user_id,
-        )
-        bulk_email_logger.info(
-            "✅ Bulk job #%s finished | user=%s | processed=%s | valid=%s | invalid=%s | risky=%s",
-            job_id,
-            job.user_id,
-            len(emails),
-            counts['valid'],
-            counts['invalid'],
-            counts['risky'],
-        )
-    except Exception as e:
-        db.session.rollback()
-        job = db.session.get(BulkUploadQueue, job_id)
-        if job:
-            _fail_email_list_bulk_job(job, str(e))
-    finally:
-        if not sk:
-            return
-        job_final = db.session.get(BulkUploadQueue, job_id)
-        if not job_final:
-            delete_file_from_spaces(sk)
-            return
-        rc = int(job_final.retry_count or 0)
-        if job_final.status == 'completed':
-            if delete_file_from_spaces(sk):
-                bulk_email_logger.info("🗑️ Removed staged list from Spaces | job=%s | key=%r", job_id, sk)
-            else:
-                bulk_email_logger.warning("🗑️ Could not delete staged list from Spaces | job=%s | key=%r", job_id, sk)
-        elif job_final.status == 'failed' and rc > EMAIL_LIST_BULK_MAX_RETRIES:
-            if delete_file_from_spaces(sk):
-                bulk_email_logger.info("🗑️ Removed staged list after max retries | job=%s | key=%r", job_id, sk)
-            else:
-                bulk_email_logger.warning("🗑️ Could not delete staged list after failure | job=%s | key=%r", job_id, sk)
-
-
 with app.app_context():
     db.create_all()
-    if inspect(db.engine).has_table("bulk_upload_queue"):
-        bulk_cols = {c["name"] for c in inspect(db.engine).get_columns("bulk_upload_queue")}
-        bulk_alters = []
-        if "spaces_key" not in bulk_cols:
-            bulk_alters.append("ALTER TABLE bulk_upload_queue ADD COLUMN spaces_key VARCHAR(1000)")
-        if "job_type" not in bulk_cols:
-            bulk_alters.append("ALTER TABLE bulk_upload_queue ADD COLUMN job_type VARCHAR(50) DEFAULT 'email_list'")
-        if "job_metadata" not in bulk_cols:
-            bulk_alters.append("ALTER TABLE bulk_upload_queue ADD COLUMN job_metadata TEXT")
-        if "progress_processed" not in bulk_cols:
-            bulk_alters.append("ALTER TABLE bulk_upload_queue ADD COLUMN progress_processed INTEGER DEFAULT 0")
-        if "progress_total" not in bulk_cols:
-            bulk_alters.append("ALTER TABLE bulk_upload_queue ADD COLUMN progress_total INTEGER")
-        if "result_json" not in bulk_cols:
-            bulk_alters.append("ALTER TABLE bulk_upload_queue ADD COLUMN result_json TEXT")
-        for stmt in bulk_alters:
-            try:
-                db.session.execute(text(stmt))
-                db.session.commit()
-            except Exception as e:
-                db.session.rollback()
-                print(f"bulk_upload_queue migration skip: {stmt} ({e})")
 
 @app.route('/', methods=["GET"])
 def home_page():
@@ -1555,21 +958,6 @@ def dashboard():
     )
 
 
-@app.route('/email-list-validation', methods=['GET'])
-def email_list_validation():
-    if not current_user.is_authenticated:
-        flash("Please log in to access this page.")
-        return redirect(url_for('login', next='/email-list-validation'))
-    active_bulk = None
-    if current_user.premium_level > 0:
-        active_bulk = _active_email_list_bulk_job(current_user.id)
-    return render_template(
-        'email_list_validation.html',
-        email_list_locked=(current_user.premium_level == 0),
-        email_list_resume_job_id=(active_bulk.id if active_bulk else None),
-    )
-
-
 @app.route('/preferences', methods=["GET", "POST"])
 def preferences():
     if not current_user.is_authenticated:
@@ -1932,156 +1320,6 @@ def validate_email_list_api():
         'counts': counts,
         'results': results,
     })
-
-
-def _active_email_list_bulk_job(user_id: int) -> BulkUploadQueue | None:
-    """One open email list job per user: pending, processing, or failed-but-still-retrying."""
-    return db.session.execute(
-        db.select(BulkUploadQueue)
-        .where(
-            BulkUploadQueue.user_id == user_id,
-            BulkUploadQueue.job_type == 'email_list',
-            or_(
-                BulkUploadQueue.status.in_(('pending', 'processing')),
-                and_(
-                    BulkUploadQueue.status == 'failed',
-                    BulkUploadQueue.retry_count <= EMAIL_LIST_BULK_MAX_RETRIES,
-                ),
-            ),
-        )
-        .order_by(BulkUploadQueue.created_at.asc())
-        .limit(1)
-    ).scalar_one_or_none()
-
-
-@app.route('/api/email-list-validation/enqueue', methods=['POST'], endpoint='email_list_validation_enqueue_api')
-def email_list_validation_enqueue_api():
-    if not current_user.is_authenticated:
-        return jsonify({'error': '🔒 Please sign in to validate a list.'}), 401
-    if current_user.premium_level <= 0:
-        return jsonify({'error': '⭐ Bulk list validation needs a paid plan. Upgrade to continue.'}), 403
-    existing = _active_email_list_bulk_job(current_user.id)
-    if existing:
-        return jsonify({
-            'error': '⏳ You already have a list validating or waiting to retry. Wait for it to finish, then try again.',
-            'active_job_id': existing.id,
-        }), 409
-
-    f = request.files.get('file')
-    if not f or not f.filename:
-        return jsonify({'error': '📎 Choose a CSV or TXT file to upload.'}), 400
-    has_header = request.form.get('has_header') in ('1', 'true', 'True', 'on', 'yes')
-    try:
-        col_index = int(request.form.get('email_column_index', '0'))
-    except ValueError:
-        return jsonify({'error': '⚙️ Invalid column index. Refresh the page and try again.'}), 400
-    if col_index < 0:
-        return jsonify({'error': '⚙️ That email column isn’t valid. Pick a column in the preview.'}), 400
-
-    raw_bytes = f.read()
-    if not raw_bytes:
-        return jsonify({'error': '📄 That file looks empty. Use a non-empty CSV or TXT list.'}), 400
-
-    safe_name = re.sub(r'[^a-zA-Z0-9._-]+', '_', f.filename)[:180]
-    key = f"email-list-queue/{current_user.id}/{uuid.uuid4().hex}_{secrets.token_hex(4)}_{safe_name}"
-    url = upload_bytes_to_spaces_private(raw_bytes, key, content_type=f.mimetype or 'text/csv')
-    if not url:
-        bulk_email_logger.error("☁️ Enqueue failed — private upload returned None | user=%s | key=%r", current_user.id, key)
-        return jsonify({
-            'error': '☁️ Couldn’t upload your list to cloud storage. Check Spaces credentials or try again shortly.',
-        }), 503
-
-    job = BulkUploadQueue(
-        user_id=current_user.id,
-        file_name=f.filename[:500],
-        file_url=url,
-        spaces_key=key,
-        job_type='email_list',
-        job_metadata={'has_header': has_header, 'email_column_index': col_index},
-        status='pending',
-    )
-    db.session.add(job)
-    db.session.commit()
-
-    bulk_email_logger.info(
-        "📬 List queued | job=%s | user=%s | file=%r | key=%r",
-        job.id,
-        current_user.id,
-        job.file_name,
-        key,
-    )
-    return jsonify({'job_id': job.id, 'status': job.status})
-
-
-def _email_list_job_to_dict(job: BulkUploadQueue) -> dict:
-    retry_count = int(job.retry_count or 0)
-    will_retry = (job.status == 'failed' and retry_count <= EMAIL_LIST_BULK_MAX_RETRIES)
-    out = {
-        'job_id': job.id,
-        'status': job.status,
-        'file_name': job.file_name,
-        'created_at': job.created_at.isoformat() if job.created_at else None,
-        'completed_at': job.completed_at.isoformat() if job.completed_at else None,
-        'progress_processed': job.progress_processed or 0,
-        'progress_total': job.progress_total,
-        'error_message': job.error_message,
-        'retry_count': retry_count,
-        'max_retries': EMAIL_LIST_BULK_MAX_RETRIES,
-        'will_retry': will_retry,
-    }
-    if job.status == 'completed' and job.result_json:
-        out['result'] = job.result_json
-    return out
-
-
-@app.route('/api/email-list-validation/jobs/<int:job_id>/stream', methods=['GET'], endpoint='email_list_validation_job_stream_api')
-def email_list_validation_job_stream_api(job_id):
-    """Server-Sent Events: push job row from DB whenever it changes (worker updates same row)."""
-    if not current_user.is_authenticated:
-        return jsonify({'error': '🔒 Sign in to view this job.'}), 401
-    job = db.session.get(BulkUploadQueue, job_id)
-    if not job or job.user_id != current_user.id or job.job_type != 'email_list':
-        return jsonify({'error': '🔍 That validation job was not found.'}), 404
-
-    owner_id = current_user.id
-
-    @stream_with_context
-    def event_stream():
-        last_blob = None
-        while True:
-            db.session.expire_all()
-            job = db.session.get(BulkUploadQueue, job_id)
-            if not job or job.user_id != owner_id or job.job_type != 'email_list':
-                yield 'event: job_error\ndata: {"error":"not_found"}\n\n'
-                break
-            payload = _email_list_job_to_dict(job)
-            blob = json.dumps(payload, separators=(',', ':'))
-            if blob != last_blob:
-                last_blob = blob
-                yield f'data: {blob}\n\n'
-            if payload.get('status') == 'completed' or (payload.get('status') == 'failed' and not payload.get('will_retry')):
-                break
-            time.sleep(1.5)
-
-    return Response(
-        event_stream(),
-        mimetype='text/event-stream',
-        headers={
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no',
-        },
-    )
-
-
-@app.route('/api/email-list-validation/jobs/<int:job_id>', methods=['GET'], endpoint='email_list_validation_job_api')
-def email_list_validation_job_api(job_id):
-    if not current_user.is_authenticated:
-        return jsonify({'error': '🔒 Sign in to view this job.'}), 401
-    job = db.session.get(BulkUploadQueue, job_id)
-    if not job or job.user_id != current_user.id or job.job_type != 'email_list':
-        return jsonify({'error': '🔍 That validation job was not found.'}), 404
-    return jsonify(_email_list_job_to_dict(job))
 
 
 # Stripe Price IDs - centralized constants
@@ -2871,7 +2109,7 @@ def admin_users():
     users = db.session.execute(db.select(User).order_by(User.id)).scalars().all()
     user_ids = [u.id for u in users]
     user_admin_metrics = {
-        uid: {'run_count': 0, 'emails_validated': 0, 'bulk_jobs_completed': 0}
+        uid: {'run_count': 0, 'emails_validated': 0}
         for uid in user_ids
     }
     if user_ids:
@@ -2888,39 +2126,11 @@ def admin_users():
             if uid in user_admin_metrics:
                 user_admin_metrics[uid]['run_count'] = int(run_count)
                 user_admin_metrics[uid]['emails_validated'] = int(total_validated)
-        bulk_rows = db.session.execute(
-            db.select(BulkUploadQueue.user_id, func.count(BulkUploadQueue.id))
-            .where(
-                BulkUploadQueue.user_id.in_(user_ids),
-                BulkUploadQueue.job_type == 'email_list',
-                BulkUploadQueue.status == 'completed',
-            )
-            .group_by(BulkUploadQueue.user_id)
-        ).all()
-        for uid, bulk_n in bulk_rows:
-            if uid in user_admin_metrics:
-                user_admin_metrics[uid]['bulk_jobs_completed'] = int(bulk_n)
-
-    queue_cutoff = datetime.now() - timedelta(days=7)
-    recent_queue_rows = db.session.execute(
-        db.select(BulkUploadQueue, User.email, User.name)
-        .join(User, BulkUploadQueue.user_id == User.id)
-        .where(
-            BulkUploadQueue.created_at >= queue_cutoff,
-            BulkUploadQueue.job_type == 'email_list',
-        )
-        .order_by(BulkUploadQueue.created_at.desc())
-    ).all()
-    recent_queue_jobs = [
-        {'job': j, 'user_email': em, 'user_name': nm}
-        for j, em, nm in recent_queue_rows
-    ]
 
     return render_template(
         "admin_users.html",
         users=users,
         user_admin_metrics=user_admin_metrics,
-        recent_queue_jobs=recent_queue_jobs,
     )
 
 

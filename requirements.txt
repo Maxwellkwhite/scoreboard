@@ -18,14 +18,5 @@ pandas>=2.0.0
 gunicorn==23.0.0
 beautifulsoup4==4.12.3
 APScheduler==3.10.4
-openai>=1.0.0
-opencv-python>=4.10.0
-html2image>=2.0.0
-boto3>=1.34.0
 authlib>=1.2.0
-assemblyai>=0.48.0
-anthropic>=0.75.0
-pydub==0.25.1
-pillow==12.0.0
 psycopg2-binary
-audioop-lts==0.2.2

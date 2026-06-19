@@ -1,6 +1,4 @@
 Individual Game page:
 - Connection to ticket sales for upcoming games would be cool
 
-Player pages
-- advanced stats add helper for player prototype
 

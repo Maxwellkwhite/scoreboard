@@ -40,10 +40,6 @@
           <i class="bi bi-house-door"></i>
           <span class="menu-item-text">Dashboard</span>
         </a>
-        <a href="{{ url_for('email_list_validation') }}" class="menu-item">
-          <i class="bi bi-envelope"></i>
-          <span class="menu-item-text">Email</span>
-        </a>
         <a href="/feedback" class="menu-item">
           <i class="bi bi-chat-left-text"></i>
           <span class="menu-item-text">Feedback</span>
@@ -125,25 +121,6 @@
                   <input type="text" id="dashValidateEmailVisual" class="form-control form-control-sm dash-action-card__input dash-action-card__input--inline" placeholder="you@example.com" autocomplete="off">
                   <button type="button" class="btn btn-primary btn-sm dash-action-card__validate-btn" id="dashValidateEmailBtn">Validate</button>
                 </div>
-              {% endif %}
-            </div>
-          </article>
-        </div>
-        <div class="col-12 col-md-6 col-xl-4">
-          <article class="dashboard-section dash-action-card dash-action-card--static h-100{% if premium_level == 0 %} dash-action-card--locked{% endif %}">
-            <div class="dash-action-card__static">
-              <div class="dash-action-card__icon" aria-hidden="true">
-                <i class="bi bi-list-ul"></i>
-              </div>
-              <h3 class="dash-action-card__title">Bulk Email Validation</h3>
-              {% if premium_level == 0 %}
-                <p class="dash-action-card__subtitle">Available on paid plans. Upgrade to validate lists in bulk.</p>
-                <a href="{{ url_for('price_page') }}" class="btn btn-primary dash-action-card__cta">
-                  <i class="bi bi-lock-fill me-1" aria-hidden="true"></i>Upgrade to Unlock
-                </a>
-              {% else %}
-                <p class="dash-action-card__subtitle">Upload a list file to check many addresses at once</p>
-                <a href="{{ url_for('email_list_validation') }}" class="btn btn-primary dash-action-card__cta">Validate New List</a>
               {% endif %}
             </div>
           </article>
