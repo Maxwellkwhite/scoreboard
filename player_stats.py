@@ -169,7 +169,6 @@ _bwar_pitch_loaded_at: float = 0.0
 _player_lookup_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _stats_table_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _stat_panels_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
-_espn_categories_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _player_core_panels_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _player_percentile_panel_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 _player_splits_panel_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
@@ -4122,29 +4121,9 @@ def _resolve_panel_year(season_year: str | int | None) -> int:
 
 
 def _fetch_espn_stat_categories(player_id: str) -> dict[str, Any]:
-    cached = _espn_categories_cache.get(player_id)
-    now = time.time()
-    if cached and now - cached[0] < _CACHE_TTL_SECONDS:
-        return cached[1]
+    from espn_mlb import fetch_espn_stat_categories
 
-    categories: dict[str, Any] = {}
-    try:
-        response = requests.get(
-            ESPN_ATHLETE_STATS_URL.format(player_id=player_id),
-            timeout=15,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        categories = {
-            category.get("name"): category
-            for category in payload.get("categories") or []
-            if category.get("name")
-        }
-    except requests.RequestException:
-        pass
-
-    _espn_categories_cache[player_id] = (now, categories)
-    return categories
+    return fetch_espn_stat_categories(player_id)
 
 
 def _empty_player_stats_panel_league_only(*, pitching: bool, season_year: int) -> dict[str, Any]:

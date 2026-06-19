@@ -6,20 +6,25 @@
 
   <div class="game-card-dev-tools__layout">
     <div
-      class="game-card game-card--in game-card-dev-tools__sample"
+      class="game-card game-card--in game-card--link game-card-dev-tools__sample"
       id="game-card-dev-sample"
-      style="--batting-team-color: #002D72; --batting-team-bg: #002D72; --batting-team-text: #FF5910;"
     >
       <div class="game-card-status">
         <span class="status-pill status-pill--in status-pill--batting-team" id="game-card-dev-pill">Top 7th</span>
-        <span class="game-card-count" id="game-card-dev-count">1-2, 1 out</span>
+        <div class="game-card-situation" id="game-card-dev-situation">
+          <span class="game-card-bases" aria-label="Runners on base" id="game-card-dev-bases">
+            <span class="game-card-base game-card-base--2nd"></span>
+            <span class="game-card-base game-card-base--3rd"></span>
+            <span class="game-card-base game-card-base--1st game-card-base--occupied"></span>
+          </span>
+          <span class="game-card-count" id="game-card-dev-count">1-2, 1 out</span>
+        </div>
       </div>
 
       <div class="game-card-teams">
         <div
           class="game-card-team game-card-team--away"
           id="game-card-dev-away"
-          style="--team-color: #002D72;"
         >
           <img class="game-card-logo" src="https://a.espncdn.com/i/teamlogos/mlb/500/21.png" alt="" width="40" height="40">
           <div class="game-card-team-meta">
@@ -32,7 +37,6 @@
         <div
           class="game-card-team game-card-team--home"
           id="game-card-dev-home"
-          style="--team-color: #E81828;"
         >
           <img class="game-card-logo" src="https://a.espncdn.com/i/teamlogos/mlb/500/22.png" alt="" width="40" height="40">
           <div class="game-card-team-meta">

@@ -17,21 +17,6 @@
     </div>
   </div>
 
-  <div class="team-roster-status-legend" aria-label="Roster status legend">
-    <span class="team-roster-status-legend__item">
-      <span class="team-roster-status-legend__dot team-roster-status-legend__dot--active" aria-hidden="true"></span>
-      Active
-    </span>
-    <span class="team-roster-status-legend__item">
-      <span class="team-roster-status-legend__dot team-roster-status-legend__dot--injured" aria-hidden="true"></span>
-      15-Day IL
-    </span>
-    <span class="team-roster-status-legend__item">
-      <span class="team-roster-status-legend__dot team-roster-status-legend__dot--out" aria-hidden="true"></span>
-      60-Day IL
-    </span>
-  </div>
-
   {% for side in [('away', game.away), ('home', game.home)] %}
   {% set team = side[1] %}
   {% set roster_panel = team_panels[side[0]].roster if team_panels.get(side[0]) else none %}

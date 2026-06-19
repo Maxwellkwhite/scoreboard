@@ -4,14 +4,102 @@
 
   var card = document.getElementById('game-card-dev-sample');
   var pill = document.getElementById('game-card-dev-pill');
+  var situationEl = document.getElementById('game-card-dev-situation');
   var countEl = document.getElementById('game-card-dev-count');
   var awayTeam = document.getElementById('game-card-dev-away');
   var homeTeam = document.getElementById('game-card-dev-home');
   var awayScoreEl = document.getElementById('game-card-dev-away-score');
   var homeScoreEl = document.getElementById('game-card-dev-home-score');
 
-  if (!card || !pill || !countEl || !awayTeam || !homeTeam || !awayScoreEl || !homeScoreEl) {
+  if (!card || !pill || !situationEl || !countEl || !awayTeam || !homeTeam || !awayScoreEl || !homeScoreEl) {
     return;
+  }
+
+  var WIN_COLOR_MIN_DISTANCE = 72;
+
+  function normalizeHex(value) {
+    if (!value) return null;
+    var color = String(value).trim();
+    if (!color) return null;
+    return color.charAt(0) === '#' ? color : '#' + color;
+  }
+
+  function colorDistance(left, right) {
+    var leftRgb = [
+      parseInt(left.slice(1, 3), 16),
+      parseInt(left.slice(3, 5), 16),
+      parseInt(left.slice(5, 7), 16)
+    ];
+    var rightRgb = [
+      parseInt(right.slice(1, 3), 16),
+      parseInt(right.slice(3, 5), 16),
+      parseInt(right.slice(5, 7), 16)
+    ];
+    return Math.sqrt(
+      leftRgb.reduce(function (sum, channel, index) {
+        var delta = channel - rightRgb[index];
+        return sum + delta * delta;
+      }, 0)
+    );
+  }
+
+  function colorsTooSimilar(left, right) {
+    if (!left || !right) return false;
+    if (left.toLowerCase() === right.toLowerCase()) return true;
+    return colorDistance(left, right) < WIN_COLOR_MIN_DISTANCE;
+  }
+
+  function teamColorCandidates(team) {
+    var candidates = [];
+    [team.color, team.alternate_color].forEach(function (value) {
+      var normalized = normalizeHex(value);
+      if (normalized && candidates.indexOf(normalized) === -1) {
+        candidates.push(normalized);
+      }
+    });
+    return candidates;
+  }
+
+  function resolveWinColors(away, home) {
+    var awayCandidates = teamColorCandidates(away);
+    var homeCandidates = teamColorCandidates(home);
+    var awayWin = normalizeHex(away.color) || awayCandidates[0] || '#56b6c6';
+    var homeWin = normalizeHex(home.color) || homeCandidates[0] || '#22a06b';
+
+    if (!colorsTooSimilar(awayWin, homeWin)) {
+      away.win_color = awayWin;
+      home.win_color = homeWin;
+      return;
+    }
+
+    var homeAlternate = normalizeHex(home.alternate_color);
+    if (homeAlternate && !colorsTooSimilar(awayWin, homeAlternate)) {
+      home.win_color = homeAlternate;
+      away.win_color = awayWin;
+      return;
+    }
+
+    var awayAlternate = normalizeHex(away.alternate_color);
+    if (awayAlternate && !colorsTooSimilar(awayAlternate, homeWin)) {
+      away.win_color = awayAlternate;
+      home.win_color = homeWin;
+      return;
+    }
+
+    var bestDistance = -1;
+    (awayCandidates.length ? awayCandidates : [awayWin]).forEach(function (awayOption) {
+      (homeCandidates.length ? homeCandidates : [homeWin]).forEach(function (homeOption) {
+        var distance = colorDistance(awayOption, homeOption);
+        if (distance > bestDistance) {
+          bestDistance = distance;
+          awayWin = awayOption;
+          homeWin = homeOption;
+        }
+      });
+    });
+
+    away.win_color = awayWin;
+    home.win_color = homeWin;
   }
 
   var teams = {
@@ -31,6 +119,8 @@
     }
   };
 
+  resolveWinColors(teams.away, teams.home);
+
   var state = {
     status: 'in',
     battingSide: 'away',
@@ -45,18 +135,31 @@
     window.gameCardScoreFlash.flash(card, side, teams[side]);
   }
 
+  function battingBorderColor(side) {
+    var team = teams[side];
+    return team.win_color || team.color || null;
+  }
+
+  function applyTeamColors() {
+    awayTeam.style.setProperty(
+      '--team-color',
+      teams.away.win_color || teams.away.color || '#1a2332'
+    );
+    homeTeam.style.setProperty(
+      '--team-color',
+      teams.home.win_color || teams.home.color || '#1a2332'
+    );
+  }
+
   function applyBattingTheme() {
     var battingTeam = teams[state.battingSide];
+    var borderColor = battingBorderColor(state.battingSide);
     if (state.status === 'in' && battingTeam) {
       if (window.teamBattingPill) {
-        window.teamBattingPill.apply(
-          card,
-          battingTeam,
-          battingTeam.color
-        );
-      } else {
-        card.style.setProperty('--batting-team-color', battingTeam.color);
-        card.style.setProperty('--batting-team-bg', battingTeam.color);
+        window.teamBattingPill.apply(card, battingTeam, borderColor);
+      } else if (borderColor) {
+        card.style.setProperty('--batting-team-color', borderColor);
+        card.style.setProperty('--batting-team-bg', battingTeam.color || borderColor);
         if (battingTeam.alternate_color) {
           card.style.setProperty('--batting-team-text', battingTeam.alternate_color);
         }
@@ -110,7 +213,7 @@
 
     var packActive = window.gameCardPackOpen && window.gameCardPackOpen.isActive(card);
     var gameEndActive = window.gameCardGameEnd && window.gameCardGameEnd.isActive(card);
-    card.className = 'game-card game-card--' + status + ' game-card-dev-tools__sample';
+    card.className = 'game-card game-card--' + status + ' game-card--link game-card-dev-tools__sample';
     if (packActive) {
       card.classList.add('game-card--pack-open');
     }
@@ -121,19 +224,20 @@
 
     if (status === 'pre') {
       pill.textContent = '7:10 PM';
-      countEl.hidden = true;
+      situationEl.hidden = true;
     } else if (status === 'in') {
       pill.textContent = state.battingSide === 'away' ? 'Top 7th' : 'Bot 7th';
-      countEl.hidden = false;
+      situationEl.hidden = false;
       countEl.textContent = '1-2, 1 out';
     } else {
       pill.textContent = 'Final';
-      countEl.hidden = true;
+      situationEl.hidden = true;
     }
 
     clearWinnerClasses();
     renderScores();
     applyWinnerClasses();
+    applyTeamColors();
     applyBattingTheme();
   }
 

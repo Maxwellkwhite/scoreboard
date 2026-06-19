@@ -29,6 +29,9 @@ ESPN_TEAM_URL = (
 ESPN_ATHLETE_URL = (
     "https://site.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{player_id}"
 )
+ESPN_ATHLETE_STATS_URL = (
+    "https://site.api.espn.com/apis/common/v3/sports/baseball/mlb/athletes/{player_id}/stats"
+)
 CACHE_TTL_SECONDS = 30
 TEAMS_CACHE_TTL_SECONDS = 3600
 _cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
@@ -37,6 +40,7 @@ _standings_cache: tuple[float, list[dict[str, Any]]] | None = None
 _teams_cache: tuple[float, dict[str, dict[str, Any]]] | None = None
 _athlete_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _team_detail_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_espn_stat_categories_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
 def _parse_score(value: Any) -> int | None:
@@ -1369,6 +1373,33 @@ def attach_preview_team_panels(game: dict[str, Any]) -> None:
     return None
 
 
+def fetch_espn_stat_categories(player_id: str) -> dict[str, Any]:
+    """ESPN athlete stat categories (batting, pitching, fielding, etc.)."""
+    cached = _espn_stat_categories_cache.get(player_id)
+    now = time.time()
+    if cached and now - cached[0] < CACHE_TTL_SECONDS:
+        return cached[1]
+
+    categories: dict[str, Any] = {}
+    try:
+        response = requests.get(
+            ESPN_ATHLETE_STATS_URL.format(player_id=player_id),
+            timeout=15,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        categories = {
+            category.get("name"): category
+            for category in payload.get("categories") or []
+            if category.get("name")
+        }
+    except requests.RequestException:
+        pass
+
+    _espn_stat_categories_cache[player_id] = (now, categories)
+    return categories
+
+
 def attach_preview_probable_pitchers(game: dict[str, Any]) -> None:
     """Enrich probable pitcher season stats from ESPN (preview pitchers API only)."""
     if game.get("status_state") != "pre":
@@ -1510,13 +1541,9 @@ def _probable_pitcher_cells_from_espn_categories(
     player_id: str,
     season_year: int,
 ) -> dict[str, str]:
-    try:
-        from player_stats import _fetch_espn_stat_categories
-        from team_stats import _espn_category_season_row
-    except ImportError:
-        return {}
+    from team_stats import _espn_category_season_row
 
-    categories = _fetch_espn_stat_categories(str(player_id))
+    categories = fetch_espn_stat_categories(str(player_id))
     row = _espn_category_season_row(categories.get("pitching"), season_year)
     if not row:
         return {}
