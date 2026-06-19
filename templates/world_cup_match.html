@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ game.name }} — World Cup</title>
+  {% include "partials/scoreboard_head_icons.html" %}
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/scoreboard.css') }}">
+</head>
+<body class="scoreboard-page game-preview-page">
+  {% include "partials/desktop_only_gate.html" %}
+  {% include "partials/scoreboard_nav.html" %}
+
+  <main class="scoreboard-main game-detail-main">
+    <p class="game-detail-back">
+      <a href="{{ url_for('world_cup_scoreboard') }}">&larr; World Cup scoreboard</a>
+    </p>
+
+    <header class="game-detail-header">
+      <p class="game-detail-kicker">
+        {% if game.status_state == 'pre' %}Match Preview
+        {% elif game.status_state == 'in' %}Live Match
+        {% else %}Match Summary{% endif %}
+      </p>
+      <h1>{{ game.away.abbr }} @ {{ game.home.abbr }}</h1>
+      <p class="game-detail-start">
+        <span class="status-pill status-pill--{{ game.status_state }}"{% if game.start_time %} data-start-time="{{ game.start_time }}"{% endif %}>{{ game.status_detail }}</span>
+      </p>
+    </header>
+
+    <section class="game-detail-matchup">
+      <div class="matchup-team">
+        {% if game.away.logo %}
+        <img src="{{ game.away.logo }}" alt="" class="matchup-logo" width="72" height="72">
+        {% endif %}
+        <h2>{{ game.away.name }}</h2>
+        {% if game.away.record %}<p class="matchup-record">{{ game.away.record }}</p>{% endif %}
+        {% if game.status_state != 'pre' and game.away.score is not none %}
+        <p class="matchup-score">{{ game.away.score }}</p>
+        {% endif %}
+      </div>
+      <div class="matchup-vs">@</div>
+      <div class="matchup-team">
+        {% if game.home.logo %}
+        <img src="{{ game.home.logo }}" alt="" class="matchup-logo" width="72" height="72">
+        {% endif %}
+        <h2>{{ game.home.name }}</h2>
+        {% if game.home.record %}<p class="matchup-record">{{ game.home.record }}</p>{% endif %}
+        {% if game.status_state != 'pre' and game.home.score is not none %}
+        <p class="matchup-score">{{ game.home.score }}</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="game-detail-section game-detail-facts">
+      {% if game.preview.venue %}
+      <div class="fact-item">
+        <span class="fact-label">Venue</span>
+        <span class="fact-value">{{ game.preview.venue }}{% if game.preview.venue_city %}, {{ game.preview.venue_city }}{% if game.preview.venue_state %}, {{ game.preview.venue_state }}{% endif %}{% if game.preview.venue_country %}, {{ game.preview.venue_country }}{% endif %}{% endif %}</span>
+      </div>
+      {% endif %}
+      {% if game.preview.broadcasts %}
+      <div class="fact-item">
+        <span class="fact-label">Watch</span>
+        <span class="fact-value">{{ game.preview.broadcasts | join(', ') }}</span>
+      </div>
+      {% endif %}
+      {% if game.preview.spread is not none or game.preview.over_under is not none %}
+      <div class="fact-item">
+        <span class="fact-label">Line</span>
+        <span class="fact-value">
+          {% if game.preview.spread is not none %}Spread {{ game.preview.spread }}{% endif %}
+          {% if game.preview.over_under is not none %}{% if game.preview.spread is not none %} · {% endif %}O/U {{ game.preview.over_under }}{% endif %}
+        </span>
+      </div>
+      {% endif %}
+      {% if game.preview.away_moneyline or game.preview.home_moneyline or game.preview.draw_moneyline %}
+      <div class="fact-item">
+        <span class="fact-label">Moneyline</span>
+        <span class="fact-value">
+          {{ game.away.abbr }} {{ game.preview.away_moneyline or '—' }}
+          · Draw {{ game.preview.draw_moneyline or '—' }}
+          · {{ game.home.abbr }} {{ game.preview.home_moneyline or '—' }}
+        </span>
+      </div>
+      {% endif %}
+    </section>
+
+    {% if game.preview.last_five %}
+    <section class="game-detail-section">
+      <h3>Last 5 Games</h3>
+      <div class="last-five-grid">
+        {% for block in game.preview.last_five %}
+        <div class="last-five-block">
+          <p class="last-five-team">{{ block.abbr }}</p>
+          <ul class="last-five-list">
+            {% for g in block.games %}
+            <li>
+              <span class="last-five-result last-five-result--{{ g.result|lower }}">{{ g.result }}</span>
+              {{ g.score }}{% if g.opponent_abbr %} vs {{ g.opponent_abbr }}{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if game.preview.head_to_head %}
+    <section class="game-detail-section">
+      <h3>Head to Head</h3>
+      <div class="last-five-grid">
+        {% for block in game.preview.head_to_head %}
+        <div class="last-five-block">
+          <p class="last-five-team">{{ block.name or block.abbr }}</p>
+          <ul class="last-five-list">
+            {% for g in block.games %}
+            <li>
+              <span class="last-five-result last-five-result--{{ g.result|lower }}">{{ g.result }}</span>
+              {{ g.score }}{% if g.opponent_abbr %} vs {{ g.opponent_abbr }}{% endif %}
+              {% if g.competition %}<span class="last-five-meta"> · {{ g.competition }}</span>{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if game.preview.group_standings %}
+    <section class="game-detail-section">
+      <h3>Group Standings</h3>
+      {% with standings=game.preview.group_standings %}
+        {% include "partials/world_cup_standings_panel.html" %}
+      {% endwith %}
+    </section>
+    {% endif %}
+
+    {% if game.preview.venue_image %}
+    <section class="game-detail-section">
+      <img src="{{ game.preview.venue_image }}" alt="{{ game.preview.venue }}" class="venue-image">
+    </section>
+    {% endif %}
+  </main>
+
+  <script>
+    (function () {
+      document.querySelectorAll('[data-start-time]').forEach(function (el) {
+        var iso = el.getAttribute('data-start-time');
+        if (!iso) return;
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return;
+        el.textContent = d.toLocaleString(undefined, {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

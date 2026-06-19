@@ -13,6 +13,8 @@
         <span class="navbar-brand__score">Score</span><span class="navbar-brand__bore">bore</span>
       </span>
     </a>
+    {% include "partials/sport_nav.html" %}
+    {% if active_sport | default('mlb') == 'mlb' %}
     <div
       class="scoreboard-search"
       data-scoreboard-search
@@ -39,6 +41,9 @@
         hidden
       ></div>
     </div>
+    {% endif %}
   </div>
 </nav>
+{% if active_sport | default('mlb') == 'mlb' %}
 <script src="{{ url_for('static', filename='js/scoreboard-search.js') }}" defer></script>
+{% endif %}

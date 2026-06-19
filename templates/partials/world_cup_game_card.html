@@ -1,0 +1,33 @@
+{% set has_winner = game.away.winner or game.home.winner %}
+<div class="game-card game-card--{{ game.status_state }} game-card--link" role="link" tabindex="0" data-game-id="{{ game.id }}" data-game-href="/world-cup/match/{{ game.id }}">
+  <div class="game-card-status">
+    <span class="status-pill status-pill--{{ game.status_state }}"
+      {% if game.status_state == 'pre' and game.start_time %}data-start-time="{{ game.start_time }}"{% endif %}>{{ game.status_detail }}</span>
+  </div>
+
+  <div class="game-card-teams">
+    {% for side in [('away', game.away), ('home', game.home)] %}
+    {% set team = side[1] %}
+    <div class="game-card-team game-card-team--{{ side[0] }}{% if team.winner %} game-card-team--winner{% elif game.status_state == 'post' and has_winner %} game-card-team--loser{% endif %}" style="--team-color: {{ team.win_color or team.color or '#1a2332' }};">
+      {% if team.logo %}
+      <img class="game-card-logo" src="{{ team.logo }}" alt="" width="40" height="40" loading="lazy">
+      {% else %}
+      <div class="game-card-logo game-card-logo--placeholder">{{ team.abbr }}</div>
+      {% endif %}
+      <div class="game-card-team-meta">
+        <span class="game-card-abbr">{{ team.abbr }}</span>
+        <span class="game-card-name">{{ team.short_name or team.name }}</span>
+      </div>
+      <span class="game-card-score">
+        {% if game.status_state in ('in', 'post') and team.score is not none %}
+          {{ team.score }}
+        {% elif game.status_state == 'pre' %}
+          —
+        {% else %}
+          {{ team.score if team.score is not none else '—' }}
+        {% endif %}
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+</div>

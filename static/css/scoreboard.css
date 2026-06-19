@@ -7929,3 +7929,118 @@ html.is-mobile-gate body.scoreboard-page {
 html.is-mobile-gate body.scoreboard-page > *:not(.desktop-only-overlay) {
   display: none !important;
 }
+
+/* Sport switcher (MLB / World Cup) */
+.sport-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem;
+  background: rgba(26, 35, 50, 0.06);
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.sport-nav__link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  color: #6b7a90;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sport-nav__link:hover {
+  color: var(--brand-red, #ff2b3b);
+}
+
+.sport-nav__link--active {
+  background: #fff;
+  color: #000;
+}
+
+.sport-nav__link--active:hover {
+  color: var(--brand-red, #ff2b3b);
+}
+
+/* World Cup group standings */
+.world-cup-standings__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.world-cup-standings__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.world-cup-standings__table th,
+.world-cup-standings__table td {
+  padding: 0.45rem 0.35rem;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.world-cup-standings__table th:first-child,
+.world-cup-standings__table td:first-child {
+  text-align: left;
+}
+
+.world-cup-standings__team {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.world-cup-standings__logo {
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.world-cup-standings__abbr {
+  font-weight: 700;
+  color: var(--team-color, #fff);
+}
+
+.world-cup-standings__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #9fb0c8;
+  font-size: 0.8rem;
+}
+
+.world-cup-standings__pts {
+  font-weight: 700;
+}
+
+.game-detail-back {
+  margin: 0 0 1rem;
+}
+
+.game-detail-back a {
+  color: #9fb0c8;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.game-detail-back a:hover {
+  color: #fff;
+}
+
+.matchup-score {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0.35rem 0 0;
+}
+
+.last-five-meta {
+  color: #6b7a90;
+  font-size: 0.85rem;
+}

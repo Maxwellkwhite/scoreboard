@@ -1,0 +1,14 @@
+{% if show_world_cup | default(true) %}
+<nav class="sport-nav" aria-label="Choose sport">
+  <a
+    class="sport-nav__link{% if active_sport | default('mlb') == 'mlb' %} sport-nav__link--active{% endif %}"
+    href="{{ url_for('home_page') }}"
+    {% if active_sport | default('mlb') == 'mlb' %}aria-current="page"{% endif %}
+  >MLB</a>
+  <a
+    class="sport-nav__link{% if active_sport | default('mlb') == 'world_cup' %} sport-nav__link--active{% endif %}"
+    href="{{ url_for('world_cup_scoreboard') }}"
+    {% if active_sport | default('mlb') == 'world_cup' %}aria-current="page"{% endif %}
+  >World Cup</a>
+</nav>
+{% endif %}

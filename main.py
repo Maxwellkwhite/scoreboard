@@ -77,6 +77,11 @@ SUPPORT_EMAIL = os.environ.get('SUPPORT_EMAIL', 'support@example.com')
 def _is_production_env() -> bool:
     return os.environ.get('APP_ENV', '').strip().upper() == 'PROD'
 
+
+def _require_world_cup():
+    if _is_production_env():
+        abort(404)
+
 #done on max@emailsconfirmed.com
 #os.environ.get('DOMAIN', 'http://127.0.0.1:5002')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
@@ -174,6 +179,7 @@ def inject_support_contact():
         'support_email': SUPPORT_EMAIL,
         'help_mailto_subject': quote('Scoreboard - Help request', safe=''),
         'show_dev_tools': not _is_production_env(),
+        'show_world_cup': not _is_production_env(),
     }
 
 
@@ -404,6 +410,82 @@ def home_page():
         upcoming_games=snapshot["upcoming_games"],
         standings=fetch_standings(),
         show_dev_tools=not _is_production_env(),
+        active_sport='mlb',
+    )
+
+
+@app.route('/world-cup', methods=['GET'], endpoint='world_cup_scoreboard')
+def world_cup_scoreboard():
+    _require_world_cup()
+    from espn_world_cup import fetch_standings, scoreboard_snapshot
+
+    snapshot = scoreboard_snapshot()
+    return render_template(
+        'world_cup_scoreboard.html',
+        today=snapshot['today'],
+        yesterday=snapshot['yesterday'],
+        today_games=snapshot['today_games'],
+        yesterday_games=snapshot['yesterday_games'],
+        upcoming_date=snapshot['upcoming_date'],
+        upcoming_games=snapshot['upcoming_games'],
+        standings=fetch_standings(),
+        active_sport='world_cup',
+    )
+
+
+@app.route('/api/world-cup/scoreboard', methods=['GET'], endpoint='api_world_cup_scoreboard')
+def api_world_cup_scoreboard():
+    _require_world_cup()
+    from espn_world_cup import fetch_scoreboard
+
+    date_param = request.args.get('date')
+    if date_param:
+        try:
+            game_date = datetime.strptime(date_param, '%Y%m%d').date()
+        except ValueError:
+            return jsonify({'error': 'date must be YYYYMMDD'}), 400
+    else:
+        game_date = date.today()
+
+    games = fetch_scoreboard(game_date)
+    return jsonify({
+        'date': game_date.isoformat(),
+        'games': games,
+    })
+
+
+@app.route(
+    '/api/world-cup/scoreboard/today',
+    methods=['GET'],
+    endpoint='api_world_cup_scoreboard_today',
+)
+def api_world_cup_scoreboard_today():
+    _require_world_cup()
+    from espn_world_cup import fetch_scoreboard
+
+    today = date.today()
+    games = fetch_scoreboard(today, force_refresh=True)
+    return jsonify({
+        'date': today.isoformat(),
+        'games': games,
+        'has_live': any(game.get('status_state') == 'in' for game in games),
+    })
+
+
+@app.route('/world-cup/match/<match_id>', methods=['GET'], endpoint='world_cup_match_page')
+def world_cup_match_page(match_id):
+    _require_world_cup()
+    from espn_world_cup import fetch_match_summary
+
+    try:
+        match = fetch_match_summary(str(match_id))
+    except (requests.RequestException, ValueError):
+        abort(404)
+
+    return render_template(
+        'world_cup_match.html',
+        game=match,
+        active_sport='world_cup',
     )
 
 
