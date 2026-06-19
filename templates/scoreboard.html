@@ -60,7 +60,9 @@
         {% endif %}
         {% endif %}
 
+        {% if show_dev_tools | default(true) %}
         {% include "partials/game_card_dev_tools.html" %}
+        {% endif %}
       </div>
 
       <div class="day-panel" id="yesterday-panel" role="tabpanel" aria-labelledby="tab-yesterday" hidden data-panel-date="{{ yesterday.isoformat() }}">
@@ -224,7 +226,9 @@
   <script src="{{ url_for('static', filename='js/game-card-game-end.js') }}"></script>
   <script src="{{ url_for('static', filename='js/team-batting-pill.js') }}"></script>
   <script src="{{ url_for('static', filename='js/scoreboard-live.js') }}"></script>
+  {% if show_dev_tools | default(true) %}
   <script src="{{ url_for('static', filename='js/game-card-dev-tools.js') }}" defer></script>
+  {% endif %}
   <script>
     (function () {
       if (!window.scoreboardTabs) return;

@@ -118,6 +118,10 @@ DOMAIN = os.environ.get('DOMAIN', 'http://127.0.0.1:5000')
 CANONICAL_BASE_URL = os.environ.get('CANONICAL_BASE_URL', DOMAIN)
 SUPPORT_EMAIL = os.environ.get('SUPPORT_EMAIL', 'support@example.com')
 
+
+def _is_production_env() -> bool:
+    return os.environ.get('APP_ENV', '').strip().upper() == 'PROD'
+
 #done on max@emailsconfirmed.com
 #os.environ.get('DOMAIN', 'http://127.0.0.1:5002')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
@@ -214,6 +218,7 @@ def inject_support_contact():
     return {
         'support_email': SUPPORT_EMAIL,
         'help_mailto_subject': quote('Scoreboard - Help request', safe=''),
+        'show_dev_tools': not _is_production_env(),
     }
 
 
@@ -1010,6 +1015,7 @@ def home_page():
         upcoming_date=snapshot["upcoming_date"],
         upcoming_games=snapshot["upcoming_games"],
         standings=fetch_standings(),
+        show_dev_tools=not _is_production_env(),
     )
 
 
