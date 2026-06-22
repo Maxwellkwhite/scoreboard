@@ -1,0 +1,65 @@
+<div class="wc-timeline-panel" id="wc-timeline-panel">
+  {% if scoring_events %}
+  <div class="wc-timeline-section">
+    <h4 class="wc-timeline-section__title">Scoring</h4>
+    <ul class="play-feed play-feed--plain" id="wc-scoring-events">
+      {% for event in scoring_events %}
+      {% set event_team = game.away if event.side == 'away' else (game.home if event.side == 'home' else none) %}
+      <li class="play-feed-item play-feed-item--scoring-summary wc-timeline-item wc-timeline-item--scoring">
+        {% if event_team %}
+        <span class="play-feed-team" style="--team-color: {{ event_team.win_color or event_team.color or '#1a2332' }};">
+          {% if event_team.logo %}
+          <img class="play-feed-team__logo" src="{{ event_team.logo }}" alt="" width="20" height="20" loading="lazy">
+          {% else %}
+          <span class="play-feed-team__logo play-feed-team__logo--placeholder">{{ event_team.abbr }}</span>
+          {% endif %}
+          <span class="play-feed-team__abbr">{{ event_team.abbr }}</span>
+        </span>
+        {% else %}
+        <span class="play-feed-team play-feed-team--empty" aria-hidden="true"></span>
+        {% endif %}
+        {% if event.clock %}<span class="play-feed-period">{{ event.clock }}</span>{% endif %}
+        <span class="play-feed-text">{{ event.text }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if key_events %}
+  <div class="wc-timeline-section">
+    <h4 class="wc-timeline-section__title">Match Timeline</h4>
+    <ul class="wc-timeline-feed" id="wc-key-events">
+      {% for event in key_events %}
+      <li class="wc-timeline-feed__item wc-timeline-feed__item--{{ 'scoring' if event.scoring else ('card' if event.card else ('sub' if event.substitution else 'default')) }}">
+        {% if event.clock %}<span class="wc-timeline-feed__clock">{{ event.clock }}</span>{% endif %}
+        <span class="wc-timeline-feed__type">{{ event.type }}</span>
+        <span class="wc-timeline-feed__text">{{ event.text }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if commentary %}
+  <div class="wc-timeline-section">
+    <h4 class="wc-timeline-section__title">Commentary</h4>
+    <ul class="play-feed" id="wc-commentary-feed">
+      {% for item in commentary %}
+      <li class="play-feed-item play-feed-item--compact">
+        {% if item.clock %}<span class="play-feed-period">{{ item.clock }}</span>{% endif %}
+        <span class="play-feed-text">{{ item.text }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if article and article.headline %}
+  <div class="wc-recap-card">
+    <h4 class="wc-recap-card__title">Recap</h4>
+    <p class="wc-recap-card__headline">{{ article.headline }}</p>
+    {% if article.description %}<p class="wc-recap-card__desc">{{ article.description }}</p>{% endif %}
+  </div>
+  {% endif %}
+</div>

@@ -1,0 +1,109 @@
+{% macro wc_lineup_team(side, team, lineup_team) %}
+<div class="lineup-team lineup-team--{{ side }} wc-lineup-team">
+  {% if lineup_team.formation %}
+  <p class="wc-lineup-view__formation">{{ lineup_team.formation }}</p>
+  {% endif %}
+
+  {% if lineup_team.starters %}
+  <h4 class="lineup-section-title">Starting XI</h4>
+  <div class="lineup-table-wrap">
+    <table class="lineup-table wc-lineup-table">
+      <thead>
+        <tr>
+          <th scope="col" class="lineup-table__player-col">Player</th>
+          <th scope="col">G</th>
+          <th scope="col">A</th>
+          <th scope="col">SH</th>
+          <th scope="col">YC</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for player in lineup_team.starters %}
+        <tr class="lineup-table__row">
+          <th scope="row" class="lineup-table__player">
+            {% if player.jersey %}<span class="wc-lineup-jersey">{{ player.jersey }}</span>{% endif %}
+            {{ player.name }}
+            {% if player.position %}<span class="lineup-table__pos">{{ player.position }}</span>{% endif %}
+          </th>
+          <td>{{ player.goals if player.goals not in [none, '0', 0] else '—' }}</td>
+          <td>{{ player.assists if player.assists not in [none, '0', 0] else '—' }}</td>
+          <td>{{ player.shots if player.shots not in [none, '0', 0] else '—' }}</td>
+          <td>{{ player.yellow_cards if player.yellow_cards not in [none, '0', 0] else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if lineup_team.substitutes %}
+  <h4 class="lineup-section-title">Substitutes</h4>
+  <div class="lineup-table-wrap">
+    <table class="lineup-table wc-lineup-table wc-lineup-table--subs">
+      <thead>
+        <tr>
+          <th scope="col" class="lineup-table__player-col">Player</th>
+          <th scope="col">G</th>
+          <th scope="col">A</th>
+          <th scope="col">SH</th>
+          <th scope="col">YC</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for player in lineup_team.substitutes %}
+        <tr class="lineup-table__row lineup-table__row--sub">
+          <th scope="row" class="lineup-table__player">
+            {% if player.jersey %}<span class="wc-lineup-jersey">{{ player.jersey }}</span>{% endif %}
+            {{ player.name }}
+            {% if player.position %}<span class="lineup-table__pos">{{ player.position }}</span>{% endif %}
+          </th>
+          <td>{{ player.goals if player.goals not in [none, '0', 0] else '—' }}</td>
+          <td>{{ player.assists if player.assists not in [none, '0', 0] else '—' }}</td>
+          <td>{{ player.shots if player.shots not in [none, '0', 0] else '—' }}</td>
+          <td>{{ player.yellow_cards if player.yellow_cards not in [none, '0', 0] else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% if lineups and (lineups.away or lineups.home) %}
+<div class="wc-lineup-panel" id="wc-lineup-panel" data-default-side="away" style="--away-team-color: {{ game.away.win_color or game.away.color or '#1a2332' }}; --home-team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};">
+  <div class="game-preview-panel__toolbar">
+    <div class="player-panel-toggle game-preview-rosters-toggle wc-lineup-toggle" role="group" aria-label="Lineup team">
+      {% for side in [('away', game.away), ('home', game.home)] %}
+      {% set team = side[1] %}
+      <button type="button" class="player-panel-toggle__btn game-preview-rosters-toggle__btn game-preview-rosters-toggle__btn--{{ side[0] }}{% if loop.first %} is-active{% endif %}" data-lineup-side="{{ side[0] }}" aria-pressed="{{ 'true' if loop.first else 'false' }}" style="--roster-team-color: {{ team.win_color or team.color or '#1a2332' }};">
+        {% if team.logo %}
+        <img class="game-preview-rosters-toggle__logo" src="{{ team.logo }}" alt="" width="18" height="18" loading="lazy">
+        {% endif %}
+        <span>{{ team.abbr }}</span>
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% for side in [('away', game.away), ('home', game.home)] %}
+  {% set team = side[1] %}
+  {% set lineup_team = lineups.away if side[0] == 'away' else lineups.home %}
+  <div class="wc-lineup-view" data-lineup-side="{{ side[0] }}"{% if not loop.first %} hidden{% endif %}>
+    <header class="wc-lineup-view__head">
+      {% if team.logo %}
+      <img src="{{ team.logo }}" alt="" class="wc-lineup-view__logo" width="32" height="32" loading="lazy">
+      {% endif %}
+      <h4 class="wc-lineup-view__title">{{ team.short_name or team.name }}</h4>
+    </header>
+    {% if lineup_team and lineup_team.players %}
+      {{ wc_lineup_team(side[0], team, lineup_team) }}
+    {% else %}
+      <p class="wc-empty-panel">Lineup not available yet.</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="wc-empty-panel">Lineups will be posted closer to kickoff.</p>
+{% endif %}

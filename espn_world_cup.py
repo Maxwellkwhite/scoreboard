@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from typing import Any
 
@@ -17,10 +18,15 @@ ESPN_SUMMARY_URL = (
 ESPN_STANDINGS_URL = (
     "https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings"
 )
+ESPN_TEAM_ROSTER_URL = (
+    "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/{team_id}/roster"
+)
 
 CACHE_TTL_SECONDS = 30
+ROSTER_CACHE_TTL_SECONDS = 3600
 _cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _summary_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_team_roster_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _standings_cache: tuple[float, list[dict[str, Any]]] | None = None
 
 STRIP_CARDS_PER_PAGE = 4
@@ -321,7 +327,9 @@ def _parse_last_five(last_five_games: list[dict[str, Any]] | None) -> list[dict[
                 "score": event.get("score"),
                 "opponent_abbr": opponent.get("abbreviation"),
                 "competition": event.get("competitionName"),
+                "date": event.get("gameDate"),
             })
+        games.sort(key=lambda game: game.get("date") or "", reverse=True)
         blocks.append({
             "abbr": team.get("abbreviation", ""),
             "name": team.get("displayName", ""),
@@ -348,9 +356,588 @@ def _parse_head_to_head(head_to_head: list[dict[str, Any]] | None) -> list[dict[
         blocks.append({
             "abbr": team.get("abbreviation", ""),
             "name": team.get("displayName", ""),
+            "logo": team.get("logo"),
             "games": games,
         })
     return blocks
+
+
+_MATCH_TEAM_STAT_SPECS: list[tuple[str, str, bool]] = [
+    ("possessionPct", "Possession", False),
+    ("totalShots", "Shots", False),
+    ("shotsOnTarget", "Shots on Target", False),
+    ("wonCorners", "Corners", False),
+    ("accuratePasses", "Accurate Passes", False),
+    ("foulsCommitted", "Fouls", True),
+    ("yellowCards", "Yellow Cards", True),
+    ("redCards", "Red Cards", True),
+    ("saves", "Saves", False),
+    ("offsides", "Offsides", True),
+]
+
+_TOURNAMENT_TEAM_STAT_SPECS: list[tuple[str, str, bool]] = [
+    ("totalGoals", "Goals", False),
+    ("goalAssists", "Assists", False),
+    ("goalsConceded", "Goals Conceded", True),
+    ("groupPts", "Points", False),
+]
+
+_TIMELINE_SKIP_TYPES = frozenset({
+    "start delay",
+    "end delay",
+})
+
+
+def _apply_standings_pts_to_team_box(
+    team_box: list[dict[str, Any]],
+    standings: list[dict[str, Any]] | None,
+) -> None:
+    pts_by_abbr: dict[str, Any] = {}
+    for group in standings or []:
+        for team in group.get("teams") or []:
+            abbr = team.get("abbr")
+            if abbr:
+                pts_by_abbr[abbr] = team.get("pts")
+    for box in team_box:
+        abbr = box.get("abbr")
+        if abbr in pts_by_abbr:
+            box["groupPts"] = pts_by_abbr[abbr]
+
+
+def _stats_map(statistics: list[dict[str, Any]] | None) -> dict[str, Any]:
+    mapped: dict[str, Any] = {}
+    for stat in statistics or []:
+        name = stat.get("name")
+        if not name:
+            continue
+        mapped[name] = stat.get("displayValue")
+        if stat.get("value") is not None:
+            mapped[f"{name}__value"] = stat.get("value")
+    return mapped
+
+
+def _parse_team_box_side(
+    team_block: dict[str, Any],
+    *,
+    home_away: str,
+    specs: list[tuple[str, str, bool]],
+) -> dict[str, Any]:
+    team = team_block.get("team") or {}
+    stats = _stats_map(team_block.get("statistics"))
+    parsed: dict[str, Any] = {
+        "home_away": home_away,
+        "abbr": team.get("abbreviation", ""),
+        "name": team.get("displayName", ""),
+        "logo": _team_logo(team),
+    }
+    for key, label, lower_is_better in specs:
+        parsed[key] = stats.get(key)
+        parsed[f"{key}__label"] = label
+        parsed[f"{key}__lower_is_better"] = lower_is_better
+    return parsed
+
+
+def _parse_team_box(
+    teams: list[dict[str, Any]] | None,
+    *,
+    away_id: str,
+    home_id: str,
+    specs: list[tuple[str, str, bool]],
+) -> list[dict[str, Any]]:
+    away_box = home_box = None
+    for team_block in teams or []:
+        team = team_block.get("team") or {}
+        team_id = str(team.get("id") or "")
+        if team_id == away_id:
+            away_box = _parse_team_box_side(team_block, home_away="away", specs=specs)
+        elif team_id == home_id:
+            home_box = _parse_team_box_side(team_block, home_away="home", specs=specs)
+    boxes: list[dict[str, Any]] = []
+    if away_box:
+        boxes.append(away_box)
+    if home_box:
+        boxes.append(home_box)
+    return boxes
+
+
+def _parse_form_events(form_blocks: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    blocks: list[dict[str, Any]] = []
+    for block in form_blocks or []:
+        team = block.get("team") or {}
+        games = []
+        for event in block.get("events") or []:
+            opponent = event.get("opponent") or {}
+            games.append({
+                "date": event.get("gameDate"),
+                "score": event.get("score"),
+                "at_vs": event.get("atVs"),
+                "opponent_abbr": opponent.get("abbreviation"),
+                "opponent_name": opponent.get("displayName"),
+                "competition": event.get("competitionName"),
+            })
+        blocks.append({
+            "abbr": team.get("abbreviation", ""),
+            "name": team.get("displayName", ""),
+            "logo": _team_logo(team),
+            "games": games,
+        })
+    return blocks
+
+
+def _parse_roster_player(entry: dict[str, Any]) -> dict[str, Any] | None:
+    athlete = entry.get("athlete") or {}
+    if not athlete.get("displayName") and not athlete.get("fullName"):
+        return None
+    position = entry.get("position") or {}
+    if isinstance(position, dict):
+        pos_label = position.get("abbreviation") or position.get("name") or ""
+    else:
+        pos_label = str(position) if position else ""
+    stats = _stats_map(entry.get("stats"))
+    headshot = athlete.get("headshot") or {}
+    return {
+        "id": athlete.get("id"),
+        "name": athlete.get("displayName") or athlete.get("fullName"),
+        "short_name": athlete.get("shortName"),
+        "jersey": entry.get("jersey"),
+        "position": pos_label,
+        "starter": bool(entry.get("starter")),
+        "subbed_in": entry.get("subbedIn"),
+        "subbed_out": entry.get("subbedOut"),
+        "headshot": headshot.get("href") if isinstance(headshot, dict) else None,
+        "goals": stats.get("totalGoals", "0"),
+        "assists": stats.get("goalAssists", "0"),
+        "yellow_cards": stats.get("yellowCards", "0"),
+        "red_cards": stats.get("redCards", "0"),
+        "shots": stats.get("totalShots", "0"),
+        "saves": stats.get("saves"),
+    }
+
+
+_ROSTER_SECTION_SPECS = (
+    ("goalkeepers", "Goalkeepers"),
+    ("defenders", "Defenders"),
+    ("midfielders", "Midfielders"),
+    ("forwards", "Forwards"),
+    ("substitutes", "Substitutes"),
+)
+_SQUAD_SECTION_SPECS = _ROSTER_SECTION_SPECS[:4]
+
+
+def _roster_position_group(position: Any) -> str:
+    if isinstance(position, dict):
+        abbr = (position.get("abbreviation") or "").upper()
+        name = (position.get("name") or position.get("displayName") or "").lower()
+    else:
+        abbr = str(position or "").upper()
+        name = abbr.lower()
+    if abbr == "SUB" or "substitute" in name:
+        return "substitutes"
+    if abbr == "G" or "goalkeeper" in name:
+        return "goalkeepers"
+    if (
+        "defender" in name
+        or abbr in {"CD", "CD-L", "CD-R", "LB", "RB", "CB"}
+        or "back" in name
+    ):
+        return "defenders"
+    if (
+        "forward" in name
+        or "striker" in name
+        or abbr in {"FW", "CF", "ST"}
+        or (abbr.startswith("F") and abbr != "SUB")
+    ):
+        return "forwards"
+    if "midfield" in name or abbr.startswith("M") or abbr in {"CM", "DM", "AM", "LM", "RM"}:
+        return "midfielders"
+    return "midfielders"
+
+
+def _roster_player_sort_key(player: dict[str, Any]) -> tuple[int, int, str]:
+    jersey = player.get("jersey")
+    if jersey is not None and str(jersey).isdigit():
+        return (0, int(jersey), player.get("name") or "")
+    return (1, 999, player.get("name") or "")
+
+
+def _parse_roster_side_sections(block: dict[str, Any]) -> dict[str, Any]:
+    grouped: dict[str, list[dict[str, Any]]] = {
+        key: [] for key, _ in _ROSTER_SECTION_SPECS
+    }
+    for entry in block.get("roster") or []:
+        if not isinstance(entry, dict):
+            continue
+        player = _parse_roster_player(entry)
+        if not player:
+            continue
+        section_key = _roster_position_group(entry.get("position"))
+        grouped[section_key].append(
+            {
+                "id": player["id"],
+                "name": player["name"],
+                "jersey": player["jersey"],
+                "position": player["position"],
+                "headshot": player["headshot"],
+                "filter": section_key.rstrip("s")
+                if section_key != "substitutes"
+                else "substitute",
+            }
+        )
+    sections = []
+    for key, title in _ROSTER_SECTION_SPECS:
+        players = grouped.get(key) or []
+        if not players:
+            continue
+        players.sort(key=_roster_player_sort_key)
+        sections.append({"id": key, "title": title, "players": players})
+    team = block.get("team") or {}
+    return {
+        "abbr": team.get("abbreviation", ""),
+        "name": team.get("displayName", ""),
+        "logo": _team_logo(team),
+        "formation": block.get("formation"),
+        "sections": sections,
+    }
+
+
+def _squad_position_group(position: Any) -> str:
+    if isinstance(position, dict):
+        abbr = (position.get("abbreviation") or "").upper()
+        name = (position.get("name") or position.get("displayName") or "").lower()
+    else:
+        abbr = str(position or "").upper()
+        name = abbr.lower()
+    if abbr == "G" or "goalkeeper" in name:
+        return "goalkeepers"
+    if abbr == "D" or "defender" in name:
+        return "defenders"
+    if abbr == "F" or "forward" in name:
+        return "forwards"
+    if abbr == "M" or "midfield" in name:
+        return "midfielders"
+    return "midfielders"
+
+
+def _parse_squad_athlete(athlete: dict[str, Any]) -> dict[str, Any] | None:
+    if not athlete.get("displayName") and not athlete.get("fullName"):
+        return None
+    position = athlete.get("position") or {}
+    if isinstance(position, dict):
+        pos_label = position.get("abbreviation") or position.get("name") or ""
+    else:
+        pos_label = str(position) if position else ""
+    section_key = _squad_position_group(position)
+    headshot = athlete.get("headshot") or {}
+    headshot_url = headshot.get("href") if isinstance(headshot, dict) else None
+    return {
+        "id": athlete.get("id"),
+        "name": athlete.get("displayName") or athlete.get("fullName"),
+        "jersey": athlete.get("jersey"),
+        "position": pos_label,
+        "headshot": headshot_url,
+        "filter": section_key.rstrip("s"),
+    }
+
+
+def _iter_squad_athletes(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    athletes: list[dict[str, Any]] = []
+    for entry in payload.get("athletes") or []:
+        if not isinstance(entry, dict):
+            continue
+        items = entry.get("items")
+        if items:
+            athletes.extend(item for item in items if isinstance(item, dict))
+        else:
+            athletes.append(entry)
+    return athletes
+
+
+def _parse_team_squad_roster_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
+    grouped: dict[str, list[dict[str, Any]]] = {
+        key: [] for key, _ in _SQUAD_SECTION_SPECS
+    }
+    for athlete in _iter_squad_athletes(payload):
+        player = _parse_squad_athlete(athlete)
+        if not player:
+            continue
+        section_key = _squad_position_group(athlete.get("position"))
+        grouped[section_key].append(player)
+
+    sections = []
+    for key, title in _SQUAD_SECTION_SPECS:
+        players = grouped.get(key) or []
+        if not players:
+            continue
+        players.sort(key=_roster_player_sort_key)
+        sections.append({"id": key, "title": title, "players": players})
+    if not sections:
+        return None
+
+    team = payload.get("team") or {}
+    return {
+        "abbr": team.get("abbreviation", ""),
+        "name": team.get("displayName", ""),
+        "logo": _team_logo(team),
+        "sections": sections,
+    }
+
+
+def fetch_team_squad_roster(
+    team_id: str,
+    *,
+    force_refresh: bool = False,
+) -> dict[str, Any] | None:
+    team_id = str(team_id)
+    now = time.time()
+    cached = _team_roster_cache.get(team_id)
+    if not force_refresh and cached and now - cached[0] < ROSTER_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    try:
+        response = requests.get(
+            ESPN_TEAM_ROSTER_URL.format(team_id=team_id),
+            timeout=15,
+        )
+        response.raise_for_status()
+    except (requests.RequestException, ValueError):
+        return None
+
+    roster = _parse_team_squad_roster_payload(response.json())
+    if roster:
+        _team_roster_cache[team_id] = (now, roster)
+    return roster
+
+
+def attach_preview_rosters(match: dict[str, Any]) -> None:
+    """Attach full tournament squad rosters for pre-match preview."""
+    if match.get("status_state") != "pre":
+        return
+
+    preview = match.setdefault("preview", {})
+    existing = preview.get("rosters") or {}
+    if existing.get("away") or existing.get("home"):
+        return
+
+    away_id = str((match.get("away") or {}).get("id") or "")
+    home_id = str((match.get("home") or {}).get("id") or "")
+    if not away_id or not home_id:
+        return
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        away_future = executor.submit(fetch_team_squad_roster, away_id)
+        home_future = executor.submit(fetch_team_squad_roster, home_id)
+        away_roster = away_future.result()
+        home_roster = home_future.result()
+
+    if not away_roster and not home_roster:
+        return
+
+    preview["rosters"] = {
+        "away": away_roster,
+        "home": home_roster,
+    }
+
+
+def _parse_match_rosters(
+    rosters: list[dict[str, Any]] | None,
+    *,
+    away_id: str,
+    home_id: str,
+) -> dict[str, Any] | None:
+    away_roster = home_roster = None
+    for block in rosters or []:
+        team = block.get("team") or {}
+        team_id = str(team.get("id") or "")
+        parsed = _parse_roster_side_sections(block)
+        if team_id == away_id:
+            away_roster = parsed
+        elif team_id == home_id:
+            home_roster = parsed
+    if not away_roster and not home_roster:
+        return None
+    if away_roster and not away_roster.get("sections"):
+        away_roster = None
+    if home_roster and not home_roster.get("sections"):
+        home_roster = None
+    if not away_roster and not home_roster:
+        return None
+    return {
+        "away": away_roster,
+        "home": home_roster,
+    }
+
+
+def _parse_roster_side(block: dict[str, Any]) -> dict[str, Any]:
+    players = []
+    for entry in block.get("roster") or []:
+        if not isinstance(entry, dict):
+            continue
+        player = _parse_roster_player(entry)
+        if player:
+            players.append(player)
+    starters = [player for player in players if player.get("starter")]
+    substitutes = [player for player in players if not player.get("starter")]
+    return {
+        "formation": block.get("formation"),
+        "starters": starters,
+        "substitutes": substitutes,
+        "players": players,
+    }
+
+
+def _parse_lineups(
+    rosters: list[dict[str, Any]] | None,
+    *,
+    away_id: str,
+    home_id: str,
+) -> dict[str, Any] | None:
+    away_lineup = home_lineup = None
+    for block in rosters or []:
+        team = block.get("team") or {}
+        team_id = str(team.get("id") or "")
+        parsed = _parse_roster_side(block)
+        parsed["abbr"] = team.get("abbreviation", "")
+        parsed["name"] = team.get("displayName", "")
+        parsed["logo"] = _team_logo(team)
+        if team_id == away_id:
+            away_lineup = parsed
+        elif team_id == home_id:
+            home_lineup = parsed
+    if not away_lineup and not home_lineup:
+        return None
+    if away_lineup and not away_lineup.get("players"):
+        away_lineup = None
+    if home_lineup and not home_lineup.get("players"):
+        home_lineup = None
+    if not away_lineup and not home_lineup:
+        return None
+    return {
+        "away": away_lineup,
+        "home": home_lineup,
+    }
+
+
+def _parse_leaders_blocks(
+    leaders: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    blocks: list[dict[str, Any]] = []
+    for block in leaders or []:
+        team = block.get("team") or {}
+        categories = []
+        for category in block.get("leaders") or []:
+            entries = category.get("leaders") or []
+            if not entries:
+                continue
+            leader = entries[0]
+            athlete = leader.get("athlete") or {}
+            categories.append({
+                "category": category.get("displayName") or category.get("name"),
+                "player": athlete.get("displayName") or athlete.get("fullName"),
+                "player_id": athlete.get("id"),
+                "value": leader.get("displayValue") or leader.get("value"),
+            })
+        if categories:
+            blocks.append({
+                "abbr": team.get("abbreviation", ""),
+                "name": team.get("displayName", ""),
+                "logo": _team_logo(team),
+                "color": _team_color(team) or "#1a2332",
+                "categories": categories,
+            })
+    return blocks
+
+
+def _event_side(team: dict[str, Any] | None, away_id: str, home_id: str) -> str | None:
+    if not team:
+        return None
+    team_id = str(team.get("id") or "")
+    if team_id == away_id:
+        return "away"
+    if team_id == home_id:
+        return "home"
+    return None
+
+
+def _parse_key_events(
+    events: list[dict[str, Any]] | None,
+    *,
+    away_id: str,
+    home_id: str,
+) -> list[dict[str, Any]]:
+    parsed: list[dict[str, Any]] = []
+    for event in events or []:
+        event_type = (event.get("type") or {}).get("text") or ""
+        if event_type.lower() in _TIMELINE_SKIP_TYPES:
+            continue
+        team = event.get("team") or {}
+        participants = []
+        for participant in event.get("participants") or []:
+            athlete = participant.get("athlete") or {}
+            name = athlete.get("displayName") or athlete.get("fullName")
+            if name:
+                participants.append(name)
+        parsed.append({
+            "type": event_type,
+            "type_id": (event.get("type") or {}).get("type"),
+            "clock": (event.get("clock") or {}).get("displayValue"),
+            "text": event.get("text"),
+            "side": _event_side(team, away_id, home_id),
+            "participants": participants,
+            "scoring": "goal" in event_type.lower(),
+            "card": "card" in event_type.lower(),
+            "substitution": event_type.lower() == "substitution",
+        })
+    return parsed
+
+
+def _parse_commentary(
+    commentary: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for entry in commentary or []:
+        text = entry.get("text")
+        if not text:
+            continue
+        clock = entry.get("time") or entry.get("clock") or {}
+        items.append({
+            "clock": clock.get("displayValue") if isinstance(clock, dict) else str(clock),
+            "text": text,
+            "type": (entry.get("type") or {}).get("text"),
+        })
+    return items
+
+
+def _parse_group_name(comp: dict[str, Any]) -> str | None:
+    groups = comp.get("groups") or {}
+    if isinstance(groups, dict):
+        return groups.get("name") or groups.get("abbreviation")
+    if isinstance(groups, list) and groups:
+        first = groups[0]
+        if isinstance(first, dict):
+            return first.get("name") or first.get("abbreviation")
+    return None
+
+
+def _parse_officials(game_info: dict[str, Any]) -> list[dict[str, str]]:
+    officials: list[dict[str, str]] = []
+    for official in game_info.get("officials") or []:
+        name = official.get("displayName") or official.get("shortDisplayName")
+        if not name:
+            continue
+        position = (official.get("position") or {}).get("name") or "Official"
+        officials.append({"name": name, "role": position})
+    return officials
+
+
+def _competition_notes(comp: dict[str, Any]) -> list[str]:
+    notes: list[str] = []
+    for note in comp.get("notes") or []:
+        if not isinstance(note, dict):
+            continue
+        text = note.get("text") or note.get("headline")
+        if text and text not in notes:
+            notes.append(text)
+    return notes
 
 
 def _entry_logo(entry: dict[str, Any], team: dict[str, Any] | None = None) -> str | None:
@@ -551,7 +1138,67 @@ def parse_match_detail(payload: dict[str, Any]) -> dict[str, Any]:
         "head_to_head": _parse_head_to_head(payload.get("headToHeadGames")),
         "group_standings": _parse_group_standings_from_summary(payload),
         "broadcasts": broadcasts,
+        "group_name": _parse_group_name(comp),
+        "officials": _parse_officials(game_info),
+        "attendance": game_info.get("attendance"),
+        "notes": _competition_notes(comp),
+        "recent_form": _parse_form_events((payload.get("boxscore") or {}).get("form")),
+        "tournament_leaders": _parse_leaders_blocks(payload.get("leaders")),
     }
+
+    away_id = str((match.get("away") or {}).get("id") or "")
+    home_id = str((match.get("home") or {}).get("id") or "")
+    boxscore = payload.get("boxscore") or {}
+    status_state = match.get("status_state")
+    is_pre = status_state == "pre"
+
+    match_stats = _parse_team_box(
+        boxscore.get("teams"),
+        away_id=away_id,
+        home_id=home_id,
+        specs=_TOURNAMENT_TEAM_STAT_SPECS if is_pre else _MATCH_TEAM_STAT_SPECS,
+    )
+    roster_blocks = payload.get("rosters")
+    lineups = _parse_lineups(roster_blocks, away_id=away_id, home_id=home_id)
+    match_rosters = _parse_match_rosters(roster_blocks, away_id=away_id, home_id=home_id)
+    key_events = _parse_key_events(
+        payload.get("keyEvents"),
+        away_id=away_id,
+        home_id=home_id,
+    )
+    commentary = _parse_commentary(payload.get("commentary"))
+
+    if is_pre:
+        group_standings = match["preview"]["group_standings"]
+        _apply_standings_pts_to_team_box(match_stats, group_standings)
+        match["preview"]["tournament_stats"] = match_stats
+    else:
+        match["live"] = {
+            "team_box": match_stats,
+            "lineups": lineups,
+            "leaders": _parse_leaders_blocks(payload.get("leaders")),
+            "key_events": key_events,
+            "commentary": commentary,
+            "scoring_events": [event for event in key_events if event.get("scoring")],
+        }
+
+    if is_pre:
+        match["preview"]["rosters"] = match_rosters
+
+    article = payload.get("article") or {}
+    if article.get("headline"):
+        links = article.get("links") or {}
+        web = links.get("web") or {}
+        recap = {
+            "headline": article.get("headline"),
+            "description": article.get("description"),
+            "link": web.get("href"),
+        }
+        if is_pre:
+            match["preview"]["article"] = recap
+        else:
+            match.setdefault("live", {})["article"] = recap
+
     return match
 
 
@@ -576,6 +1223,7 @@ def fetch_match_summary(
         raise ValueError(f"No summary for match {match_id}")
 
     detail = parse_match_detail(payload)
+    attach_preview_rosters(detail)
     _summary_cache[match_id] = (now, detail)
     return detail
 

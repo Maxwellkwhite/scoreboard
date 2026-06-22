@@ -1,0 +1,46 @@
+{% if standings %}
+<div class="wc-match-standings" aria-label="Group standings">
+  {% for group in standings %}
+  <div class="wc-match-standings__table-wrap">
+    <table class="wc-match-standings__table">
+      <colgroup>
+        <col class="wc-match-standings__col-pts">
+        <col class="wc-match-standings__col-team">
+        <col class="wc-match-standings__col-record">
+        <col class="wc-match-standings__col-gd">
+      </colgroup>
+      <thead>
+        <tr>
+          <th scope="col">Pts</th>
+          <th scope="col">Team</th>
+          <th scope="col">W-D-L</th>
+          <th scope="col">GD</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for team in group.teams %}
+        {% set is_match_team = team.abbr and (team.abbr == game.away.abbr or team.abbr == game.home.abbr) %}
+        <tr class="wc-match-standings__row{% if is_match_team %} wc-match-standings__row--match-team{% endif %}" style="--team-color: {{ team.color or '#1a2332' }};">
+          <td class="wc-match-standings__pts">{{ team.pts if team.pts is not none else '—' }}</td>
+          <td class="wc-match-standings__team">
+            <span class="wc-match-standings__team-mark">
+              {% if team.logo %}
+              <img class="wc-match-standings__logo" src="{{ team.logo }}" alt="" width="24" height="24" loading="lazy">
+              {% else %}
+              <span class="wc-match-standings__logo wc-match-standings__logo--fallback">{{ team.abbr }}</span>
+              {% endif %}
+              <span class="wc-match-standings__name">{{ team.name }}</span>
+            </span>
+          </td>
+          <td class="wc-match-standings__record">{{ team.record or '—' }}</td>
+          <td class="wc-match-standings__gd">{{ team.gd if team.gd is not none else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="standings-panel__empty">Standings unavailable right now.</p>
+{% endif %}

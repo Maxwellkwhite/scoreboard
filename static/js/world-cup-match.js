@@ -145,6 +145,126 @@
     );
   }
 
+  function initRosterToggle() {
+    var container = document.getElementById('wc-preview-rosters');
+    if (!container) return;
+
+    container.querySelectorAll('.game-preview-rosters-toggle .player-panel-toggle__btn').forEach(function (btn) {
+      if (btn.getAttribute('data-wc-roster-toggle-bound') === 'true') return;
+      btn.setAttribute('data-wc-roster-toggle-bound', 'true');
+      btn.addEventListener('click', function () {
+        var side = btn.getAttribute('data-roster-side');
+        if (!side) return;
+
+        container.querySelectorAll('.game-preview-rosters-toggle .player-panel-toggle__btn').forEach(function (toggleBtn) {
+          var isActive = toggleBtn.getAttribute('data-roster-side') === side;
+          toggleBtn.classList.toggle('is-active', isActive);
+          toggleBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+
+        container.querySelectorAll('.game-preview-rosters-view').forEach(function (panel) {
+          panel.hidden = panel.getAttribute('data-roster-side') !== side;
+        });
+      });
+    });
+  }
+
+  function initLineupToggle() {
+    var container = document.getElementById('wc-lineup-panel');
+    if (!container) return;
+
+    container.querySelectorAll('.wc-lineup-toggle .player-panel-toggle__btn').forEach(function (btn) {
+      if (btn.getAttribute('data-lineup-toggle-bound') === 'true') return;
+      btn.setAttribute('data-lineup-toggle-bound', 'true');
+      btn.addEventListener('click', function () {
+        var side = btn.getAttribute('data-lineup-side');
+        if (!side) return;
+
+        container.querySelectorAll('.wc-lineup-toggle .player-panel-toggle__btn').forEach(function (toggleBtn) {
+          var isActive = toggleBtn.getAttribute('data-lineup-side') === side;
+          toggleBtn.classList.toggle('is-active', isActive);
+          toggleBtn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+
+        container.querySelectorAll('.wc-lineup-view').forEach(function (panel) {
+          panel.hidden = panel.getAttribute('data-lineup-side') !== side;
+        });
+      });
+    });
+  }
+
+  function parseStatNumber(value) {
+    if (value == null || value === '') return null;
+    var num = parseFloat(String(value).replace('%', ''));
+    return isNaN(num) ? null : num;
+  }
+
+  function updateTeamStats(teamBox) {
+    if (!teamBox || !teamBox.length) return;
+    var away = teamBox.find(function (row) { return row.home_away === 'away'; });
+    var home = teamBox.find(function (row) { return row.home_away === 'home'; });
+    if (!away || !home) return;
+
+    document.querySelectorAll('[data-stat-away]').forEach(function (el) {
+      var key = el.getAttribute('data-stat-away');
+      if (key && away[key] != null) {
+        el.textContent = away[key];
+      }
+    });
+    document.querySelectorAll('[data-stat-home]').forEach(function (el) {
+      var key = el.getAttribute('data-stat-home');
+      if (key && home[key] != null) {
+        el.textContent = home[key];
+      }
+    });
+
+    document.querySelectorAll('.team-stats__row[data-stat-key]').forEach(function (row) {
+      var key = row.getAttribute('data-stat-key');
+      if (!key) return;
+      var awayRaw = away[key];
+      var homeRaw = home[key];
+      var awayNum = parseStatNumber(awayRaw);
+      var homeNum = parseStatNumber(homeRaw);
+      var awayBar = row.querySelector('[data-stat-bar-away="' + key + '"]');
+      var homeBar = row.querySelector('[data-stat-bar-home="' + key + '"]');
+      if (awayNum == null || homeNum == null || !awayBar || !homeBar) return;
+      var lowerIsBetter = key === 'foulsCommitted' || key === 'yellowCards' ||
+        key === 'redCards' || key === 'offsides' || key === 'goalsConceded';
+      var awayBarVal = lowerIsBetter ? homeNum : awayNum;
+      var homeBarVal = lowerIsBetter ? awayNum : homeNum;
+      var total = awayBarVal + homeBarVal;
+      if (total <= 0) return;
+      awayBar.style.width = ((awayBarVal / total) * 100).toFixed(1) + '%';
+      homeBar.style.width = ((homeBarVal / total) * 100).toFixed(1) + '%';
+    });
+  }
+
+  function formatFormDates() {
+    document.querySelectorAll('.wc-form-list__date[data-start-time]').forEach(function (el) {
+      var iso = el.getAttribute('data-start-time');
+      if (!iso) return;
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return;
+      el.textContent = d.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    });
+  }
+
+  var lastEventCount = document.querySelectorAll('#wc-key-events .wc-timeline-feed__item').length;
+
+  function applyLivePanels(game) {
+    if (!game || !game.live) return;
+    updateTeamStats(game.live.team_box);
+    var eventCount = (game.live.key_events || []).length;
+    if (game.status_state === 'in' && eventCount > lastEventCount) {
+      window.location.reload();
+    }
+    lastEventCount = eventCount;
+  }
+
   function applyGame(game) {
     if (!game) return;
 
@@ -185,6 +305,12 @@
       if (homeScore && game.home) {
         homeScore.textContent = game.home.score != null ? game.home.score : '0';
       }
+    }
+
+    applyLivePanels(game);
+
+    if (game.status_state !== initialStatus && initialStatus) {
+      window.location.reload();
     }
   }
 
@@ -321,6 +447,9 @@
 
   initDetailTabs();
   initStripCardNavigation();
+  initRosterToggle();
+  initLineupToggle();
+  formatFormDates();
 
   if (initialStatus === 'pre') {
     var statusPill = document.getElementById('game-status-pill');

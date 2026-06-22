@@ -1,0 +1,85 @@
+{% set away_box = team_box | selectattr('home_away', 'equalto', 'away') | list | first %}
+{% set home_box = team_box | selectattr('home_away', 'equalto', 'home') | list | first %}
+{% if tournament_mode %}
+  {% set stat_specs = [
+    ('totalGoals', 'Goals', false),
+    ('goalAssists', 'Assists', false),
+    ('goalsConceded', 'Goals Conceded', true),
+    ('groupPts', 'Points', false),
+  ] %}
+  {% set panel_label = 'Tournament' %}
+{% else %}
+  {% set stat_specs = [
+    ('possessionPct', 'Possession', false),
+    ('totalShots', 'Shots', false),
+    ('shotsOnTarget', 'Shots on Target', false),
+    ('wonCorners', 'Corners', false),
+    ('accuratePasses', 'Accurate Passes', false),
+    ('foulsCommitted', 'Fouls', true),
+    ('yellowCards', 'Yellow Cards', true),
+    ('redCards', 'Red Cards', true),
+    ('saves', 'Saves', false),
+    ('offsides', 'Offsides', true),
+  ] %}
+  {% set panel_label = 'Match' %}
+{% endif %}
+
+<div class="team-stats probable-pitchers-matchup team-season-matchup wc-team-stats" id="wc-team-stats-panel" style="--away-team-color: {{ game.away.win_color or game.away.color or '#1a2332' }}; --home-team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};">
+  <div class="probable-pitchers-matchup__pitchers">
+    {% for side in [('away', game.away), ('home', game.home)] %}
+    {% set team = side[1] %}
+    {% set box = away_box if side[0] == 'away' else home_box %}
+    <article class="pitcher-card pitcher-card--preview pitcher-card--matchup pitcher-card--{{ side[0] }} pitcher-card--team-only">
+      <header class="pitcher-card__team pitcher-card__team--{{ side[0] }}">
+        {% if team.logo %}
+        <img class="pitcher-card__team-logo" src="{{ team.logo }}" alt="" width="32" height="32" loading="lazy">
+        {% else %}
+        <span class="pitcher-card__team-logo-fallback">{{ team.abbr }}</span>
+        {% endif %}
+        <span class="pitcher-card__team-abbr">{{ box.abbr if box else team.abbr }}</span>
+      </header>
+    </article>
+    {% endfor %}
+  </div>
+
+  <p class="probable-pitchers-matchup__label">{{ panel_label }} Stats</p>
+  <div class="team-stats__rows">
+    {% for stat_key, stat_label, lower_is_better in stat_specs %}
+      {% set away_raw = away_box[stat_key] if away_box and away_box[stat_key] is not none else none %}
+      {% set home_raw = home_box[stat_key] if home_box and home_box[stat_key] is not none else none %}
+      {% if away_raw is not none or home_raw is not none %}
+        {% set away_num = away_raw | float if away_raw is not none and away_raw != '' else none %}
+        {% set home_num = home_raw | float if home_raw is not none and home_raw != '' else none %}
+        {% if away_num is not none and home_num is not none %}
+          {% if lower_is_better %}
+            {% set away_bar = home_num %}
+            {% set home_bar = away_num %}
+          {% else %}
+            {% set away_bar = away_num %}
+            {% set home_bar = home_num %}
+          {% endif %}
+          {% set stat_total = away_bar + home_bar %}
+        {% else %}
+          {% set stat_total = 0 %}
+        {% endif %}
+        <div class="team-stats__row" data-stat-key="{{ stat_key }}">
+          <div class="team-stats__values">
+            <div class="team-stats__cell team-stats__cell--away">
+              <span class="team-stats__value" data-stat-away="{{ stat_key }}">{{ away_raw if away_raw is not none else '—' }}</span>
+            </div>
+            <div class="team-stats__label">{{ stat_label }}</div>
+            <div class="team-stats__cell team-stats__cell--home">
+              <span class="team-stats__value" data-stat-home="{{ stat_key }}">{{ home_raw if home_raw is not none else '—' }}</span>
+            </div>
+          </div>
+          {% if stat_total > 0 %}
+          <div class="team-stats__bar" role="presentation">
+            <span class="team-stats__bar-away" data-stat-bar-away="{{ stat_key }}" style="width: {{ (away_bar / stat_total * 100) | round(1) }}%"></span>
+            <span class="team-stats__bar-home" data-stat-bar-home="{{ stat_key }}" style="width: {{ (home_bar / stat_total * 100) | round(1) }}%"></span>
+          </div>
+          {% endif %}
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+</div>

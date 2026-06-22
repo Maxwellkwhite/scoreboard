@@ -1,0 +1,29 @@
+{% macro wc_form_block(block, show_dates=false) %}
+<div class="wc-form-block">
+  <header class="wc-form-block__head">
+    {% if block.logo %}
+    <img class="wc-form-block__logo" src="{{ block.logo }}" alt="" width="28" height="28" loading="lazy">
+    {% endif %}
+    <span class="wc-form-block__team">{{ block.abbr or block.name }}</span>
+  </header>
+  <ul class="wc-form-list">
+    {% for g in block.games %}
+    <li class="wc-form-list__item">
+      {% if g.result %}
+      <span class="last-five-result last-five-result--{{ g.result|lower }}">{{ g.result }}</span>
+      {% endif %}
+      <span class="wc-form-list__score">{{ g.score }}</span>
+      {% if g.at_vs and g.opponent_abbr %}
+      <span class="wc-form-list__opp">{{ g.at_vs }} {{ g.opponent_abbr }}</span>
+      {% elif g.opponent_abbr %}
+      <span class="wc-form-list__opp">vs {{ g.opponent_abbr }}</span>
+      {% endif %}
+      {% if g.competition %}<span class="last-five-meta"> · {{ g.competition }}</span>{% endif %}
+      {% if show_dates and g.date %}
+      <span class="wc-form-list__date" data-start-time="{{ g.date }}"></span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endmacro %}

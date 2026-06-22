@@ -1,0 +1,18 @@
+<div class="wc-preview-panel">
+  {% if game.preview.tournament_stats %}
+  <div id="wc-team-stats-mount">
+    {% with team_box=game.preview.tournament_stats, tournament_mode=true %}
+      {% include "partials/world_cup_team_stats_panel.html" %}
+    {% endwith %}
+  </div>
+  {% else %}
+  <p class="wc-empty-panel">Tournament stats unavailable.</p>
+  {% endif %}
+
+  {% if game.preview.last_five %}
+  <div class="wc-preview-section wc-preview-section--last-five">
+    <h4 class="wc-preview-section__title">Last 5 Games</h4>
+    {% include "partials/world_cup_last_five_panel.html" %}
+  </div>
+  {% endif %}
+</div>

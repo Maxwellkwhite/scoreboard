@@ -17,14 +17,35 @@
     {% include "partials/world_cup_live_strip.html" %}
 
     <header class="game-detail-header">
-      <p class="game-detail-kicker">{% if game.status_state == 'pre' %}Match Preview{% elif game.status_state == 'in' %}Live Match{% else %}Match Summary{% endif %}</p>
+      <p class="game-detail-kicker">
+        {% if game.preview.group_name %}{{ game.preview.group_name }} · {% endif %}
+        {% if game.status_state == 'pre' %}Match Preview{% elif game.status_state == 'in' %}Live Match{% else %}Match Summary{% endif %}
+      </p>
     </header>
 
     {% set is_pre = game.status_state == 'pre' %}
-    {% set has_match_info = game.preview.venue or game.preview.broadcasts or game.preview.spread is not none or game.preview.over_under is not none or game.preview.away_moneyline or game.preview.home_moneyline or game.preview.draw_moneyline or game.preview.venue_image %}
-    {% set has_last_five = game.preview.last_five %}
-    {% set has_head_to_head = game.preview.head_to_head %}
-    {% set has_group_standings = game.preview.group_standings %}
+    {% set live = game.live|default({}, true) %}
+
+    {% if is_pre %}
+      {% set has_preview = game.preview.tournament_stats or game.preview.last_five %}
+      {% set has_team_stats = false %}
+      {% set has_leaders = game.preview.tournament_leaders %}
+      {% set has_roster = true %}
+      {% set has_lineups = false %}
+      {% set rosters = game.preview.rosters|default(none, true) %}
+      {% set has_standings = game.preview.group_standings %}
+      {% set has_details = true %}
+    {% else %}
+      {% set has_preview = false %}
+      {% set has_team_stats = live.team_box %}
+      {% set has_leaders = live.leaders %}
+      {% set has_roster = false %}
+      {% set has_lineups = true %}
+      {% set lineups = live.lineups|default(none, true) %}
+      {% set has_timeline = live.key_events or live.commentary or live.scoring_events or live.article %}
+      {% set has_standings = game.preview.group_standings %}
+      {% set has_details = true %}
+    {% endif %}
 
     <div class="game-hero-layout game-hero-layout--solo">
       <section class="game-card game-card--{{ game.status_state }} game-detail-hero" id="game-matchup">
@@ -82,123 +103,130 @@
     </div>
 
     {% set tab_ns = namespace(first=true) %}
-    {% if has_match_info or has_last_five or has_head_to_head or has_group_standings %}
     <nav class="game-detail-tabs" id="game-detail-tabs" aria-label="Match details">
-      {% if has_match_info %}
-      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="match-info" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Match Info</button>
+      {% if is_pre and has_preview %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="preview" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Preview</button>
       {% set tab_ns.first = false %}
       {% endif %}
-      {% if has_last_five %}
-      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="last-five" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Last 5</button>
+      {% if not is_pre and has_timeline %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="timeline" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Timeline</button>
       {% set tab_ns.first = false %}
       {% endif %}
-      {% if has_head_to_head %}
-      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="head-to-head" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Head to Head</button>
+      {% if has_team_stats %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="team-stats" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Team Stats</button>
       {% set tab_ns.first = false %}
       {% endif %}
-      {% if has_group_standings %}
-      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="group-standings" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Standings</button>
+      {% if has_roster %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="roster" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Roster</button>
+      {% set tab_ns.first = false %}
+      {% endif %}
+      {% if has_lineups %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="lineups" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Lineups</button>
+      {% set tab_ns.first = false %}
+      {% endif %}
+      {% if has_leaders %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="leaders" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">{% if is_pre %}Tournament Leaders{% else %}Match Leaders{% endif %}</button>
+      {% set tab_ns.first = false %}
+      {% endif %}
+      {% if has_standings %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="standings" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Standings</button>
+      {% set tab_ns.first = false %}
+      {% endif %}
+      {% if has_details %}
+      <button type="button" class="game-detail-tab{% if tab_ns.first %} is-active{% endif %}" data-panel="details" aria-selected="{{ 'true' if tab_ns.first else 'false' }}">Details</button>
       {% set tab_ns.first = false %}
       {% endif %}
     </nav>
-    {% endif %}
 
     {% set panel_ns = namespace(first=true) %}
-    {% if has_match_info %}
-    <section class="game-detail-section game-detail-panel game-detail-facts" id="game-match-info-section" data-panel="match-info"{% if not panel_ns.first %} hidden{% endif %}>
-      <h3>Match Information</h3>
+
+    {% if is_pre and has_preview %}
+    <section class="game-detail-section game-detail-panel" id="wc-preview-section" data-panel="preview"{% if not panel_ns.first %} hidden{% endif %}>
+      <h3>Match Preview</h3>
     {% set panel_ns.first = false %}
-      {% if game.preview.venue %}
-      <div class="fact-item">
-        <span class="fact-label">Venue</span>
-        <span class="fact-value">{{ game.preview.venue }}{% if game.preview.venue_city %}, {{ game.preview.venue_city }}{% if game.preview.venue_state %}, {{ game.preview.venue_state }}{% endif %}{% if game.preview.venue_country %}, {{ game.preview.venue_country }}{% endif %}{% endif %}</span>
-      </div>
-      {% endif %}
-      {% if game.preview.broadcasts %}
-      <div class="fact-item">
-        <span class="fact-label">Watch</span>
-        <span class="fact-value">{{ game.preview.broadcasts | join(', ') }}</span>
-      </div>
-      {% endif %}
-      {% if game.preview.spread is not none or game.preview.over_under is not none %}
-      <div class="fact-item">
-        <span class="fact-label">Line</span>
-        <span class="fact-value">
-          {% if game.preview.spread is not none %}Spread {{ game.preview.spread }}{% endif %}
-          {% if game.preview.over_under is not none %}{% if game.preview.spread is not none %} · {% endif %}O/U {{ game.preview.over_under }}{% endif %}
-        </span>
-      </div>
-      {% endif %}
-      {% if game.preview.away_moneyline or game.preview.home_moneyline or game.preview.draw_moneyline %}
-      <div class="fact-item">
-        <span class="fact-label">Moneyline</span>
-        <span class="fact-value">
-          {{ game.away.abbr }} {{ game.preview.away_moneyline or '—' }}
-          · Draw {{ game.preview.draw_moneyline or '—' }}
-          · {{ game.home.abbr }} {{ game.preview.home_moneyline or '—' }}
-        </span>
-      </div>
-      {% endif %}
-      {% if game.preview.venue_image %}
-      <div class="game-preview-venue-image-wrap">
-        <img src="{{ game.preview.venue_image }}" alt="{{ game.preview.venue }}" class="venue-image">
-      </div>
-      {% endif %}
+      {% include "partials/world_cup_match_preview_panel.html" %}
     </section>
     {% endif %}
 
-    {% if has_last_five %}
-    <section class="game-detail-section game-detail-panel" id="game-last-five-section" data-panel="last-five"{% if not panel_ns.first %} hidden{% endif %}>
-      <h3>Last 5 Games</h3>
+    {% if not is_pre and has_timeline %}
+    <section class="game-detail-section game-detail-panel" id="wc-timeline-section" data-panel="timeline"{% if not panel_ns.first %} hidden{% endif %}>
+      <h3>Match Timeline</h3>
     {% set panel_ns.first = false %}
-      <div class="last-five-grid">
-        {% for block in game.preview.last_five %}
-        <div class="last-five-block">
-          <p class="last-five-team">{{ block.abbr }}</p>
-          <ul class="last-five-list">
-            {% for g in block.games %}
-            <li>
-              <span class="last-five-result last-five-result--{{ g.result|lower }}">{{ g.result }}</span>
-              {{ g.score }}{% if g.opponent_abbr %} vs {{ g.opponent_abbr }}{% endif %}
-            </li>
-            {% endfor %}
-          </ul>
-        </div>
-        {% endfor %}
+      <div id="wc-timeline-mount">
+        {% with key_events=live.key_events, scoring_events=live.scoring_events, commentary=live.commentary, article=live.article %}
+          {% include "partials/world_cup_timeline_panel.html" %}
+        {% endwith %}
       </div>
     </section>
     {% endif %}
 
-    {% if has_head_to_head %}
-    <section class="game-detail-section game-detail-panel" id="game-head-to-head-section" data-panel="head-to-head"{% if not panel_ns.first %} hidden{% endif %}>
-      <h3>Head to Head</h3>
+    {% if has_team_stats %}
+    <section class="game-detail-section game-detail-panel" id="wc-team-stats-section" data-panel="team-stats"{% if not panel_ns.first %} hidden{% endif %}>
+      <h3>Team Stats</h3>
     {% set panel_ns.first = false %}
-      <div class="last-five-grid">
-        {% for block in game.preview.head_to_head %}
-        <div class="last-five-block">
-          <p class="last-five-team">{{ block.name or block.abbr }}</p>
-          <ul class="last-five-list">
-            {% for g in block.games %}
-            <li>
-              <span class="last-five-result last-five-result--{{ g.result|lower }}">{{ g.result }}</span>
-              {{ g.score }}{% if g.opponent_abbr %} vs {{ g.opponent_abbr }}{% endif %}
-              {% if g.competition %}<span class="last-five-meta"> · {{ g.competition }}</span>{% endif %}
-            </li>
-            {% endfor %}
-          </ul>
-        </div>
-        {% endfor %}
+      <div id="wc-team-stats-mount">
+        {% with team_box=live.team_box, tournament_mode=false %}
+          {% include "partials/world_cup_team_stats_panel.html" %}
+        {% endwith %}
       </div>
     </section>
     {% endif %}
 
-    {% if has_group_standings %}
-    <section class="game-detail-section game-detail-panel" id="game-group-standings-section" data-panel="group-standings"{% if not panel_ns.first %} hidden{% endif %}>
-      <h3>Group Standings</h3>
+    {% if has_roster %}
+    <section class="game-detail-section game-detail-panel" id="wc-roster-section" data-panel="roster"{% if not panel_ns.first %} hidden{% endif %}>
+      <h3>Roster</h3>
+    {% set panel_ns.first = false %}
+      <div id="wc-roster-mount">
+        {% if rosters %}
+          {% include "partials/world_cup_rosters_panel.html" %}
+        {% else %}
+          <p class="player-splits-empty">Roster unavailable.</p>
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if has_lineups %}
+    <section class="game-detail-section game-detail-panel" id="wc-lineups-section" data-panel="lineups"{% if not panel_ns.first %} hidden{% endif %}>
+      <h3>Lineups</h3>
+    {% set panel_ns.first = false %}
+      <div id="wc-lineups-mount">
+        {% if lineups %}
+          {% include "partials/world_cup_lineups_panel.html" %}
+        {% else %}
+          <p class="wc-empty-panel">Lineups will be posted closer to kickoff.</p>
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if has_leaders %}
+    <section class="game-detail-section game-detail-panel" id="wc-leaders-section" data-panel="leaders"{% if not panel_ns.first %} hidden{% endif %}>
+      <h3>{% if is_pre %}Tournament Leaders{% else %}Match Leaders{% endif %}</h3>
+    {% set panel_ns.first = false %}
+      <div id="wc-leaders-mount">
+        {% with leaders=game.preview.tournament_leaders if is_pre else live.leaders %}
+          {% include "partials/world_cup_leaders_panel.html" %}
+        {% endwith %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if has_standings %}
+    <section class="game-detail-section game-detail-panel" id="wc-standings-section" data-panel="standings"{% if not panel_ns.first %} hidden{% endif %}>
+      <h3>{% if game.preview.group_name %}{{ game.preview.group_name }}{% else %}Group Standings{% endif %}</h3>
     {% set panel_ns.first = false %}
       {% with standings=game.preview.group_standings %}
-        {% include "partials/world_cup_standings_panel.html" %}
+        {% include "partials/world_cup_match_standings.html" %}
       {% endwith %}
+    </section>
+    {% endif %}
+
+    {% if has_details %}
+    <section class="game-detail-section game-detail-panel" id="wc-details-section" data-panel="details"{% if not panel_ns.first %} hidden{% endif %}>
+      <h3>Match Details</h3>
+    {% set panel_ns.first = false %}
+      {% include "partials/world_cup_match_details_panel.html" %}
     </section>
     {% endif %}
 

@@ -1,0 +1,28 @@
+<div class="wc-leaders-grid" id="wc-leaders-panel">
+  {% for block in leaders %}
+  {% if game is defined and block.abbr == game.away.abbr %}
+    {% set leader_color = game.away.win_color or game.away.color or block.color or '#1a2332' %}
+  {% elif game is defined and block.abbr == game.home.abbr %}
+    {% set leader_color = game.home.win_color or game.home.color or block.color or '#1a2332' %}
+  {% else %}
+    {% set leader_color = block.color or '#1a2332' %}
+  {% endif %}
+  <article class="wc-leaders-card" style="--leader-team-color: {{ leader_color }};">
+    <header class="wc-leaders-card__head">
+      {% if block.logo %}
+      <img class="wc-leaders-card__logo" src="{{ block.logo }}" alt="" width="28" height="28" loading="lazy">
+      {% endif %}
+      <span class="wc-leaders-card__team">{{ block.abbr or block.name }}</span>
+    </header>
+    <ul class="wc-leaders-list">
+      {% for category in block.categories %}
+      <li class="wc-leaders-list__item">
+        <span class="wc-leaders-list__cat">{{ category.category }}</span>
+        <span class="wc-leaders-list__player">{{ category.player }}</span>
+        <span class="wc-leaders-list__value">{{ category.value }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+  {% endfor %}
+</div>

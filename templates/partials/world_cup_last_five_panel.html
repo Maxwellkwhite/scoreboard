@@ -1,0 +1,8 @@
+{% from 'partials/world_cup_form_block.html' import wc_form_block %}
+<div class="wc-last-five-panel">
+  <div class="last-five-grid">
+    {% for block in game.preview.last_five %}
+      {{ wc_form_block(block) }}
+    {% endfor %}
+  </div>
+</div>

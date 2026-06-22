@@ -1,0 +1,48 @@
+<div class="game-detail-facts wc-match-details">
+  {% if game.preview.group_name %}
+  <div class="fact-item">
+    <span class="fact-label">Group</span>
+    <span class="fact-value">{{ game.preview.group_name }}</span>
+  </div>
+  {% endif %}
+  {% if game.preview.venue %}
+  <div class="fact-item">
+    <span class="fact-label">Venue</span>
+    <span class="fact-value">{{ game.preview.venue }}{% if game.preview.venue_city %}, {{ game.preview.venue_city }}{% if game.preview.venue_state %}, {{ game.preview.venue_state }}{% endif %}{% if game.preview.venue_country %}, {{ game.preview.venue_country }}{% endif %}{% endif %}</span>
+  </div>
+  {% endif %}
+  {% if game.preview.officials %}
+  <div class="fact-item">
+    <span class="fact-label">Officials</span>
+    <span class="fact-value">
+      {% for official in game.preview.officials %}
+        {{ official.name }}{% if official.role %} ({{ official.role }}){% endif %}{% if not loop.last %} · {% endif %}
+      {% endfor %}
+    </span>
+  </div>
+  {% endif %}
+  {% if game.preview.attendance %}
+  <div class="fact-item">
+    <span class="fact-label">Attendance</span>
+    <span class="fact-value">{{ '{:,}'.format(game.preview.attendance|int) }}</span>
+  </div>
+  {% endif %}
+  {% if game.preview.broadcasts %}
+  <div class="fact-item">
+    <span class="fact-label">Watch</span>
+    <span class="fact-value">{{ game.preview.broadcasts | join(', ') }}</span>
+  </div>
+  {% endif %}
+  {% for note in game.preview.notes or [] %}
+  <div class="fact-item">
+    <span class="fact-label">Note</span>
+    <span class="fact-value">{{ note }}</span>
+  </div>
+  {% endfor %}
+
+  {% if game.preview.venue_image %}
+  <div class="game-preview-venue-image-wrap">
+    <img src="{{ game.preview.venue_image }}" alt="{{ game.preview.venue }}" class="venue-image">
+  </div>
+  {% endif %}
+</div>
