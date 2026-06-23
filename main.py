@@ -174,7 +174,6 @@ def inject_support_contact():
         'support_email': SUPPORT_EMAIL,
         'help_mailto_subject': quote('Scoreboard - Help request', safe=''),
         'show_dev_tools': not _is_production_env(),
-        'show_world_cup': not _is_production_env(),
     }
 
 
@@ -392,6 +391,33 @@ with app.app_context():
 
 @app.route('/', methods=["GET"])
 def home_page():
+    from espn_mlb import fetch_standings as fetch_mlb_standings
+    from espn_world_cup import fetch_standings as fetch_wc_standings
+    from scoreboard_all import all_scoreboard_snapshot
+
+    snapshot = all_scoreboard_snapshot()
+    wc_standings = []
+    try:
+        wc_standings = fetch_wc_standings()
+    except Exception:
+        wc_standings = []
+
+    return render_template(
+        "all_scoreboard.html",
+        today=snapshot["today"],
+        yesterday=snapshot["yesterday"],
+        today_games=snapshot["today_games"],
+        yesterday_games=snapshot["yesterday_games"],
+        upcoming_date=snapshot["upcoming_date"],
+        upcoming_games=snapshot["upcoming_games"],
+        mlb_standings=fetch_mlb_standings(),
+        wc_standings=wc_standings,
+        active_sport='all',
+    )
+
+
+@app.route('/mlb', methods=['GET'], endpoint='mlb_scoreboard')
+def mlb_scoreboard():
     from espn_mlb import fetch_standings, scoreboard_snapshot
 
     snapshot = scoreboard_snapshot()
@@ -409,6 +435,45 @@ def home_page():
     )
 
 
+@app.route('/api/scoreboard/today', methods=['GET'], endpoint='api_all_scoreboard_today')
+def api_all_scoreboard_today():
+    from scoreboard_all import fetch_all_scoreboard, merge_and_sort, tag_games
+    from espn_mlb import fetch_scoreboard as fetch_mlb_scoreboard
+    from espn_world_cup import fetch_scoreboard as fetch_wc_scoreboard
+
+    today = date.today()
+    games = merge_and_sort(
+        tag_games(fetch_mlb_scoreboard(today, force_refresh=True), 'mlb'),
+        tag_games(fetch_wc_scoreboard(today, force_refresh=True), 'world_cup'),
+    )
+    has_live = any(game.get('status_state') == 'in' for game in games)
+    return jsonify({
+        'date': today.isoformat(),
+        'games': games,
+        'has_live': has_live,
+    })
+
+
+@app.route('/api/scoreboard', methods=['GET'], endpoint='api_all_scoreboard')
+def api_all_scoreboard():
+    from scoreboard_all import fetch_all_scoreboard
+
+    date_param = request.args.get('date')
+    if date_param:
+        try:
+            game_date = datetime.strptime(date_param, '%Y%m%d').date()
+        except ValueError:
+            return jsonify({'error': 'date must be YYYYMMDD'}), 400
+    else:
+        game_date = date.today()
+
+    games = fetch_all_scoreboard(game_date)
+    return jsonify({
+        'date': game_date.isoformat(),
+        'games': games,
+    })
+
+
 @app.route('/world-cup', methods=['GET'], endpoint='world_cup_scoreboard')
 def world_cup_scoreboard():
     from espn_world_cup import fetch_standings, scoreboard_snapshot
@@ -423,6 +488,7 @@ def world_cup_scoreboard():
         upcoming_date=snapshot['upcoming_date'],
         upcoming_games=snapshot['upcoming_games'],
         standings=fetch_standings(),
+        show_dev_tools=not _is_production_env(),
         active_sport='world_cup',
     )
 
@@ -497,9 +563,166 @@ def api_world_cup_match(match_id):
     return jsonify({'game': game, 'strip_games': strip_games})
 
 
+@app.route('/world-cup/team/<team_id>', methods=['GET'], endpoint='world_cup_team_page')
+def world_cup_team_page(team_id):
+    from espn_world_cup import fetch_scoreboard, fetch_team, strip_initial_page_for_team
+
+    try:
+        team = fetch_team(str(team_id))
+    except (requests.RequestException, ValueError):
+        abort(404)
+
+    strip_games = fetch_scoreboard(date.today())
+    return render_template(
+        'world_cup_team.html',
+        team=team,
+        strip_games=strip_games,
+        strip_initial_page=strip_initial_page_for_team(strip_games, str(team_id)),
+        current_game_id='',
+        active_sport='world_cup',
+    )
+
+
+@app.route('/api/world-cup/team/<team_id>', methods=['GET'], endpoint='api_world_cup_team')
+def api_world_cup_team(team_id):
+    from espn_world_cup import fetch_team
+
+    try:
+        team = fetch_team(str(team_id), force_refresh=True)
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Team not found'}), 404
+
+    return jsonify({'team': team})
+
+
+@app.route('/api/world-cup/team/<team_id>/stats', methods=['GET'], endpoint='api_world_cup_team_stats')
+def api_world_cup_team_stats(team_id):
+    from wc_team_stats import fetch_team_stats_bundle
+
+    try:
+        bundle = fetch_team_stats_bundle(str(team_id))
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Team not found'}), 404
+
+    if not bundle.get('stats_table') and not bundle.get('stat_panels'):
+        return jsonify({'error': 'Stats unavailable'}), 404
+
+    return jsonify({
+        'stats_table': bundle.get('stats_table'),
+        'stat_panels': bundle.get('stat_panels') or [],
+    })
+
+
+@app.route(
+    '/api/world-cup/team/<team_id>/stats/roster',
+    methods=['GET'],
+    endpoint='api_world_cup_team_stats_roster',
+)
+def api_world_cup_team_stats_roster(team_id):
+    from espn_world_cup import fetch_team
+    from wc_team_stats import build_team_roster_panel
+
+    try:
+        fetch_team(str(team_id))
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Team not found'}), 404
+
+    stat_panel = build_team_roster_panel(str(team_id))
+    if not stat_panel:
+        return jsonify({'error': 'Roster unavailable'}), 404
+
+    return jsonify({'stat_panel': stat_panel})
+
+
+@app.route(
+    '/api/world-cup/team/<team_id>/stats/schedule',
+    methods=['GET'],
+    endpoint='api_world_cup_team_stats_schedule',
+)
+def api_world_cup_team_stats_schedule(team_id):
+    from espn_world_cup import fetch_team
+    from wc_team_stats import build_team_schedule_panel
+
+    try:
+        fetch_team(str(team_id))
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Team not found'}), 404
+
+    stat_panel = build_team_schedule_panel(str(team_id))
+    if not stat_panel:
+        return jsonify({'error': 'Schedule unavailable'}), 404
+
+    return jsonify({'stat_panel': stat_panel})
+
+
+@app.route('/world-cup/player/<player_id>', methods=['GET'], endpoint='world_cup_player_page')
+def world_cup_player_page(player_id):
+    from espn_world_cup import fetch_player, fetch_scoreboard, strip_initial_page_for_team
+
+    try:
+        player = fetch_player(str(player_id))
+    except (requests.RequestException, ValueError):
+        abort(404)
+
+    strip_games = fetch_scoreboard(date.today())
+    team_id = str((player.get('team') or {}).get('id') or '')
+
+    return render_template(
+        'world_cup_player.html',
+        player=player,
+        is_goalkeeper=bool(player.get('is_goalkeeper')),
+        strip_games=strip_games,
+        strip_initial_page=strip_initial_page_for_team(strip_games, team_id) if team_id else 0,
+        current_game_id='',
+        active_sport='world_cup',
+    )
+
+
+@app.route('/api/world-cup/player/<player_id>', methods=['GET'], endpoint='api_world_cup_player')
+def api_world_cup_player(player_id):
+    from espn_world_cup import fetch_player
+
+    try:
+        player = fetch_player(str(player_id), force_refresh=True)
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Player not found'}), 404
+
+    return jsonify({'player': player})
+
+
+@app.route(
+    '/api/world-cup/player/<player_id>/stats/league',
+    methods=['GET'],
+    endpoint='api_world_cup_player_stats_league',
+)
+def api_world_cup_player_stats_league(player_id):
+    from wc_team_stats import fetch_player_stats_bundle
+
+    try:
+        bundle = fetch_player_stats_bundle(str(player_id))
+    except (requests.RequestException, ValueError):
+        return jsonify({'error': 'Player not found'}), 404
+
+    if not bundle.get('stat_panel'):
+        return jsonify({'error': 'Stats unavailable'}), 404
+
+    return jsonify({
+        'stat_panel': bundle.get('stat_panel'),
+        'profile_panel': bundle.get('profile_panel'),
+    })
+
+
+@app.route('/api/search', methods=['GET'], endpoint='api_search')
+def api_search():
+    from scoreboard_search import search_all
+
+    query = request.args.get('q', '')
+    return jsonify(search_all(query))
+
+
 @app.route('/api/mlb/search', methods=['GET'], endpoint='api_mlb_search')
 def api_mlb_search():
-    from mlb_search import search_mlb
+    from scoreboard_search import search_mlb
 
     query = request.args.get('q', '')
     return jsonify(search_mlb(query))
@@ -556,6 +779,7 @@ def mlb_game_page(game_id):
         strip_games=strip_games,
         current_game_id=str(game_id),
         strip_initial_page=strip_initial_page(strip_games, str(game_id)),
+        active_sport='mlb',
     )
 
 
@@ -681,6 +905,7 @@ def mlb_team_page(team_id):
         strip_games=strip_games,
         strip_initial_page=strip_initial_page_for_team(strip_games, str(team_id)),
         current_game_id='',
+        active_sport='mlb',
     )
 
 
@@ -798,6 +1023,7 @@ def mlb_player_page(player_id):
         strip_games=strip_games,
         strip_initial_page=strip_initial_page_for_team(strip_games, team_id) if team_id else 0,
         current_game_id='',
+        active_sport='mlb',
     )
 
 

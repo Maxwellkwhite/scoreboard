@@ -1,3 +1,4 @@
+{% from 'macros/teams.html' import team_link %}
 {% set has_winner = game.away.winner or game.home.winner %}
 {% set is_current = game.id == current_game_id %}
 {% if game.status_state == 'pre' and game.start_time %}
@@ -21,7 +22,7 @@
       {% else %}
       <span class="game-mini-card__logo-fallback">{{ team.abbr }}</span>
       {% endif %}
-      <span class="game-mini-card__abbr">{{ team.abbr }}</span>
+      <span class="game-mini-card__abbr">{% if team.id %}{{ team_link(team.id, team.abbr, sport='world_cup') }}{% else %}{{ team.abbr }}{% endif %}</span>
       <span class="game-mini-card__score">{% if game.status_state == 'pre' %}—{% else %}{{ team.score if team.score is not none else '0' }}{% endif %}</span>
     </div>
     {% endfor %}

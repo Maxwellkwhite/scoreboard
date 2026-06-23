@@ -394,6 +394,9 @@
     }
 
     document.addEventListener('click', function (event) {
+      if (event.target.closest('.team-link')) {
+        return;
+      }
       var card = event.target.closest('.game-mini-card--link');
       if (card) {
         navigateStripCard(card);
@@ -402,6 +405,9 @@
 
     document.addEventListener('keydown', function (event) {
       if (event.key !== 'Enter' && event.key !== ' ') {
+        return;
+      }
+      if (event.target.closest('.team-link')) {
         return;
       }
       var card = event.target.closest('.game-mini-card--link');

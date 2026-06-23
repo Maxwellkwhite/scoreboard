@@ -1,3 +1,4 @@
+{% from 'macros/teams.html' import team_link %}
 {% set roster_section_ids = ['goalkeepers', 'defenders', 'midfielders', 'forwards', 'substitutes'] %}
 <div class="game-preview-panel game-preview-rosters" id="wc-preview-rosters" data-default-side="away" style="--away-team-color: {{ game.away.win_color or game.away.color or '#1a2332' }}; --home-team-color: {{ game.home.win_color or game.home.color or '#1a2332' }};">
   <div class="game-preview-panel__toolbar">
@@ -8,7 +9,7 @@
         {% if team.logo %}
         <img class="game-preview-rosters-toggle__logo" src="{{ team.logo }}" alt="" width="18" height="18" loading="lazy">
         {% endif %}
-        <span>{{ team.abbr }}</span>
+        <span>{% if team.id %}{{ team_link(team.id, team.abbr, sport='world_cup') }}{% else %}{{ team.abbr }}{% endif %}</span>
       </button>
       {% endfor %}
     </div>
@@ -22,7 +23,7 @@
       {% if team.logo %}
       <img src="{{ team.logo }}" alt="" class="game-preview-rosters-view__logo" width="32" height="32" loading="lazy">
       {% endif %}
-      <h4 class="game-preview-rosters-view__title">{{ team.short_name or team.name }}</h4>
+      <h4 class="game-preview-rosters-view__title">{% if team.id %}{{ team_link(team.id, team.short_name or team.name, sport='world_cup') }}{% else %}{{ team.short_name or team.name }}{% endif %}</h4>
     </header>
     {% if roster_side and roster_side.sections %}
     {% for section in roster_side.sections if section.id in roster_section_ids %}
@@ -30,6 +31,20 @@
       <h5 class="game-preview-roster-section__title">{{ section.title }}</h5>
       <div class="team-roster-grid team-roster-grid--preview">
         {% for player in section.players %}
+        {% if player.id %}
+        <a href="{{ url_for('world_cup_player_page', player_id=player.id) }}" class="team-roster-card team-roster-card--{{ player.filter or 'other' }} team-roster-card--status-active">
+          {% if player.jersey %}<span class="team-roster-card__jersey">#{{ player.jersey }}</span>{% endif %}
+          {% if player.headshot %}
+          <span class="team-roster-card__avatar-wrap">
+            <img class="team-roster-card__avatar team-roster-card__avatar--{{ player.filter or 'other' }}" src="{{ player.headshot }}" alt="" width="52" height="52" loading="lazy">
+          </span>
+          {% else %}
+          <span class="team-roster-card__avatar team-roster-card__avatar--placeholder team-roster-card__avatar--{{ player.filter or 'other' }}">{{ player.name[:1] }}</span>
+          {% endif %}
+          <span class="team-roster-card__name">{{ player.name }}</span>
+          <span class="team-roster-card__pos">{{ player.position }}</span>
+        </a>
+        {% else %}
         <div class="team-roster-card team-roster-card--{{ player.filter or 'other' }} team-roster-card--status-active">
           {% if player.jersey %}<span class="team-roster-card__jersey">#{{ player.jersey }}</span>{% endif %}
           {% if player.headshot %}
@@ -42,6 +57,7 @@
           <span class="team-roster-card__name">{{ player.name }}</span>
           <span class="team-roster-card__pos">{{ player.position }}</span>
         </div>
+        {% endif %}
         {% endfor %}
       </div>
     </section>

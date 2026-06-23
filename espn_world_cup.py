@@ -21,12 +21,29 @@ ESPN_STANDINGS_URL = (
 ESPN_TEAM_ROSTER_URL = (
     "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/{team_id}/roster"
 )
+ESPN_TEAM_URL = (
+    "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/{team_id}"
+)
+ESPN_TEAM_SCHEDULE_URL = (
+    "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/teams/{team_id}/schedule"
+)
+ESPN_ATHLETE_URL = (
+    "https://site.api.espn.com/apis/common/v3/sports/soccer/athletes/{player_id}"
+)
+ESPN_CORE_TEAM_EVENTS_URL = (
+    "https://sports.core.api.espn.com/v2/sports/soccer/leagues/fifa.world"
+    "/seasons/{season}/teams/{team_id}/events"
+)
 
 CACHE_TTL_SECONDS = 30
 ROSTER_CACHE_TTL_SECONDS = 3600
+DETAIL_CACHE_TTL_SECONDS = 300
 _cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _summary_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _team_roster_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_team_detail_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_player_detail_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_team_events_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _standings_cache: tuple[float, list[dict[str, Any]]] | None = None
 
 STRIP_CARDS_PER_PAGE = 4
@@ -305,6 +322,279 @@ def strip_initial_page(
     return 0
 
 
+def strip_initial_page_for_team(
+    strip_matches: list[dict[str, Any]],
+    team_id: str,
+) -> int:
+    team_id = str(team_id)
+    for index, match in enumerate(strip_matches):
+        away_id = str((match.get("away") or {}).get("id") or "")
+        home_id = str((match.get("home") or {}).get("id") or "")
+        if team_id in {away_id, home_id}:
+            return (index + 1) // STRIP_CARDS_PER_PAGE
+    return 0
+
+
+def _standing_row_for_team(team_id: str) -> dict[str, Any] | None:
+    team_id = str(team_id)
+    for group in fetch_standings():
+        for team in group.get("teams") or []:
+            if str(team.get("id")) == team_id:
+                return {
+                    **team,
+                    "group_name": group.get("name"),
+                    "group_abbr": group.get("abbr"),
+                }
+    return None
+
+
+def parse_team_detail(payload: dict[str, Any]) -> dict[str, Any]:
+    team = payload.get("team") or {}
+    team_id = team.get("id")
+    if not team_id:
+        raise ValueError("Team not found")
+
+    standing_row = _standing_row_for_team(str(team_id))
+    group_name = None
+    groups_field = team.get("groups")
+    if isinstance(groups_field, dict):
+        group_name = groups_field.get("name") or groups_field.get("abbreviation")
+    elif isinstance(groups_field, list):
+        for group in groups_field:
+            if isinstance(group, dict):
+                group_name = group.get("name") or group.get("abbreviation")
+            elif isinstance(group, str) and group not in {"id"}:
+                group_name = group
+            if group_name:
+                break
+    if not group_name and standing_row:
+        group_name = standing_row.get("group_name")
+
+    record_summary = _team_record(team.get("record"))
+    if not record_summary and standing_row:
+        record_summary = standing_row.get("record")
+
+    return {
+        "id": str(team_id),
+        "abbr": team.get("abbreviation") or "",
+        "name": team.get("displayName") or team.get("name") or "",
+        "short_name": team.get("shortDisplayName") or "",
+        "location": team.get("location") or "",
+        "logo": _team_logo(team),
+        "color": _team_color(team) or "#1a2332",
+        "alternate_color": _team_alternate_color(team),
+        "record": record_summary,
+        "pct": standing_row.get("pct") if standing_row else None,
+        "standing_summary": team.get("standingSummary")
+        or (
+            f"{standing_row.get('group_name')} · {standing_row.get('pts')} pts"
+            if standing_row and standing_row.get("group_name")
+            else None
+        ),
+        "group_name": group_name,
+        "group_abbr": standing_row.get("group_abbr") if standing_row else None,
+        "gp": standing_row.get("gp") if standing_row else None,
+        "wins": standing_row.get("wins") if standing_row else None,
+        "draws": standing_row.get("draws") if standing_row else None,
+        "losses": standing_row.get("losses") if standing_row else None,
+        "gd": standing_row.get("gd") if standing_row else None,
+        "pts": standing_row.get("pts") if standing_row else None,
+        "venue": None,
+        "home_record": None,
+        "road_record": None,
+        "division_gb": None,
+        "streak": None,
+        "season_year": str((payload.get("season") or {}).get("year") or date.today().year),
+    }
+
+
+def fetch_team(
+    team_id: str,
+    *,
+    force_refresh: bool = False,
+) -> dict[str, Any]:
+    team_id = str(team_id)
+    now = time.time()
+    cached = _team_detail_cache.get(team_id)
+    if not force_refresh and cached and now - cached[0] < DETAIL_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    response = requests.get(ESPN_TEAM_URL.format(team_id=team_id), timeout=15)
+    response.raise_for_status()
+    team = parse_team_detail(response.json())
+    _team_detail_cache[team_id] = (now, team)
+    return team
+
+
+def _national_team_from_citizenship(citizenship: str | None) -> dict[str, Any] | None:
+    if not citizenship:
+        return None
+    target = citizenship.strip().lower()
+    for group in fetch_standings():
+        for team in group.get("teams") or []:
+            name = (team.get("name") or "").strip().lower()
+            abbr = (team.get("abbr") or "").strip().lower()
+            if target == name or target == abbr:
+                return {
+                    "id": str(team.get("id") or ""),
+                    "abbr": team.get("abbr") or "",
+                    "name": team.get("name") or "",
+                    "logo": team.get("logo") or "",
+                    "color": team.get("color") or "#1a2332",
+                    "group_name": group.get("name"),
+                }
+    return None
+
+
+def parse_player_detail(payload: dict[str, Any]) -> dict[str, Any]:
+    athlete = payload.get("athlete") or {}
+    player_id = athlete.get("id")
+    if not player_id:
+        raise ValueError("Player not found")
+
+    position = athlete.get("position") or {}
+    if isinstance(position, dict):
+        position_label = position.get("abbreviation") or position.get("name") or ""
+    else:
+        position_label = str(position) if position else ""
+
+    headshot = athlete.get("headshot") or {}
+    headshot_url = headshot.get("href") if isinstance(headshot, dict) else headshot
+
+    national_team = _national_team_from_citizenship(athlete.get("citizenship"))
+    club_team = athlete.get("team") or {}
+    team = national_team or {
+        "id": str(club_team.get("id") or ""),
+        "abbr": club_team.get("abbreviation") or "",
+        "name": club_team.get("displayName") or club_team.get("name") or "",
+        "logo": _team_logo(club_team),
+        "color": _team_color(club_team) or "#1a2332",
+    }
+
+    birth_date = athlete.get("dateOfBirth") or athlete.get("birthDate")
+    birth_display = None
+    if birth_date:
+        birth_display = str(birth_date)[:10]
+
+    return {
+        "id": str(player_id),
+        "name": athlete.get("displayName") or athlete.get("fullName") or "",
+        "short_name": athlete.get("shortName") or athlete.get("displayName") or "",
+        "headshot": headshot_url,
+        "jersey": athlete.get("jersey"),
+        "position": position_label,
+        "team": team,
+        "citizenship": athlete.get("citizenship"),
+        "height": athlete.get("displayHeight") or athlete.get("height"),
+        "weight": athlete.get("displayWeight") or athlete.get("weight"),
+        "birth_place": athlete.get("displayBirthPlace") or athlete.get("birthPlace"),
+        "birth_date": birth_display,
+        "age": athlete.get("age"),
+        "experience": athlete.get("experience", {}).get("years")
+        if isinstance(athlete.get("experience"), dict)
+        else athlete.get("experience"),
+        "debut_year": None,
+        "status": (athlete.get("status") or {}).get("name")
+        if isinstance(athlete.get("status"), dict)
+        else athlete.get("status"),
+        "season_label": "World Cup",
+        "season_year": str(date.today().year),
+        "season_stats": [],
+        "stats_table": None,
+        "is_goalkeeper": position_label.upper() in {"G", "GK", "GOALKEEPER"},
+    }
+
+
+def fetch_player(
+    player_id: str,
+    *,
+    force_refresh: bool = False,
+) -> dict[str, Any]:
+    player_id = str(player_id)
+    now = time.time()
+    cached = _player_detail_cache.get(player_id)
+    if not force_refresh and cached and now - cached[0] < DETAIL_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    response = requests.get(ESPN_ATHLETE_URL.format(player_id=player_id), timeout=15)
+    response.raise_for_status()
+    player = parse_player_detail(response.json())
+    _player_detail_cache[player_id] = (now, player)
+    return player
+
+
+def fetch_team_schedule_payload(
+    team_id: str,
+    *,
+    force_refresh: bool = False,
+) -> dict[str, Any]:
+    team_id = str(team_id)
+    cache_key = f"schedule:{team_id}"
+    now = time.time()
+    cached = _team_detail_cache.get(cache_key)
+    if not force_refresh and cached and now - cached[0] < DETAIL_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    response = requests.get(ESPN_TEAM_SCHEDULE_URL.format(team_id=team_id), timeout=15)
+    response.raise_for_status()
+    payload = response.json()
+    _team_detail_cache[cache_key] = (now, payload)
+    return payload
+
+
+def fetch_team_core_events(
+    team_id: str,
+    *,
+    season: int | None = None,
+    force_refresh: bool = False,
+) -> list[dict[str, Any]]:
+    """Lightweight event id/date list from ESPN core (full tournament schedule)."""
+    team_id = str(team_id)
+    year = season or date.today().year
+    cache_key = f"{team_id}:{year}"
+    now = time.time()
+    cached = _team_events_cache.get(cache_key)
+    if not force_refresh and cached and now - cached[0] < DETAIL_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    try:
+        response = requests.get(
+            ESPN_CORE_TEAM_EVENTS_URL.format(season=year, team_id=team_id),
+            timeout=15,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.RequestException:
+        return cached[1] if cached else []
+
+    events: list[dict[str, Any]] = []
+    for item in payload.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        ref = item.get("$ref")
+        event_id = item.get("id")
+        event_date = item.get("date")
+        if ref:
+            if not event_id:
+                event_id = str(ref).split("/events/")[-1].split("?")[0]
+            if not event_date:
+                try:
+                    event_payload = requests.get(ref, timeout=15).json()
+                except requests.RequestException:
+                    event_payload = {}
+                event_date = event_payload.get("date")
+        if not event_id:
+            continue
+        events.append({
+            "id": str(event_id),
+            "date": event_date,
+        })
+
+    events.sort(key=lambda row: row.get("date") or "")
+    _team_events_cache[cache_key] = (now, events)
+    return events
+
+
 def _format_american_odds(value: Any) -> str | None:
     if value is None:
         return None
@@ -325,12 +615,15 @@ def _parse_last_five(last_five_games: list[dict[str, Any]] | None) -> list[dict[
             games.append({
                 "result": event.get("gameResult"),
                 "score": event.get("score"),
+                "at_vs": event.get("atVs"),
+                "opponent_id": opponent.get("id"),
                 "opponent_abbr": opponent.get("abbreviation"),
                 "competition": event.get("competitionName"),
                 "date": event.get("gameDate"),
             })
         games.sort(key=lambda game: game.get("date") or "", reverse=True)
         blocks.append({
+            "id": team.get("id"),
             "abbr": team.get("abbreviation", ""),
             "name": team.get("displayName", ""),
             "logo": team.get("logo"),
@@ -349,11 +642,14 @@ def _parse_head_to_head(head_to_head: list[dict[str, Any]] | None) -> list[dict[
             games.append({
                 "result": event.get("gameResult"),
                 "score": event.get("score"),
+                "at_vs": event.get("atVs"),
+                "opponent_id": opponent.get("id"),
                 "opponent_abbr": opponent.get("abbreviation"),
                 "competition": event.get("competitionName"),
                 "date": event.get("gameDate"),
             })
         blocks.append({
+            "id": team.get("id"),
             "abbr": team.get("abbreviation", ""),
             "name": team.get("displayName", ""),
             "logo": team.get("logo"),
@@ -471,11 +767,13 @@ def _parse_form_events(form_blocks: list[dict[str, Any]] | None) -> list[dict[st
                 "date": event.get("gameDate"),
                 "score": event.get("score"),
                 "at_vs": event.get("atVs"),
+                "opponent_id": opponent.get("id"),
                 "opponent_abbr": opponent.get("abbreviation"),
                 "opponent_name": opponent.get("displayName"),
                 "competition": event.get("competitionName"),
             })
         blocks.append({
+            "id": team.get("id"),
             "abbr": team.get("abbreviation", ""),
             "name": team.get("displayName", ""),
             "logo": _team_logo(team),
@@ -838,6 +1136,7 @@ def _parse_leaders_blocks(
             })
         if categories:
             blocks.append({
+                "id": team.get("id"),
                 "abbr": team.get("abbreviation", ""),
                 "name": team.get("displayName", ""),
                 "logo": _team_logo(team),

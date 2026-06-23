@@ -1,0 +1,5 @@
+{% if game.sport == 'world_cup' %}
+  {% include "partials/world_cup_game_card.html" %}
+{% else %}
+  {% include "partials/game_card.html" %}
+{% endif %}

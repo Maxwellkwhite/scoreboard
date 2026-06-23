@@ -2,6 +2,13 @@
   var section = document.getElementById('team-stats-section');
   if (!section) return;
 
+  var pageRoot = document.body;
+  var isWorldCupTeam = pageRoot.classList.contains('world-cup-team-page');
+  var apiBase = pageRoot.getAttribute('data-team-api-base') || '/api/mlb/team';
+  var playerHrefPrefix = pageRoot.getAttribute('data-player-href-prefix') || '/player/';
+  var teamHrefPrefix = pageRoot.getAttribute('data-team-href-prefix') || '/team/';
+  var gameHrefPrefix = pageRoot.getAttribute('data-game-href-prefix') || '/game/';
+
   var teamId = section.getAttribute('data-team-id');
   var loadingEl = document.getElementById('team-stats-loading');
   var errorEl = document.getElementById('team-stats-error');
@@ -22,7 +29,7 @@
   function playerLink(id, name) {
     if (!id || !name) return escapeHtml(name || '');
     return (
-      '<a href="/player/' + encodeURIComponent(id) + '" class="player-link">' +
+      '<a href="' + playerHrefPrefix + encodeURIComponent(id) + '" class="player-link">' +
       escapeHtml(name) + '</a>'
     );
   }
@@ -30,7 +37,7 @@
   function teamLink(id, label) {
     if (!id || !label) return escapeHtml(label || '');
     return (
-      '<a href="/team/' + encodeURIComponent(id) + '" class="team-link">' +
+      '<a href="' + teamHrefPrefix + encodeURIComponent(id) + '" class="team-link">' +
       escapeHtml(label) + '</a>'
     );
   }
@@ -311,7 +318,7 @@
       (meta ? '<span class="team-roster-card__meta">' + escapeHtml(meta) + '</span>' : '');
 
     return (
-      '<a href="/player/' + encodeURIComponent(player.id) + '" class="' + cardClass + '"' +
+      '<a href="' + playerHrefPrefix + encodeURIComponent(player.id) + '" class="' + cardClass + '"' +
       ' data-filter="' + escapeHtml(player.filter || 'other') + '">' +
       inner +
       '</a>'
@@ -535,7 +542,7 @@
 
     if (game.id) {
       return (
-        '<a href="/game/' + encodeURIComponent(game.id) + '" class="' + classes.join(' ') + '">' +
+        '<a href="' + gameHrefPrefix + encodeURIComponent(game.id) + '" class="' + classes.join(' ') + '">' +
         inner +
         '</a>'
       );
@@ -591,7 +598,7 @@
 
       if (game.id) {
         return (
-          '<a href="/game/' + encodeURIComponent(game.id) + '" class="' + classes.join(' ') + '">' +
+          '<a href="' + gameHrefPrefix + encodeURIComponent(game.id) + '" class="' + classes.join(' ') + '">' +
           inner +
           '</a>'
         );
@@ -766,6 +773,89 @@
     });
   }
 
+  function formatGameDate(iso) {
+    if (!iso) return '—';
+    var date = new Date(iso);
+    if (isNaN(date.getTime())) return '—';
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
+  function gameOpponentLabel(game) {
+    var prefix = game.home_away === 'away' ? '@' : 'vs';
+    var opponent = game.opponent_abbr || game.opponent_name || '';
+    return prefix + ' ' + opponent;
+  }
+
+  function gameResultClass(result) {
+    if (result === 'W') return 'w';
+    if (result === 'L') return 'l';
+    if (result === 'T') return 't';
+    return 'upcoming';
+  }
+
+  function buildTeamGameRowHtml(game, options) {
+    options = options || {};
+    var resultKey = gameResultClass(game.result);
+    var matchup = gameOpponentLabel(game);
+    var scoreHtml = '—';
+    if (game.team_score != null && game.opponent_score != null) {
+      scoreHtml = escapeHtml(game.team_score) + '–' + escapeHtml(game.opponent_score);
+    } else if (game.status) {
+      scoreHtml = options.upcoming
+        ? '<span class="team-schedule-row__status" data-start-time="' + escapeHtml(game.date || '') + '">' +
+          escapeHtml(game.status) + '</span>'
+        : escapeHtml(game.status);
+    }
+
+    var resultHtml = game.result
+      ? '<span class="team-schedule-row__result team-schedule-row__result--' + resultKey + '">' +
+        escapeHtml(game.result) + '</span>'
+      : '<span class="team-schedule-row__status">—</span>';
+
+    var rowInner =
+      '<span class="team-schedule-row__date">' + escapeHtml(formatGameDate(game.date)) + '</span>' +
+      '<span class="team-schedule-row__matchup">' + escapeHtml(matchup) + '</span>' +
+      resultHtml +
+      '<span class="team-schedule-row__score">' + scoreHtml + '</span>';
+
+    if (game.id) {
+      return (
+        '<li><a class="team-schedule-row team-schedule-row--link" href="' +
+        gameHrefPrefix + encodeURIComponent(game.id) + '">' + rowInner + '</a></li>'
+      );
+    }
+    return '<li class="team-schedule-row">' + rowInner + '</li>';
+  }
+
+  function buildTeamGamesOverviewHtml(panel) {
+    var upcoming = panel.upcoming_game;
+    var lastFive = panel.last_five || [];
+    var html = '<div class="team-games-overview">';
+
+    html += '<section class="team-schedule-section">';
+    html += '<h3 class="team-schedule-section__title">Upcoming Game</h3>';
+    if (upcoming) {
+      html += '<ul class="team-schedule-list">' + buildTeamGameRowHtml(upcoming, { upcoming: true }) + '</ul>';
+    } else {
+      html += '<p class="player-splits-empty">No upcoming games.</p>';
+    }
+    html += '</section>';
+
+    html += '<section class="team-schedule-section">';
+    html += '<h3 class="team-schedule-section__title">Last 5 Games</h3>';
+    if (lastFive.length) {
+      html += '<ul class="team-schedule-list">' +
+        lastFive.map(function (game) { return buildTeamGameRowHtml(game); }).join('') +
+        '</ul>';
+    } else {
+      html += '<p class="player-splits-empty">No recent games.</p>';
+    }
+    html += '</section>';
+
+    html += '</div>';
+    return html;
+  }
+
   function buildPanelInnerHtml(panel) {
     if (panel.panel_kind === 'toggle_stat_bars' || panel.panel_kind === 'toggle_stat_table' || panel.panel_kind === 'toggle_leaders') {
       var defaultView = panel.default_view || (panel.views[0] && panel.views[0].id);
@@ -804,6 +894,9 @@
     if (panel.panel_kind === 'schedule_calendar') {
       return '<div class="team-panel-body">' + buildScheduleCalendarHtml(panel) + '</div>';
     }
+    if (panel.panel_kind === 'team_games_overview') {
+      return '<div class="team-panel-body">' + buildTeamGamesOverviewHtml(panel) + '</div>';
+    }
     if (panel.panel_kind === 'loading') {
       return buildPanelLoadingHtml();
     }
@@ -816,26 +909,41 @@
     return '<div class="team-panel-body"><p class="player-splits-empty">No data available.</p></div>';
   }
 
-  var PANEL_ORDER = ['team_stats', 'leaders', 'roster', 'schedule'];
+  var PANEL_ORDER = isWorldCupTeam
+    ? ['roster', 'games']
+    : ['team_stats', 'leaders', 'roster', 'schedule'];
   var activePanelId = null;
   var tabNavigationBound = false;
-  var LAZY_PANEL_CONFIG = {
-    leaders: {
-      label: 'Team Leaders',
-      path: '/stats/leaders',
-      payloadKey: 'stat_panel',
-    },
-    roster: {
-      label: 'Roster',
-      path: '/stats/roster',
-      payloadKey: 'stat_panel',
-    },
-    schedule: {
-      label: 'Schedule',
-      path: '/stats/schedule',
-      payloadKey: 'stat_panel',
-    },
-  };
+  var LAZY_PANEL_CONFIG = isWorldCupTeam
+    ? {
+        roster: {
+          label: 'Roster',
+          path: '/stats/roster',
+          payloadKey: 'stat_panel',
+        },
+        games: {
+          label: 'Games',
+          path: '/stats/schedule',
+          payloadKey: 'stat_panel',
+        },
+      }
+    : {
+        leaders: {
+          label: 'Team Leaders',
+          path: '/stats/leaders',
+          payloadKey: 'stat_panel',
+        },
+        roster: {
+          label: 'Roster',
+          path: '/stats/roster',
+          payloadKey: 'stat_panel',
+        },
+        schedule: {
+          label: 'Schedule',
+          path: '/stats/schedule',
+          payloadKey: 'stat_panel',
+        },
+      };
   var lazyPanelState = {};
 
   function panelSortIndex(panelId) {
@@ -913,6 +1021,18 @@
     wireRosterHeadshotFallbacks(panelEl);
     initScheduleCalendars(panelEl);
     initRosterPanels(panelEl);
+    panelEl.querySelectorAll('.team-schedule-row__status[data-start-time]').forEach(function (el) {
+      var iso = el.getAttribute('data-start-time');
+      if (!iso) return;
+      var date = new Date(iso);
+      if (isNaN(date.getTime())) return;
+      el.textContent = date.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+    });
   }
 
   function setActivePanel(panelId) {
@@ -983,16 +1103,20 @@
 
     tabsEl.innerHTML = '';
     panelsEl.innerHTML = '';
-    activePanelId = panels[0] ? panels[0].id : null;
+    activePanelId = panels[0] ? panels[0].id : (isWorldCupTeam ? 'roster' : null);
 
     panels.forEach(function (panel, index) {
       insertTab(panel, index === 0);
       wirePanelElement(insertPanelSection(panel, index === 0));
     });
 
-    registerLazyPanelTab('leaders');
     registerLazyPanelTab('roster');
-    registerLazyPanelTab('schedule');
+    if (isWorldCupTeam) {
+      registerLazyPanelTab('games');
+    } else {
+      registerLazyPanelTab('schedule');
+      registerLazyPanelTab('leaders');
+    }
 
     if (activePanelId) {
       setActivePanel(activePanelId);
@@ -1016,7 +1140,7 @@
   }
 
   function fetchTeamStats(path) {
-    return fetch('/api/mlb/team/' + encodeURIComponent(teamId) + path).then(function (response) {
+    return fetch(apiBase + '/' + encodeURIComponent(teamId) + path).then(function (response) {
       if (!response.ok) throw new Error('Stats unavailable');
       return response.json();
     });
@@ -1112,7 +1236,7 @@
     var hasSummary = payload.stats_table && buildSeasonTableHtml(payload.stats_table);
     var hasPanels = payload.stat_panels && payload.stat_panels.length;
 
-    if (!hasSummary && !hasPanels) {
+    if (!hasSummary && !hasPanels && !isWorldCupTeam) {
       showError();
       return;
     }
@@ -1127,8 +1251,11 @@
       summaryEl.hidden = true;
     }
 
-    if (hasPanels) {
-      initCorePanels(payload.stat_panels);
+    if (hasPanels || isWorldCupTeam) {
+      initCorePanels(payload.stat_panels || []);
+      if (isWorldCupTeam && activePanelId) {
+        ensureLazyPanelLoaded(activePanelId);
+      }
     }
 
     finishLoading();

@@ -81,8 +81,12 @@
     var prevStatus = lastStatus[gameId];
     var flashActive = window.gameCardScoreFlash &&
       window.gameCardScoreFlash.isActive(card);
-    var packActive = window.gameCardPackOpen &&
-      window.gameCardPackOpen.isActive(card);
+    var matchStartActive = window.gameCardMatchStart &&
+      window.gameCardMatchStart.isActive(card);
+    var redCardActive = window.gameCardRedCard &&
+      window.gameCardRedCard.isActive(card);
+    var yellowCardActive = window.gameCardYellowCard &&
+      window.gameCardYellowCard.isActive(card);
     var gameEndActive = window.gameCardGameEnd &&
       window.gameCardGameEnd.isActive(card);
 
@@ -90,8 +94,14 @@
     if (flashActive) {
       card.classList.add('game-card--score-flash');
     }
-    if (packActive) {
-      card.classList.add('game-card--pack-open');
+    if (matchStartActive) {
+      card.classList.add('game-card--match-start');
+    }
+    if (redCardActive) {
+      card.classList.add('game-card--red-card');
+    }
+    if (yellowCardActive) {
+      card.classList.add('game-card--yellow-card');
     }
     if (gameEndActive) {
       card.classList.add('game-card--game-end');
@@ -160,8 +170,8 @@
 
     lastScores[gameId] = { away: awayScore, home: homeScore };
 
-    if (prevStatus === 'pre' && game.status_state === 'in' && window.gameCardPackOpen) {
-      window.gameCardPackOpen.play(card, game);
+    if (prevStatus === 'pre' && game.status_state === 'in' && window.gameCardMatchStart) {
+      window.gameCardMatchStart.play(card, game);
     }
     if (prevStatus && prevStatus !== 'post' && game.status_state === 'post' && window.gameCardGameEnd) {
       window.gameCardGameEnd.play(card, game);
@@ -323,6 +333,9 @@
   }
 
   document.addEventListener('click', function (event) {
+    if (event.target.closest('.team-link')) {
+      return;
+    }
     var card = event.target.closest('.game-card--link');
     if (card) {
       navigateGameCard(card);
@@ -331,6 +344,9 @@
 
   document.addEventListener('keydown', function (event) {
     if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+    if (event.target.closest('.team-link')) {
       return;
     }
     var card = event.target.closest('.game-card--link');

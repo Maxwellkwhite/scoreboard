@@ -20,8 +20,8 @@
     {% set away_raw = (away_cells.W ~ '-' ~ away_cells.L) if away_cells.W and away_cells.L else ((away_espn.W ~ '-' ~ away_espn.L) if away_espn.W and away_espn.L else none) %}
     {% set home_raw = (home_cells.W ~ '-' ~ home_cells.L) if home_cells.W and home_cells.L else ((home_espn.W ~ '-' ~ home_espn.L) if home_espn.W and home_espn.L else none) %}
   {% elif stat_key == 'SO' %}
-    {% set away_raw = away_cells.SO or away_espn.SO or away_espn.K %}
-    {% set home_raw = home_cells.SO or home_espn.SO or home_espn.K %}
+    {% set away_raw = away_cells.get('SO') if away_cells.get('SO') is not none else (away_espn.get('SO') if away_espn.get('SO') is not none else away_espn.get('K')) %}
+    {% set home_raw = home_cells.get('SO') if home_cells.get('SO') is not none else (home_espn.get('SO') if home_espn.get('SO') is not none else home_espn.get('K')) %}
   {% else %}
     {% set away_raw = away_cells[stat_key] if away_cells.get(stat_key) else away_espn.get(stat_key) %}
     {% set home_raw = home_cells[stat_key] if home_cells.get(stat_key) else home_espn.get(stat_key) %}

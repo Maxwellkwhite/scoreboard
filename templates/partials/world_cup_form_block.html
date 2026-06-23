@@ -1,10 +1,11 @@
+{% from 'macros/teams.html' import team_link %}
 {% macro wc_form_block(block, show_dates=false) %}
 <div class="wc-form-block">
   <header class="wc-form-block__head">
     {% if block.logo %}
     <img class="wc-form-block__logo" src="{{ block.logo }}" alt="" width="28" height="28" loading="lazy">
     {% endif %}
-    <span class="wc-form-block__team">{{ block.abbr or block.name }}</span>
+    <span class="wc-form-block__team">{% if block.id %}{{ team_link(block.id, block.abbr or block.name, sport='world_cup') }}{% else %}{{ block.abbr or block.name }}{% endif %}</span>
   </header>
   <ul class="wc-form-list">
     {% for g in block.games %}
@@ -14,9 +15,9 @@
       {% endif %}
       <span class="wc-form-list__score">{{ g.score }}</span>
       {% if g.at_vs and g.opponent_abbr %}
-      <span class="wc-form-list__opp">{{ g.at_vs }} {{ g.opponent_abbr }}</span>
+      <span class="wc-form-list__opp">{{ g.at_vs }} {% if g.opponent_id %}{{ team_link(g.opponent_id, g.opponent_abbr, sport='world_cup') }}{% else %}{{ g.opponent_abbr }}{% endif %}</span>
       {% elif g.opponent_abbr %}
-      <span class="wc-form-list__opp">vs {{ g.opponent_abbr }}</span>
+      <span class="wc-form-list__opp">vs {% if g.opponent_id %}{{ team_link(g.opponent_id, g.opponent_abbr, sport='world_cup') }}{% else %}{{ g.opponent_abbr }}{% endif %}</span>
       {% endif %}
       {% if g.competition %}<span class="last-five-meta"> · {{ g.competition }}</span>{% endif %}
       {% if show_dates and g.date %}

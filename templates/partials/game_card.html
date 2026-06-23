@@ -1,7 +1,7 @@
 {% from 'macros/teams.html' import team_link, batting_team_style %}
 {% set batting_team = game.away if game.batting_side == 'away' else (game.home if game.batting_side == 'home' else none) %}
 {% set has_winner = game.away.winner or game.home.winner %}
-<div class="game-card game-card--{{ game.status_state }} game-card--link" role="link" tabindex="0" data-game-id="{{ game.id }}" data-game-href="/game/{{ game.id }}"{% if game.status_state == 'in' and batting_team %} style="{{ batting_team_style(batting_team) }}"{% endif %}>
+<div class="game-card game-card--{{ game.status_state }} game-card--link" role="link" tabindex="0" data-sport="mlb" data-game-id="{{ game.id }}" data-game-href="/game/{{ game.id }}"{% if game.status_state == 'in' and batting_team %} style="{{ batting_team_style(batting_team) }}"{% endif %}>
   <div class="game-card-status">
     <span class="status-pill status-pill--{{ game.status_state }}{% if game.status_state == 'in' and batting_team %} status-pill--batting-team{% endif %}"
       {% if game.status_state == 'pre' and game.start_time %}data-start-time="{{ game.start_time }}"{% endif %}>{{ game.status_detail }}</span>

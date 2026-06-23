@@ -1,3 +1,4 @@
+{% from 'macros/teams.html' import team_link %}
 {% set away_box = team_box | selectattr('home_away', 'equalto', 'away') | list | first %}
 {% set home_box = team_box | selectattr('home_away', 'equalto', 'home') | list | first %}
 {% if tournament_mode %}
@@ -36,7 +37,7 @@
         {% else %}
         <span class="pitcher-card__team-logo-fallback">{{ team.abbr }}</span>
         {% endif %}
-        <span class="pitcher-card__team-abbr">{{ box.abbr if box else team.abbr }}</span>
+        <span class="pitcher-card__team-abbr">{% if team.id %}{{ team_link(team.id, box.abbr if box else team.abbr, sport='world_cup') }}{% else %}{{ box.abbr if box else team.abbr }}{% endif %}</span>
       </header>
     </article>
     {% endfor %}

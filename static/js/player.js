@@ -2,6 +2,10 @@
   var rootEl = document.querySelector('.player-page .game-detail-main');
   if (!rootEl) return;
 
+  var pageRoot = document.body;
+  var isWorldCupPlayer = pageRoot.classList.contains('world-cup-player-page');
+  var apiBase = pageRoot.getAttribute('data-player-api-base') || '/api/mlb/player';
+
   var playerId = rootEl.getAttribute('data-player-id');
   var isPitcher = rootEl.getAttribute('data-is-pitcher') === 'true';
   var visualPanelId = isPitcher ? 'pitch_profile' : 'hit_profile';
@@ -1918,11 +1922,13 @@
     var profileLoaded = panels.some(function (panel) {
       return panel.id === 'hit_profile' || panel.id === 'pitch_profile';
     });
-    if (!profileLoaded) {
+    if (!profileLoaded && !isWorldCupPlayer) {
       upsertPanel({ id: visualPanelId, label: visualPanelLabel, panel_kind: 'loading' });
     }
-    registerLazyPanelTab('splits');
-    registerPercentileComingSoonTab();
+    if (!isWorldCupPlayer) {
+      registerLazyPanelTab('splits');
+      registerPercentileComingSoonTab();
+    }
 
     if (activePanelId) {
       setActivePanel(activePanelId);
@@ -1946,7 +1952,7 @@
   }
 
   function fetchPlayerStats(path) {
-    return fetch('/api/mlb/player/' + encodeURIComponent(playerId) + path).then(function (response) {
+    return fetch(apiBase + '/' + encodeURIComponent(playerId) + path).then(function (response) {
       if (!response.ok) throw new Error('Stats unavailable');
       return response.json();
     });

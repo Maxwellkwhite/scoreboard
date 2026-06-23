@@ -740,7 +740,7 @@ html[data-scoreboard-view="standings"] #tab-standings {
   }
 }
 
-.game-card > :not(.game-card-ripple-layer):not(.game-card-pack-layer):not(.game-card-game-end-layer) {
+.game-card > :not(.game-card-ripple-layer):not(.game-card-pack-layer):not(.game-card-match-start-layer):not(.game-card-red-card-layer):not(.game-card-yellow-card-layer):not(.game-card-strikeout-layer):not(.game-card-walk-layer):not(.game-card-game-end-layer) {
   position: relative;
   z-index: 1;
 }
@@ -1203,6 +1203,967 @@ html[data-scoreboard-view="standings"] #tab-standings {
   100% {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+/* Soccer match start — pitch reveal with team logos and kickoff ball */
+.game-card--match-start {
+  overflow: hidden;
+}
+
+.game-card--match-start.game-card--in {
+  border-color: #dde3eb !important;
+  box-shadow: 0 2px 8px rgba(26, 35, 50, 0.06) !important;
+}
+
+.game-card--match-start.game-card--link {
+  transform: none !important;
+  pointer-events: none;
+}
+
+.game-card--match-start.game-card--link:focus-visible {
+  outline: none;
+}
+
+.game-card-match-start-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 4;
+  overflow: hidden;
+}
+
+.game-card-match-start__pitch {
+  position: absolute;
+  inset: 10% 5% 12%;
+  border-radius: 6px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  background:
+    repeating-linear-gradient(
+      90deg,
+      #3a8f3d 0,
+      #3a8f3d 14%,
+      #449a47 14%,
+      #449a47 28%
+    );
+  box-shadow:
+    inset 0 0 24px rgba(0, 0, 0, 0.12),
+    0 4px 16px rgba(26, 35, 50, 0.18);
+  opacity: 0;
+  transform: scale(0.94);
+  animation: game-card-match-start-pitch var(--match-start-duration, 10s) ease-out forwards;
+}
+
+.game-card-match-start__markings {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.game-card-match-start__line--half {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.game-card-match-start__circle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28%;
+  aspect-ratio: 1;
+  margin: -14% 0 0 -14%;
+  border: 2px solid rgba(255, 255, 255, 0.88);
+  border-radius: 50%;
+}
+
+.game-card-match-start__box {
+  position: absolute;
+  top: 22%;
+  width: 18%;
+  height: 56%;
+  border: 2px solid rgba(255, 255, 255, 0.88);
+}
+
+.game-card-match-start__box--left {
+  left: 0;
+  border-left: none;
+}
+
+.game-card-match-start__box--right {
+  right: 0;
+  border-right: none;
+}
+
+.game-card-match-start__team {
+  position: absolute;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.6rem;
+  height: 3.6rem;
+  margin-top: -1.8rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--team-color, #1a2332) 30%, white),
+    0 6px 18px rgba(26, 35, 50, 0.2);
+  opacity: 0;
+  transform: scale(0.72);
+}
+
+.game-card-match-start__team--away {
+  left: 10%;
+  animation: game-card-match-start-team-away var(--match-start-duration, 10s) ease-out forwards;
+}
+
+.game-card-match-start__team--home {
+  right: 10%;
+  animation: game-card-match-start-team-home var(--match-start-duration, 10s) ease-out forwards;
+}
+
+.game-card-match-start__logo {
+  width: 2.6rem;
+  height: 2.6rem;
+  object-fit: contain;
+}
+
+.game-card-match-start__logo--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--team-color, #1a2332) 12%, white);
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--team-color, #1a2332);
+}
+
+.game-card-match-start__ball {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin: -1.25rem 0 0 -1.25rem;
+  opacity: 0;
+  transform: scale(0.2);
+  filter: drop-shadow(0 3px 8px rgba(26, 35, 50, 0.32));
+  animation: game-card-match-start-ball var(--match-start-duration, 10s) cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.game-card-match-start__ball-img {
+  display: block;
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: contain;
+}
+
+.game-card--match-start > .game-card-status,
+.game-card--match-start > .game-card-teams {
+  opacity: 0;
+  animation: game-card-match-start-content-snap var(--match-start-duration, 10s) cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  transform-origin: center center;
+}
+
+@keyframes game-card-match-start-pitch {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  12% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  82% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  92%, 100% {
+    opacity: 0;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes game-card-match-start-team-away {
+  0%, 14% {
+    opacity: 0;
+    transform: scale(0.72) translateX(-8px);
+  }
+  28% {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+  82% {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+  92%, 100% {
+    opacity: 0;
+    transform: scale(0.85) translateX(-6px);
+  }
+}
+
+@keyframes game-card-match-start-team-home {
+  0%, 22% {
+    opacity: 0;
+    transform: scale(0.72) translateX(8px);
+  }
+  36% {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+  82% {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+  }
+  92%, 100% {
+    opacity: 0;
+    transform: scale(0.85) translateX(6px);
+  }
+}
+
+@keyframes game-card-match-start-ball {
+  0%, 38% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  52% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.96);
+  }
+  68%, 82% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  92%, 100% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+@keyframes game-card-match-start-content-snap {
+  0%, 84% {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  92% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  96% {
+    transform: scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Soccer red card — flash, card reveal, player name banner */
+.game-card--red-card {
+  overflow: hidden;
+  pointer-events: none;
+  border-color: #ef9a9a !important;
+  box-shadow:
+    0 0 0 2px rgba(211, 47, 47, 0.45),
+    0 10px 28px rgba(183, 28, 28, 0.28) !important;
+  background: color-mix(in srgb, #e53935 12%, #fff);
+  animation: game-card-red-card-border var(--red-card-duration, 6s) ease-out forwards;
+}
+
+.game-card--red-card.game-card--link:focus-visible {
+  outline: none;
+}
+
+.game-card-red-card-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 5;
+  overflow: hidden;
+}
+
+.game-card-red-card__flash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(211, 47, 47, 0.22);
+  opacity: 0;
+  animation: game-card-red-card-flash var(--red-card-duration, 6s) ease-out forwards;
+}
+
+.game-card-red-card__card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2.4rem;
+  height: 3.4rem;
+  margin: -1.7rem 0 0 -1.2rem;
+  opacity: 0;
+  transform: scale(0.35) rotate(-8deg);
+  transform-origin: center center;
+  animation: game-card-red-card-reveal var(--red-card-duration, 6s) cubic-bezier(0.22, 1, 0.28, 1) forwards;
+}
+
+.game-card-red-card__card-face {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.35) 0%, transparent 38%),
+    linear-gradient(180deg, #ff5252 0%, #d32f2f 52%, #b71c1c 100%);
+  border: 1px solid rgba(97, 0, 0, 0.35);
+  box-shadow:
+    0 10px 28px rgba(136, 14, 14, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -2px 6px rgba(74, 0, 0, 0.28);
+}
+
+.game-card-red-card__player {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 7;
+  padding: 0.7rem 0.65rem 1.1rem;
+  text-align: center;
+  font-size: 1.28rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  color: #8b0000;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+  background: linear-gradient(
+    180deg,
+    rgba(253, 236, 234, 0.97) 0%,
+    rgba(253, 236, 234, 0.82) 55%,
+    rgba(253, 236, 234, 0) 100%
+  );
+  opacity: 0;
+  transform: translateY(-10px) scale(0.94);
+  animation: game-card-red-card-player var(--red-card-name-duration, 10.02s) ease-out forwards;
+}
+
+.game-card-red-card__player-abbr,
+.game-card-yellow-card__player-abbr {
+  font-weight: 700;
+  opacity: 0.78;
+}
+
+@keyframes game-card-red-card-flash {
+  0% {
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  18% {
+    opacity: 0.75;
+  }
+  28% {
+    opacity: 0.35;
+  }
+  38%, 100% {
+    opacity: 0;
+  }
+}
+
+@keyframes game-card-red-card-border {
+  0%, 6% {
+    border-color: #ef9a9a;
+    box-shadow:
+      0 0 0 2px rgba(211, 47, 47, 0.45),
+      0 10px 28px rgba(183, 28, 28, 0.28);
+    background: color-mix(in srgb, #e53935 12%, #fff);
+  }
+  10% {
+    border-color: #e57373;
+    box-shadow:
+      0 0 0 3px rgba(229, 57, 53, 0.55),
+      0 12px 34px rgba(183, 28, 28, 0.38);
+    background: color-mix(in srgb, #e53935 18%, #fff);
+  }
+  20% {
+    border-color: #ef9a9a;
+    box-shadow:
+      0 0 0 2px rgba(211, 47, 47, 0.35),
+      0 8px 22px rgba(183, 28, 28, 0.2);
+    background: color-mix(in srgb, #e53935 8%, #fff);
+  }
+  32%, 100% {
+    border-color: #dde3eb;
+    box-shadow: 0 2px 8px rgba(26, 35, 50, 0.06);
+    background: #fff;
+  }
+}
+
+@keyframes game-card-red-card-reveal {
+  0%, 14% {
+    opacity: 0;
+    transform: scale(0.35) rotate(-8deg);
+  }
+  22% {
+    opacity: 1;
+    transform: scale(0.55) rotate(-5deg);
+  }
+  42% {
+    opacity: 1;
+    transform: scale(1.35) rotate(2deg);
+  }
+  58% {
+    opacity: 0.92;
+    transform: scale(2.15) rotate(4deg);
+  }
+  72%, 100% {
+    opacity: 0;
+    transform: scale(2.6) rotate(6deg);
+  }
+}
+
+@keyframes game-card-red-card-player {
+  0%, 43% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.94);
+  }
+  46% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  93% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+/* Soccer yellow card — flash, card reveal, player name banner */
+.game-card--yellow-card {
+  overflow: hidden;
+  pointer-events: none;
+  border-color: #ffe082 !important;
+  box-shadow:
+    0 0 0 2px rgba(245, 166, 35, 0.45),
+    0 10px 28px rgba(230, 162, 0, 0.28) !important;
+  background: color-mix(in srgb, #fbc02d 12%, #fff);
+  animation: game-card-yellow-card-border var(--yellow-card-duration, 6s) ease-out forwards;
+}
+
+.game-card--yellow-card.game-card--link:focus-visible {
+  outline: none;
+}
+
+.game-card-yellow-card-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 5;
+  overflow: hidden;
+}
+
+.game-card-yellow-card__flash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(251, 192, 45, 0.24);
+  opacity: 0;
+  animation: game-card-yellow-card-flash var(--yellow-card-duration, 6s) ease-out forwards;
+}
+
+.game-card-yellow-card__card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2.4rem;
+  height: 3.4rem;
+  margin: -1.7rem 0 0 -1.2rem;
+  opacity: 0;
+  transform: scale(0.35) rotate(-8deg);
+  transform-origin: center center;
+  animation: game-card-yellow-card-reveal var(--yellow-card-duration, 6s) cubic-bezier(0.22, 1, 0.28, 1) forwards;
+}
+
+.game-card-yellow-card__card-face {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.42) 0%, transparent 38%),
+    linear-gradient(180deg, #fff176 0%, #fbc02d 52%, #f9a825 100%);
+  border: 1px solid rgba(130, 90, 0, 0.35);
+  box-shadow:
+    0 10px 28px rgba(180, 130, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 6px rgba(140, 95, 0, 0.22);
+}
+
+.game-card-yellow-card__player {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 7;
+  padding: 0.7rem 0.65rem 1.1rem;
+  text-align: center;
+  font-size: 1.28rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  color: #7a5a00;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 249, 230, 0.97) 0%,
+    rgba(255, 249, 230, 0.82) 55%,
+    rgba(255, 249, 230, 0) 100%
+  );
+  opacity: 0;
+  transform: translateY(-10px) scale(0.94);
+  animation: game-card-yellow-card-player var(--yellow-card-name-duration, 10.02s) ease-out forwards;
+}
+
+@keyframes game-card-yellow-card-flash {
+  0% {
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  18% {
+    opacity: 0.75;
+  }
+  28% {
+    opacity: 0.35;
+  }
+  38%, 100% {
+    opacity: 0;
+  }
+}
+
+@keyframes game-card-yellow-card-border {
+  0%, 6% {
+    border-color: #ffe082;
+    box-shadow:
+      0 0 0 2px rgba(245, 166, 35, 0.45),
+      0 10px 28px rgba(230, 162, 0, 0.28);
+    background: color-mix(in srgb, #fbc02d 12%, #fff);
+  }
+  10% {
+    border-color: #ffd54f;
+    box-shadow:
+      0 0 0 3px rgba(251, 192, 45, 0.55),
+      0 12px 34px rgba(230, 162, 0, 0.38);
+    background: color-mix(in srgb, #fbc02d 18%, #fff);
+  }
+  20% {
+    border-color: #ffe082;
+    box-shadow:
+      0 0 0 2px rgba(245, 166, 35, 0.35),
+      0 8px 22px rgba(230, 162, 0, 0.2);
+    background: color-mix(in srgb, #fbc02d 8%, #fff);
+  }
+  32%, 100% {
+    border-color: #dde3eb;
+    box-shadow: 0 2px 8px rgba(26, 35, 50, 0.06);
+    background: #fff;
+  }
+}
+
+@keyframes game-card-yellow-card-reveal {
+  0%, 14% {
+    opacity: 0;
+    transform: scale(0.35) rotate(-8deg);
+  }
+  22% {
+    opacity: 1;
+    transform: scale(0.55) rotate(-5deg);
+  }
+  42% {
+    opacity: 1;
+    transform: scale(1.35) rotate(2deg);
+  }
+  58% {
+    opacity: 0.92;
+    transform: scale(2.15) rotate(4deg);
+  }
+  72%, 100% {
+    opacity: 0;
+    transform: scale(2.6) rotate(6deg);
+  }
+}
+
+@keyframes game-card-yellow-card-player {
+  0%, 43% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.94);
+  }
+  46% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  93% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+/* MLB strikeout — red flash, K glyph, batter name banner */
+.game-card--strikeout {
+  overflow: hidden;
+  pointer-events: none;
+  border-color: #ef9a9a !important;
+  box-shadow:
+    0 0 0 2px rgba(211, 47, 47, 0.45),
+    0 10px 28px rgba(183, 28, 28, 0.28) !important;
+  background: color-mix(in srgb, #e53935 12%, #fff);
+  animation: game-card-strikeout-border var(--strikeout-duration, 6s) ease-out forwards;
+}
+
+.game-card--strikeout.game-card--link:focus-visible {
+  outline: none;
+}
+
+.game-card-strikeout-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 5;
+  overflow: hidden;
+}
+
+.game-card-strikeout__flash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(211, 47, 47, 0.22);
+  opacity: 0;
+  animation: game-card-strikeout-flash var(--strikeout-duration, 6s) ease-out forwards;
+}
+
+.game-card-strikeout__glyph {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.35) rotate(-8deg);
+  transform-origin: center center;
+  animation: game-card-strikeout-glyph var(--strikeout-duration, 6s) cubic-bezier(0.22, 1, 0.28, 1) forwards;
+}
+
+.game-card-strikeout__k {
+  display: inline-block;
+  font-size: 4.75rem;
+  font-weight: 900;
+  line-height: 1;
+  color: #d32f2f;
+  text-shadow: 0 4px 18px rgba(183, 28, 28, 0.35);
+}
+
+.game-card-strikeout__k--looking {
+  transform: scaleX(-1);
+}
+
+.game-card-strikeout__player {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 7;
+  padding: 0.7rem 0.65rem 1.1rem;
+  text-align: center;
+  font-size: 1.28rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  color: #8b0000;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+  background: linear-gradient(
+    180deg,
+    rgba(253, 236, 234, 0.97) 0%,
+    rgba(253, 236, 234, 0.82) 55%,
+    rgba(253, 236, 234, 0) 100%
+  );
+  opacity: 0;
+  transform: translateY(-10px) scale(0.94);
+  animation: game-card-strikeout-player var(--strikeout-name-duration, 10.02s) ease-out forwards;
+}
+
+.game-card-strikeout__player-abbr {
+  font-weight: 700;
+  opacity: 0.78;
+}
+
+@keyframes game-card-strikeout-flash {
+  0% { opacity: 0; }
+  8% { opacity: 1; }
+  18% { opacity: 0.75; }
+  28% { opacity: 0.35; }
+  38%, 100% { opacity: 0; }
+}
+
+@keyframes game-card-strikeout-border {
+  0%, 6% {
+    border-color: #ef9a9a;
+    box-shadow:
+      0 0 0 2px rgba(211, 47, 47, 0.45),
+      0 10px 28px rgba(183, 28, 28, 0.28);
+    background: color-mix(in srgb, #e53935 12%, #fff);
+  }
+  10% {
+    border-color: #e57373;
+    box-shadow:
+      0 0 0 3px rgba(229, 57, 53, 0.55),
+      0 12px 34px rgba(183, 28, 28, 0.38);
+    background: color-mix(in srgb, #e53935 18%, #fff);
+  }
+  20% {
+    border-color: #ef9a9a;
+    box-shadow:
+      0 0 0 2px rgba(211, 47, 47, 0.35),
+      0 8px 22px rgba(183, 28, 28, 0.2);
+    background: color-mix(in srgb, #e53935 8%, #fff);
+  }
+  32%, 100% {
+    border-color: #dde3eb;
+    box-shadow: 0 2px 8px rgba(26, 35, 50, 0.06);
+    background: #fff;
+  }
+}
+
+@keyframes game-card-strikeout-glyph {
+  0%, 14% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35) rotate(-8deg);
+  }
+  22% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.55) rotate(-5deg);
+  }
+  42% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.35) rotate(2deg);
+  }
+  58% {
+    opacity: 0.92;
+    transform: translate(-50%, -50%) scale(2.15) rotate(4deg);
+  }
+  72%, 100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2.6) rotate(6deg);
+  }
+}
+
+@keyframes game-card-strikeout-player {
+  0%, 43% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.94);
+  }
+  46% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  93% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+/* MLB walk — blue flash, BB glyph, batter name banner */
+.game-card--walk {
+  overflow: hidden;
+  pointer-events: none;
+  border-color: #90caf9 !important;
+  box-shadow:
+    0 0 0 2px rgba(33, 150, 243, 0.45),
+    0 10px 28px rgba(25, 118, 210, 0.28) !important;
+  background: color-mix(in srgb, #2196f3 12%, #fff);
+  animation: game-card-walk-border var(--walk-duration, 6s) ease-out forwards;
+}
+
+.game-card--walk.game-card--link:focus-visible {
+  outline: none;
+}
+
+.game-card-walk-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 5;
+  overflow: hidden;
+}
+
+.game-card-walk__flash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(33, 150, 243, 0.22);
+  opacity: 0;
+  animation: game-card-walk-flash var(--walk-duration, 6s) ease-out forwards;
+}
+
+.game-card-walk__glyph {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.35) rotate(-8deg);
+  transform-origin: center center;
+  animation: game-card-walk-glyph var(--walk-duration, 6s) cubic-bezier(0.22, 1, 0.28, 1) forwards;
+}
+
+.game-card-walk__bb {
+  font-size: 3.5rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  color: #1565c0;
+  text-shadow: 0 4px 18px rgba(21, 101, 192, 0.35);
+}
+
+.game-card-walk__player {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 7;
+  padding: 0.7rem 0.65rem 1.1rem;
+  text-align: center;
+  font-size: 1.28rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  color: #0d47a1;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+  background: linear-gradient(
+    180deg,
+    rgba(227, 242, 253, 0.97) 0%,
+    rgba(227, 242, 253, 0.82) 55%,
+    rgba(227, 242, 253, 0) 100%
+  );
+  opacity: 0;
+  transform: translateY(-10px) scale(0.94);
+  animation: game-card-walk-player var(--walk-name-duration, 10.02s) ease-out forwards;
+}
+
+.game-card-walk__player-abbr {
+  font-weight: 700;
+  opacity: 0.78;
+}
+
+@keyframes game-card-walk-flash {
+  0% { opacity: 0; }
+  8% { opacity: 1; }
+  18% { opacity: 0.75; }
+  28% { opacity: 0.35; }
+  38%, 100% { opacity: 0; }
+}
+
+@keyframes game-card-walk-border {
+  0%, 6% {
+    border-color: #90caf9;
+    box-shadow:
+      0 0 0 2px rgba(33, 150, 243, 0.45),
+      0 10px 28px rgba(25, 118, 210, 0.28);
+    background: color-mix(in srgb, #2196f3 12%, #fff);
+  }
+  10% {
+    border-color: #64b5f6;
+    box-shadow:
+      0 0 0 3px rgba(33, 150, 243, 0.55),
+      0 12px 34px rgba(25, 118, 210, 0.38);
+    background: color-mix(in srgb, #2196f3 18%, #fff);
+  }
+  20% {
+    border-color: #90caf9;
+    box-shadow:
+      0 0 0 2px rgba(33, 150, 243, 0.35),
+      0 8px 22px rgba(25, 118, 210, 0.2);
+    background: color-mix(in srgb, #2196f3 8%, #fff);
+  }
+  32%, 100% {
+    border-color: #dde3eb;
+    box-shadow: 0 2px 8px rgba(26, 35, 50, 0.06);
+    background: #fff;
+  }
+}
+
+@keyframes game-card-walk-glyph {
+  0%, 14% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35) rotate(-8deg);
+  }
+  22% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.55) rotate(-5deg);
+  }
+  42% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.35) rotate(2deg);
+  }
+  58% {
+    opacity: 0.92;
+    transform: translate(-50%, -50%) scale(2.15) rotate(4deg);
+  }
+  72%, 100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2.6) rotate(6deg);
+  }
+}
+
+@keyframes game-card-walk-player {
+  0%, 43% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.94);
+  }
+  46% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  93% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
   }
 }
 
@@ -7752,6 +8713,36 @@ a.team-schedule-calendar__game-card:focus-visible {
   border-bottom: 1px solid #eef1f5;
 }
 
+.team-schedule-row--link {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) auto auto;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid #eef1f5;
+  text-decoration: none;
+  color: inherit;
+}
+
+.team-schedule-row--link:hover,
+.team-schedule-row--link:focus-visible {
+  background: #f8fafc;
+}
+
+.team-schedule-row__matchup {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1a2332;
+}
+
+.team-schedule-row__score {
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #1a2332;
+  text-align: right;
+}
+
 .team-schedule-row__date {
   font-size: 0.78rem;
   color: #8a96a8;
@@ -7991,12 +8982,6 @@ html.is-mobile-gate body.scoreboard-page > *:not(.desktop-only-overlay) {
   .world-cup-standings__grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1rem;
-  }
-}
-
-@media (min-width: 1280px) {
-  .world-cup-standings__grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -8768,4 +9753,32 @@ html.is-mobile-gate body.scoreboard-page > *:not(.desktop-only-overlay) {
   .wc-timeline-feed__text {
     grid-column: 1 / -1;
   }
+}
+
+.all-standings {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.all-standings__toolbar {
+  align-self: flex-start;
+  margin-bottom: 0;
+}
+
+.all-standings--has-toggle .all-standings__block[data-standings-sport]:not(.all-standings__block--active) {
+  display: none;
+}
+
+.all-standings--has-toggle .all-standings__block[hidden] {
+  display: none !important;
+}
+
+.all-standings__title {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1a2332;
 }

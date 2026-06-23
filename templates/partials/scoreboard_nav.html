@@ -14,11 +14,11 @@
       </span>
     </a>
     {% include "partials/sport_nav.html" %}
-    {% if active_sport | default('mlb') == 'mlb' %}
+    {% if active_sport | default('all') in ['mlb', 'all', 'world_cup'] %}
     <div
       class="scoreboard-search"
       data-scoreboard-search
-      data-search-api="{{ url_for('api_mlb_search') }}"
+      data-search-api="{{ url_for('api_search') }}"
     >
       <label class="scoreboard-search__label" for="scoreboard-search-input">Search teams or players</label>
       <span class="scoreboard-search__icon bi bi-search" aria-hidden="true"></span>
@@ -44,6 +44,6 @@
     {% endif %}
   </div>
 </nav>
-{% if active_sport | default('mlb') == 'mlb' %}
+{% if active_sport | default('all') in ['mlb', 'all', 'world_cup'] %}
 <script src="{{ url_for('static', filename='js/scoreboard-search.js') }}" defer></script>
 {% endif %}

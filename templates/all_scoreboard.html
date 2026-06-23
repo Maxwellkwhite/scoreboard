@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Scoreboard — FIFA World Cup</title>
-  <meta name="description" content="Live FIFA World Cup scores, today's matches, and group standings.">
+  <title>Scoreboard — All Sports</title>
+  <meta name="description" content="Live scores across MLB and FIFA World Cup.">
   {% include "partials/scoreboard_head_icons.html" %}
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
@@ -18,7 +18,7 @@
     })();
   </script>
 </head>
-<body class="scoreboard-page" data-today-api="/api/world-cup/scoreboard/today" data-match-href-prefix="/world-cup/match/">
+<body class="scoreboard-page scoreboard-page--all" data-today-api="{{ url_for('api_all_scoreboard_today') }}">
   {% include "partials/desktop_only_gate.html" %}
   {% include "partials/scoreboard_nav.html" %}
 
@@ -39,12 +39,12 @@
         {% if today_games %}
         <div class="scoreboard-grid" id="today-games">
           {% for game in today_games %}
-            {% include "partials/world_cup_game_card.html" %}
+            {% include "partials/all_game_card.html" %}
           {% endfor %}
         </div>
         {% else %}
         <div class="scoreboard-empty">
-          <strong>No World Cup matches today</strong>
+          <strong>No games today</strong>
           {% if upcoming_games %}See the next scheduled slate below.{% else %}Switch to Yesterday for recent results.{% endif %}
         </div>
         {% if upcoming_games %}
@@ -53,15 +53,11 @@
           <span class="section-date upcoming-block-date" data-local-date="{{ upcoming_date.isoformat() }}">{{ upcoming_date.isoformat() }}</span>
           <div class="scoreboard-grid">
             {% for game in upcoming_games %}
-              {% include "partials/world_cup_game_card.html" %}
+              {% include "partials/all_game_card.html" %}
             {% endfor %}
           </div>
         </div>
         {% endif %}
-        {% endif %}
-
-        {% if show_dev_tools | default(true) %}
-        {% include "partials/world_cup_game_card_dev_tools.html" %}
         {% endif %}
       </div>
 
@@ -69,19 +65,63 @@
         {% if yesterday_games %}
         <div class="scoreboard-grid">
           {% for game in yesterday_games %}
-            {% include "partials/world_cup_game_card.html" %}
+            {% include "partials/all_game_card.html" %}
           {% endfor %}
         </div>
         {% else %}
         <div class="scoreboard-empty">
-          <strong>No matches yesterday</strong>
-          Check back during the tournament.
+          <strong>No games yesterday</strong>
         </div>
         {% endif %}
       </div>
 
       <div class="day-panel" id="standings-panel" role="tabpanel" aria-labelledby="tab-standings" hidden>
-        {% include "partials/world_cup_standings_panel.html" %}
+        <div class="all-standings{% if wc_standings %} all-standings--has-toggle{% endif %}">
+          {% if wc_standings %}
+          <div class="game-preview-panel__toolbar all-standings__toolbar">
+            <div class="player-panel-toggle" data-standings-toggle role="group" aria-label="Standings league">
+              <button
+                type="button"
+                class="player-panel-toggle__btn is-active"
+                id="all-standings-tab-mlb"
+                data-standings-sport="mlb"
+                aria-pressed="true"
+              >MLB</button>
+              <button
+                type="button"
+                class="player-panel-toggle__btn"
+                id="all-standings-tab-world-cup"
+                data-standings-sport="world_cup"
+                aria-pressed="false"
+              >World Cup</button>
+            </div>
+          </div>
+          {% endif %}
+          <section
+            class="all-standings__block{% if wc_standings %} all-standings__block--active{% endif %}"
+            {% if wc_standings %}id="all-standings-mlb" data-standings-sport="mlb" role="tabpanel" aria-labelledby="all-standings-tab-mlb"{% endif %}
+          >
+            <h3 class="all-standings__title">MLB</h3>
+            {% with standings=mlb_standings %}
+              {% include "partials/standings_panel.html" %}
+            {% endwith %}
+          </section>
+          {% if wc_standings %}
+          <section
+            class="all-standings__block"
+            id="all-standings-world-cup"
+            role="tabpanel"
+            aria-labelledby="all-standings-tab-world-cup"
+            data-standings-sport="world_cup"
+            hidden
+          >
+            <h3 class="all-standings__title">FIFA World Cup</h3>
+            {% with standings=wc_standings %}
+              {% include "partials/world_cup_standings_panel.html" %}
+            {% endwith %}
+          </section>
+          {% endif %}
+        </div>
       </div>
     </section>
   </main>
@@ -120,7 +160,7 @@
       formatPreGameTimes();
       formatLocalDates();
 
-      var tabs = document.querySelectorAll('.day-tab');
+      var tabs = document.querySelectorAll('.scoreboard-view-nav .day-tab[data-day]');
       var panels = document.querySelectorAll('.day-panel');
       var activeDateEl = document.getElementById('active-section-date');
 
@@ -218,17 +258,58 @@
           window.scoreboardLive.setActiveDay(day);
         }
       });
+
+      (function initAllStandingsTabs() {
+        var nav = document.querySelector('[data-standings-toggle]');
+        if (!nav) {
+          return;
+        }
+
+        var sportTabs = nav.querySelectorAll('[data-standings-sport]');
+        var sportPanels = document.querySelectorAll('.all-standings__block[data-standings-sport]');
+
+        function setStandingsSport(sport) {
+          sportTabs.forEach(function (tab) {
+            var isActive = tab.getAttribute('data-standings-sport') === sport;
+            tab.classList.toggle('is-active', isActive);
+            tab.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+          });
+
+          sportPanels.forEach(function (panel) {
+            var show = panel.getAttribute('data-standings-sport') === sport;
+            panel.classList.toggle('all-standings__block--active', show);
+            panel.hidden = !show;
+          });
+        }
+
+        nav.addEventListener('click', function (event) {
+          var tab = event.target.closest('[data-standings-sport]');
+          if (!tab) {
+            return;
+          }
+          event.preventDefault();
+          event.stopPropagation();
+          setStandingsSport(tab.getAttribute('data-standings-sport'));
+        });
+
+        window.allStandingsTabs = {
+          setSport: setStandingsSport
+        };
+
+        setStandingsSport('mlb');
+      })();
     })();
   </script>
   <script src="{{ url_for('static', filename='js/game-card-score-flash.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/game-card-pack-open.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/game-card-strikeout.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/game-card-walk.js') }}"></script>
   <script src="{{ url_for('static', filename='js/game-card-match-start.js') }}"></script>
   <script src="{{ url_for('static', filename='js/game-card-red-card.js') }}"></script>
   <script src="{{ url_for('static', filename='js/game-card-yellow-card.js') }}"></script>
   <script src="{{ url_for('static', filename='js/game-card-game-end.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/world-cup-scoreboard.js') }}"></script>
-  {% if show_dev_tools | default(true) %}
-  <script src="{{ url_for('static', filename='js/world-cup-game-card-dev-tools.js') }}" defer></script>
-  {% endif %}
+  <script src="{{ url_for('static', filename='js/team-batting-pill.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/all-scoreboard-live.js') }}"></script>
   <script>
     (function () {
       if (!window.scoreboardTabs) return;

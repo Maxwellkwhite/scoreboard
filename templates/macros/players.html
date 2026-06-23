@@ -1,6 +1,10 @@
-{% macro player_link(id, name, class='player-link') -%}
+{% macro player_link(id, name, class='player-link', sport='mlb') -%}
 {% if id and name -%}
+{% if sport == 'world_cup' -%}
+<a href="{{ url_for('world_cup_player_page', player_id=id) }}" class="{{ class }}">{{ name }}</a>
+{%- else -%}
 <a href="{{ url_for('mlb_player_page', player_id=id) }}" class="{{ class }}">{{ name }}</a>
+{%- endif %}
 {%- elif name -%}
 {{ name }}
 {%- endif %}

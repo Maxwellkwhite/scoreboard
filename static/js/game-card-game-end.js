@@ -19,6 +19,13 @@
     { x: 62, y: 48, delay: 8400, count: 28, scale: 1.35, palette: 'winner' }
   ];
 
+  function isSoccerGame(game, card) {
+    if (game && game.sport === 'world_cup') {
+      return true;
+    }
+    return Boolean(card && card.getAttribute('data-sport') === 'world_cup');
+  }
+
   function winnerSide(game) {
     if (!game) {
       return null;
@@ -88,15 +95,18 @@
     return 0.45;
   }
 
-  function buildMetaFromGame(game) {
+  function buildMetaFromGame(game, card) {
     var side = winnerSide(game);
     var winner = side && game[side] ? game[side] : null;
     var away = game.away || {};
     var home = game.home || {};
+    var winnerColors = teamColors(winner);
+    var soccer = isSoccerGame(game, card);
     return {
       winnerSide: side,
       mixedColors: uniqueColors(teamColors(away).concat(teamColors(home))),
-      winnerColors: teamColors(winner),
+      winnerColors: winnerColors,
+      winnerOnly: soccer,
       intensity: intensityForGame(game)
     };
   }
@@ -136,6 +146,7 @@
       winnerSide: side,
       mixedColors: uniqueColors(awayColors.concat(homeColors)),
       winnerColors: readTeamColorsFromRow(winnerRow),
+      winnerOnly: isSoccerGame(null, card),
       intensity: intensityForGame({ away: { score: awayScore }, home: { score: homeScore } })
     };
   }
@@ -217,10 +228,15 @@
     }
   }
 
-  function spawnShow(container, show, colors, winnerColors, intensity) {
-    var palette = show.palette === 'winner' && winnerColors.length
-      ? winnerColors
-      : colors;
+  function spawnShow(container, show, colors, winnerColors, intensity, winnerOnly) {
+    var palette;
+    if (winnerOnly && winnerColors.length) {
+      palette = winnerColors;
+    } else if (show.palette === 'winner' && winnerColors.length) {
+      palette = winnerColors;
+    } else {
+      palette = colors;
+    }
     if (!palette.length) {
       palette = ['#ffffff'];
     }
@@ -236,7 +252,14 @@
 
     FIREWORK_SHOWS.slice(0, showCount).forEach(function (show) {
       var timer = setTimeout(function () {
-        spawnShow(container, show, meta.mixedColors, meta.winnerColors, intensity);
+        spawnShow(
+          container,
+          show,
+          meta.mixedColors,
+          meta.winnerColors,
+          intensity,
+          meta.winnerOnly
+        );
       }, show.delay);
       timers.push(timer);
     });
@@ -280,8 +303,8 @@
       return;
     }
 
-    var meta = game ? buildMetaFromGame(game) : extractMetaFromCard(card);
-    if (!meta.winnerSide || !meta.mixedColors.length) {
+    var meta = game ? buildMetaFromGame(game, card) : extractMetaFromCard(card);
+    if (!meta.winnerSide || (!meta.mixedColors.length && !meta.winnerColors.length)) {
       return;
     }
 

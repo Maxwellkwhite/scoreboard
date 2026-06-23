@@ -212,10 +212,18 @@
     }
 
     var packActive = window.gameCardPackOpen && window.gameCardPackOpen.isActive(card);
+    var strikeoutActive = window.gameCardStrikeout && window.gameCardStrikeout.isActive(card);
+    var walkActive = window.gameCardWalk && window.gameCardWalk.isActive(card);
     var gameEndActive = window.gameCardGameEnd && window.gameCardGameEnd.isActive(card);
     card.className = 'game-card game-card--' + status + ' game-card--link game-card-dev-tools__sample';
     if (packActive) {
       card.classList.add('game-card--pack-open');
+    }
+    if (strikeoutActive) {
+      card.classList.add('game-card--strikeout');
+    }
+    if (walkActive) {
+      card.classList.add('game-card--walk');
     }
     if (gameEndActive) {
       card.classList.add('game-card--game-end');
@@ -303,6 +311,35 @@
     }, 500);
   }
 
+  function playStrikeoutAnimation(looking) {
+    if (state.status === 'pre') {
+      setCardState('in', { battingSide: state.battingSide });
+    }
+    var side = state.battingSide;
+    if (window.gameCardStrikeout) {
+      window.gameCardStrikeout.play(card, {
+        playerName: looking ? 'F. Lindor' : 'P. Alonso',
+        teamAbbr: teams[side].abbr,
+        side: side,
+        looking: looking
+      });
+    }
+  }
+
+  function playWalkAnimation() {
+    if (state.status === 'pre') {
+      setCardState('in', { battingSide: state.battingSide });
+    }
+    var side = state.battingSide;
+    if (window.gameCardWalk) {
+      window.gameCardWalk.play(card, {
+        playerName: 'J. Soto',
+        teamAbbr: teams[side].abbr,
+        side: side
+      });
+    }
+  }
+
   function playGameEndAnimation() {
     state.awayScore = 5;
     state.homeScore = 3;
@@ -346,6 +383,15 @@
         break;
       case 'game-start':
         playGameStartAnimation();
+        break;
+      case 'strikeout-swinging':
+        playStrikeoutAnimation(false);
+        break;
+      case 'strikeout-looking':
+        playStrikeoutAnimation(true);
+        break;
+      case 'walk':
+        playWalkAnimation();
         break;
       case 'game-end':
         playGameEndAnimation();

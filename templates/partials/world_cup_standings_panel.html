@@ -1,3 +1,4 @@
+{% from 'macros/teams.html' import team_link %}
 <div class="standings-board world-cup-standings" aria-label="World Cup group standings">
   {% if standings %}
   <div class="world-cup-standings__grid">
@@ -27,8 +28,8 @@
                   {% else %}
                   <span class="world-cup-standings__logo world-cup-standings__logo--fallback" aria-hidden="true">{{ team.abbr }}</span>
                   {% endif %}
-                  <span class="world-cup-standings__abbr">{{ team.abbr }}</span>
-                  <span class="world-cup-standings__name">{{ team.name }}</span>
+                  <span class="world-cup-standings__abbr">{% if team.id %}{{ team_link(team.id, team.abbr, sport='world_cup') }}{% else %}{{ team.abbr }}{% endif %}</span>
+                  <span class="world-cup-standings__name">{% if team.id %}{{ team_link(team.id, team.name, sport='world_cup') }}{% else %}{{ team.name }}{% endif %}</span>
                 </div>
               </td>
               <td class="world-cup-standings__record">{{ team.record or '—' }}</td>

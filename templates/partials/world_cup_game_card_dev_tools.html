@@ -1,0 +1,76 @@
+<section class="game-card-dev-tools" id="wc-game-card-dev-tools" aria-label="World Cup game card animation test">
+  <div class="game-card-dev-tools__header">
+    <h3 class="game-card-dev-tools__title">Card animation test</h3>
+    <p class="game-card-dev-tools__hint">Dev preview — always visible below today&apos;s matches.</p>
+  </div>
+
+  <div class="game-card-dev-tools__layout">
+    <div
+      class="game-card game-card--in game-card--link game-card-dev-tools__sample"
+      id="wc-game-card-dev-sample"
+      data-sport="world_cup"
+    >
+      <div class="game-card-status">
+        <span class="status-pill status-pill--in" id="wc-game-card-dev-pill">65&apos;</span>
+      </div>
+
+      <div class="game-card-teams">
+        <div class="game-card-team game-card-team--away" id="wc-game-card-dev-away">
+          <img class="game-card-logo" src="https://a.espncdn.com/i/teamlogos/countries/500/arg.png" alt="" width="40" height="40">
+          <div class="game-card-team-meta">
+            <span class="game-card-abbr">ARG</span>
+            <span class="game-card-name">Argentina</span>
+          </div>
+          <span class="game-card-score" id="wc-game-card-dev-away-score">2</span>
+        </div>
+
+        <div class="game-card-team game-card-team--home" id="wc-game-card-dev-home">
+          <img class="game-card-logo" src="https://a.espncdn.com/i/teamlogos/countries/500/fra.png" alt="" width="40" height="40">
+          <div class="game-card-team-meta">
+            <span class="game-card-abbr">FRA</span>
+            <span class="game-card-name">France</span>
+          </div>
+          <span class="game-card-score" id="wc-game-card-dev-home-score">1</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="game-card-dev-tools__controls">
+      <fieldset class="game-card-dev-tools__group">
+        <legend>Animations</legend>
+        <div class="game-card-dev-tools__buttons">
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="pulse-away">Away score flash</button>
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="pulse-home">Home score flash</button>
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="pulse-full">Full score update</button>
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="game-start">Match start</button>
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="red-card">Red card</button>
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="yellow-card">Yellow card</button>
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="game-end">Match end (final)</button>
+        </div>
+      </fieldset>
+
+      <fieldset class="game-card-dev-tools__group">
+        <legend>Card state</legend>
+        <div class="game-card-dev-tools__buttons">
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="state-pre">Pre-match</button>
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="state-live">Live</button>
+          <button type="button" class="game-card-dev-tools__btn" data-dev-action="state-final">Final</button>
+        </div>
+      </fieldset>
+
+      <fieldset class="game-card-dev-tools__group">
+        <legend>Scores</legend>
+        <div class="game-card-dev-tools__score-row">
+          <span class="game-card-dev-tools__score-label">Away</span>
+          <button type="button" class="game-card-dev-tools__btn game-card-dev-tools__btn--icon" data-dev-action="away-dec" aria-label="Decrease away score">−</button>
+          <button type="button" class="game-card-dev-tools__btn game-card-dev-tools__btn--icon" data-dev-action="away-inc" aria-label="Increase away score">+</button>
+        </div>
+        <div class="game-card-dev-tools__score-row">
+          <span class="game-card-dev-tools__score-label">Home</span>
+          <button type="button" class="game-card-dev-tools__btn game-card-dev-tools__btn--icon" data-dev-action="home-dec" aria-label="Decrease home score">−</button>
+          <button type="button" class="game-card-dev-tools__btn game-card-dev-tools__btn--icon" data-dev-action="home-inc" aria-label="Increase home score">+</button>
+        </div>
+      </fieldset>
+    </div>
+  </div>
+</section>

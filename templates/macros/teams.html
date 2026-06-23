@@ -1,6 +1,10 @@
-{% macro team_link(id, label, class='team-link', stop_nav=false) -%}
+{% macro team_link(id, label, class='team-link', stop_nav=false, sport='mlb') -%}
 {% if id and label -%}
+{% if sport == 'world_cup' -%}
+<a href="{{ url_for('world_cup_team_page', team_id=id) }}" class="{{ class }}{% if stop_nav %} team-link--stop{% endif %}"{% if stop_nav %} onclick="event.stopPropagation();"{% endif %}>{{ label }}</a>
+{%- else -%}
 <a href="{{ url_for('mlb_team_page', team_id=id) }}" class="{{ class }}{% if stop_nav %} team-link--stop{% endif %}"{% if stop_nav %} onclick="event.stopPropagation();"{% endif %}>{{ label }}</a>
+{%- endif %}
 {%- elif label -%}
 {{ label }}
 {%- endif %}

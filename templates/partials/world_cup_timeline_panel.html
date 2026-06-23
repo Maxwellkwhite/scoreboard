@@ -1,3 +1,4 @@
+{% from 'macros/teams.html' import team_link %}
 <div class="wc-timeline-panel" id="wc-timeline-panel">
   {% if scoring_events %}
   <div class="wc-timeline-section">
@@ -13,7 +14,7 @@
           {% else %}
           <span class="play-feed-team__logo play-feed-team__logo--placeholder">{{ event_team.abbr }}</span>
           {% endif %}
-          <span class="play-feed-team__abbr">{{ event_team.abbr }}</span>
+          <span class="play-feed-team__abbr">{% if event_team.id %}{{ team_link(event_team.id, event_team.abbr, sport='world_cup') }}{% else %}{{ event_team.abbr }}{% endif %}</span>
         </span>
         {% else %}
         <span class="play-feed-team play-feed-team--empty" aria-hidden="true"></span>

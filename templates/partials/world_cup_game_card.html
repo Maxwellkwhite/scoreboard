@@ -1,5 +1,6 @@
+{% from 'macros/teams.html' import team_link %}
 {% set has_winner = game.away.winner or game.home.winner %}
-<div class="game-card game-card--{{ game.status_state }} game-card--link" role="link" tabindex="0" data-game-id="{{ game.id }}" data-game-href="/world-cup/match/{{ game.id }}">
+<div class="game-card game-card--{{ game.status_state }} game-card--link" role="link" tabindex="0" data-sport="world_cup" data-game-id="{{ game.id }}" data-game-href="/world-cup/match/{{ game.id }}">
   <div class="game-card-status">
     <span class="status-pill status-pill--{{ game.status_state }}"
       {% if game.status_state == 'pre' and game.start_time %}data-start-time="{{ game.start_time }}"{% endif %}>{{ game.status_detail }}</span>
@@ -15,8 +16,8 @@
       <div class="game-card-logo game-card-logo--placeholder">{{ team.abbr }}</div>
       {% endif %}
       <div class="game-card-team-meta">
-        <span class="game-card-abbr">{{ team.abbr }}</span>
-        <span class="game-card-name">{{ team.short_name or team.name }}</span>
+        <span class="game-card-abbr">{% if team.id %}{{ team_link(team.id, team.abbr, sport='world_cup') }}{% else %}{{ team.abbr }}{% endif %}</span>
+        <span class="game-card-name">{% if team.id %}{{ team_link(team.id, team.short_name or team.name, sport='world_cup') }}{% else %}{{ team.short_name or team.name }}{% endif %}</span>
       </div>
       <span class="game-card-score">
         {% if game.status_state in ('in', 'post') and team.score is not none %}
