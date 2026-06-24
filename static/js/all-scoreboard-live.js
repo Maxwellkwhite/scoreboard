@@ -295,6 +295,9 @@
     if (prevStatus && prevStatus !== 'post' && game.status_state === 'post' && window.gameCardGameEnd) {
       window.gameCardGameEnd.play(card, game);
     }
+    if (window.gameCardCardEvents) {
+      window.gameCardCardEvents.apply(card, game, key);
+    }
     lastStatus[key] = game.status_state;
 
     applyBattingTheme(card, game);

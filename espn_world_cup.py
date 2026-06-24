@@ -1146,6 +1146,83 @@ def _parse_leaders_blocks(
     return blocks
 
 
+def _card_type_from_key_event(event: dict[str, Any]) -> str | None:
+    type_obj = event.get("type") or {}
+    type_slug = str(type_obj.get("type") or "").lower()
+    type_text = str(type_obj.get("text") or "").lower()
+    if "red" in type_slug or type_text == "red card":
+        return "red"
+    if "yellow" in type_slug or type_text == "yellow card":
+        return "yellow"
+    body = str(event.get("text") or "").lower()
+    if "red card" in body:
+        return "red"
+    if "yellow card" in body:
+        return "yellow"
+    return None
+
+
+def _card_events_for_animation(
+    key_events: list[dict[str, Any]] | None,
+    match: dict[str, Any],
+) -> list[dict[str, Any]]:
+    away = match.get("away") or {}
+    home = match.get("home") or {}
+    cards: list[dict[str, Any]] = []
+    for event in key_events or []:
+        card_type = event.get("card_type")
+        if not card_type:
+            continue
+        event_id = event.get("id")
+        if not event_id:
+            continue
+        participants = event.get("participants") or []
+        player_name = event.get("player_name") or (participants[0] if participants else None)
+        if not player_name:
+            continue
+        side = event.get("side")
+        if not side:
+            continue
+        team = away if side == "away" else home
+        cards.append({
+            "event_id": str(event_id),
+            "card_type": card_type,
+            "player_name": player_name,
+            "side": side,
+            "team_abbr": team.get("abbr") or "",
+        })
+    return cards
+
+
+def enrich_live_card_animations(
+    matches: list[dict[str, Any]],
+    *,
+    force_refresh: bool = False,
+) -> None:
+    """Attach card_events for live matches so scoreboard clients can animate cards."""
+    live_matches = [
+        match for match in matches
+        if match.get("status_state") == "in" and match.get("id")
+    ]
+    if not live_matches:
+        return
+
+    def _enrich(match: dict[str, Any]) -> None:
+        try:
+            detail = fetch_match_summary(str(match["id"]), force_refresh=force_refresh)
+            key_events = (detail.get("live") or {}).get("key_events") or []
+            match["card_events"] = _card_events_for_animation(key_events, match)
+        except (requests.RequestException, ValueError):
+            return
+
+    if len(live_matches) == 1:
+        _enrich(live_matches[0])
+        return
+
+    with ThreadPoolExecutor(max_workers=min(4, len(live_matches))) as executor:
+        list(executor.map(_enrich, live_matches))
+
+
 def _event_side(team: dict[str, Any] | None, away_id: str, home_id: str) -> str | None:
     if not team:
         return None
@@ -1170,20 +1247,27 @@ def _parse_key_events(
             continue
         team = event.get("team") or {}
         participants = []
+        player_name = None
         for participant in event.get("participants") or []:
             athlete = participant.get("athlete") or {}
             name = athlete.get("displayName") or athlete.get("fullName")
             if name:
                 participants.append(name)
+                if not player_name:
+                    player_name = name
+        card_type = _card_type_from_key_event(event)
         parsed.append({
+            "id": event.get("id"),
             "type": event_type,
             "type_id": (event.get("type") or {}).get("type"),
             "clock": (event.get("clock") or {}).get("displayValue"),
             "text": event.get("text"),
             "side": _event_side(team, away_id, home_id),
             "participants": participants,
+            "player_name": player_name,
             "scoring": "goal" in event_type.lower(),
-            "card": "card" in event_type.lower(),
+            "card": card_type is not None,
+            "card_type": card_type,
             "substitution": event_type.lower() == "substitution",
         })
     return parsed

@@ -176,6 +176,9 @@
     if (prevStatus && prevStatus !== 'post' && game.status_state === 'post' && window.gameCardGameEnd) {
       window.gameCardGameEnd.play(card, game);
     }
+    if (window.gameCardCardEvents) {
+      window.gameCardCardEvents.apply(card, game, gameId);
+    }
     lastStatus[gameId] = game.status_state;
   }
 

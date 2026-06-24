@@ -440,11 +440,14 @@ def api_all_scoreboard_today():
     from scoreboard_all import fetch_all_scoreboard, merge_and_sort, tag_games
     from espn_mlb import fetch_scoreboard as fetch_mlb_scoreboard
     from espn_world_cup import fetch_scoreboard as fetch_wc_scoreboard
+    from espn_world_cup import enrich_live_card_animations
 
     today = date.today()
+    wc_games = fetch_wc_scoreboard(today, force_refresh=True)
+    enrich_live_card_animations(wc_games, force_refresh=True)
     games = merge_and_sort(
         tag_games(fetch_mlb_scoreboard(today, force_refresh=True), 'mlb'),
-        tag_games(fetch_wc_scoreboard(today, force_refresh=True), 'world_cup'),
+        tag_games(wc_games, 'world_cup'),
     )
     has_live = any(game.get('status_state') == 'in' for game in games)
     return jsonify({
@@ -519,10 +522,11 @@ def api_world_cup_scoreboard():
     endpoint='api_world_cup_scoreboard_today',
 )
 def api_world_cup_scoreboard_today():
-    from espn_world_cup import fetch_scoreboard
+    from espn_world_cup import fetch_scoreboard, enrich_live_card_animations
 
     today = date.today()
     games = fetch_scoreboard(today, force_refresh=True)
+    enrich_live_card_animations(games, force_refresh=True)
     return jsonify({
         'date': today.isoformat(),
         'games': games,
