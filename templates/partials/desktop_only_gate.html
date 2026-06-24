@@ -1,12 +1,2 @@
 <script src="{{ url_for('static', filename='js/desktop-only.js') }}"></script>
-<div id="desktop-only-overlay" class="desktop-only-overlay" role="dialog" aria-modal="true" aria-labelledby="desktop-only-title">
-  <div class="desktop-only-content">
-    <svg class="desktop-only-icon" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-      <line x1="8" y1="21" x2="16" y2="21"></line>
-      <line x1="12" y1="17" x2="12" y2="21"></line>
-    </svg>
-    <h2 class="desktop-only-title" id="desktop-only-title">Desktop Experience Only</h2>
-    <p class="desktop-only-text">Please access Scoreboard on a desktop browser.</p>
-  </div>
-</div>
+{% include "partials/mobile_preview.html" %}

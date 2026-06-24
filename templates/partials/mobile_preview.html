@@ -1,0 +1,218 @@
+<div id="desktop-only-overlay" class="desktop-only-overlay mobile-preview" role="document" aria-labelledby="mobile-preview-title">
+  <div class="mobile-preview__scroll">
+    <header class="mobile-preview__hero">
+      <a class="mobile-preview__brand" href="{{ url_for('home_page') }}" aria-label="Scorebore home">
+        <img
+          class="mobile-preview__logo"
+          src="{{ url_for('static', filename='images/logo.png') }}"
+          alt=""
+          width="48"
+          height="48"
+        >
+        <span class="mobile-preview__brand-text">
+          <span class="navbar-brand__score">Score</span><span class="navbar-brand__bore">bore</span>
+        </span>
+      </a>
+      <h1 class="mobile-preview__title" id="mobile-preview-title">Built for desktop</h1>
+      <p class="mobile-preview__lede">Live MLB and World Cup scoreboards with rich animations and deep stats. Preview what you get on a bigger screen below.</p>
+    </header>
+
+    <section class="mobile-preview__card mobile-preview__card--open" data-preview-card>
+      <button type="button" class="mobile-preview__card-toggle" aria-expanded="true" aria-controls="mobile-preview-animations">
+        <span class="mobile-preview__card-icon bi bi-lightning-charge-fill" aria-hidden="true"></span>
+        <span class="mobile-preview__card-head">
+          <span class="mobile-preview__card-title">Live card animations</span>
+          <span class="mobile-preview__card-desc">Score flashes, red cards, pack opens, and more</span>
+        </span>
+        <span class="mobile-preview__card-chevron bi bi-chevron-down" aria-hidden="true"></span>
+      </button>
+      <div class="mobile-preview__card-body" id="mobile-preview-animations">
+        <div class="player-panel-toggle mobile-preview__sport-toggle" role="group" aria-label="Animation sport">
+          <button type="button" class="player-panel-toggle__btn is-active" data-preview-sport="world_cup" aria-pressed="true">World Cup</button>
+          <button type="button" class="player-panel-toggle__btn" data-preview-sport="mlb" aria-pressed="false">MLB</button>
+        </div>
+
+        <div class="mobile-preview__demo" id="mobile-preview-wc-demo" data-preview-sport-panel="world_cup">
+          <div
+            class="game-card game-card--in game-card-dev-tools__sample mobile-preview__game-card"
+            id="mobile-preview-wc-card"
+            data-sport="world_cup"
+          >
+            <div class="game-card-status">
+              <span class="status-pill status-pill--in" id="mobile-preview-wc-pill">65&apos;</span>
+            </div>
+            <div class="game-card-teams">
+              <div class="game-card-team game-card-team--away" id="mobile-preview-wc-away" style="--team-color: #74acdf;">
+                <img class="game-card-logo" src="https://a.espncdn.com/i/teamlogos/countries/500/arg.png" alt="" width="40" height="40">
+                <div class="game-card-team-meta">
+                  <span class="game-card-abbr">ARG</span>
+                  <span class="game-card-name">Argentina</span>
+                </div>
+                <span class="game-card-score" id="mobile-preview-wc-away-score">2</span>
+              </div>
+              <div class="game-card-team game-card-team--home" id="mobile-preview-wc-home" style="--team-color: #21304e;">
+                <img class="game-card-logo" src="https://a.espncdn.com/i/teamlogos/countries/500/fra.png" alt="" width="40" height="40">
+                <div class="game-card-team-meta">
+                  <span class="game-card-abbr">FRA</span>
+                  <span class="game-card-name">France</span>
+                </div>
+                <span class="game-card-score" id="mobile-preview-wc-home-score">1</span>
+              </div>
+            </div>
+          </div>
+          <div class="mobile-preview__chips" data-demo-root="wc">
+            <button type="button" class="mobile-preview__chip mobile-preview__chip--accent" data-dev-action="red-card">Red card</button>
+            <button type="button" class="mobile-preview__chip" data-dev-action="yellow-card">Yellow card</button>
+            <button type="button" class="mobile-preview__chip" data-dev-action="pulse-full">Goal flash</button>
+            <button type="button" class="mobile-preview__chip" data-dev-action="game-start">Kickoff</button>
+            <button type="button" class="mobile-preview__chip" data-dev-action="game-end">Full time</button>
+          </div>
+        </div>
+
+        <div class="mobile-preview__demo" id="mobile-preview-mlb-demo" data-preview-sport-panel="mlb" hidden>
+          <div
+            class="game-card game-card--in game-card-dev-tools__sample mobile-preview__game-card"
+            id="mobile-preview-mlb-card"
+            data-sport="mlb"
+            style="--batting-team-color: #ff5910; --batting-team-bg: #002d72; --batting-team-text: #ffffff;"
+          >
+            <div class="game-card-status">
+              <span class="status-pill status-pill--in status-pill--batting-team" id="mobile-preview-mlb-pill">Top 7th</span>
+              <div class="game-card-situation" id="mobile-preview-mlb-situation">
+                <span class="game-card-bases" aria-label="Runners on base">
+                  <span class="game-card-base game-card-base--2nd"></span>
+                  <span class="game-card-base game-card-base--3rd"></span>
+                  <span class="game-card-base game-card-base--1st game-card-base--occupied"></span>
+                </span>
+                <span class="game-card-count" id="mobile-preview-mlb-count">1-2, 1 out</span>
+              </div>
+            </div>
+            <div class="game-card-teams">
+              <div class="game-card-team game-card-team--away" id="mobile-preview-mlb-away" style="--team-color: #ff5910;">
+                <img class="game-card-logo" src="https://a.espncdn.com/i/teamlogos/mlb/500/21.png" alt="" width="40" height="40">
+                <div class="game-card-team-meta">
+                  <span class="game-card-abbr">NYM</span>
+                  <span class="game-card-name">Mets</span>
+                </div>
+                <span class="game-card-score" id="mobile-preview-mlb-away-score">4</span>
+              </div>
+              <div class="game-card-team game-card-team--home" id="mobile-preview-mlb-home" style="--team-color: #e81828;">
+                <img class="game-card-logo" src="https://a.espncdn.com/i/teamlogos/mlb/500/22.png" alt="" width="40" height="40">
+                <div class="game-card-team-meta">
+                  <span class="game-card-abbr">PHI</span>
+                  <span class="game-card-name">Phillies</span>
+                </div>
+                <span class="game-card-score" id="mobile-preview-mlb-home-score">3</span>
+              </div>
+            </div>
+          </div>
+          <div class="mobile-preview__chips" data-demo-root="mlb">
+            <button type="button" class="mobile-preview__chip mobile-preview__chip--accent" data-dev-action="game-start">Pack open</button>
+            <button type="button" class="mobile-preview__chip" data-dev-action="strikeout-swinging">Strikeout</button>
+            <button type="button" class="mobile-preview__chip" data-dev-action="walk">Walk</button>
+            <button type="button" class="mobile-preview__chip" data-dev-action="pulse-full">Score flash</button>
+            <button type="button" class="mobile-preview__chip" data-dev-action="game-end">Game end</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mobile-preview__card" data-preview-card>
+      <button type="button" class="mobile-preview__card-toggle" aria-expanded="false" aria-controls="mobile-preview-scoreboards">
+        <span class="mobile-preview__card-icon bi bi-grid-3x3-gap-fill" aria-hidden="true"></span>
+        <span class="mobile-preview__card-head">
+          <span class="mobile-preview__card-title">Live scoreboards</span>
+          <span class="mobile-preview__card-desc">All games, MLB, and World Cup in one place</span>
+        </span>
+        <span class="mobile-preview__card-chevron bi bi-chevron-down" aria-hidden="true"></span>
+      </button>
+      <div class="mobile-preview__card-body" id="mobile-preview-scoreboards" hidden>
+        <ul class="mobile-preview__list">
+          <li><strong>All Games</strong> — MLB and World Cup on a single board with live score polling.</li>
+          <li><strong>Today / Yesterday / Upcoming</strong> — quick day tabs plus standings side-by-side.</li>
+          <li><strong>Live situation</strong> — bases, counts, match clocks, and batting-team highlights on each card.</li>
+          <li><strong>Click through</strong> — every card opens a full match page with tabs and live updates.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="mobile-preview__card" data-preview-card>
+      <button type="button" class="mobile-preview__card-toggle" aria-expanded="false" aria-controls="mobile-preview-stats">
+        <span class="mobile-preview__card-icon bi bi-bar-chart-fill" aria-hidden="true"></span>
+        <span class="mobile-preview__card-head">
+          <span class="mobile-preview__card-title">Player &amp; team stats</span>
+          <span class="mobile-preview__card-desc">Profiles, splits, rosters, and schedules</span>
+        </span>
+        <span class="mobile-preview__card-chevron bi bi-chevron-down" aria-hidden="true"></span>
+      </button>
+      <div class="mobile-preview__card-body" id="mobile-preview-stats" hidden>
+        <div class="mobile-preview__mock player-profile mobile-preview__mock--player">
+          <div class="player-profile__lead">
+            <div class="player-profile__headshot player-profile__headshot--placeholder" aria-hidden="true"><span>J</span></div>
+            <div class="player-profile__details">
+              <p class="mobile-preview__mock-label">Example player page</p>
+              <p class="player-profile__name">Juan Soto</p>
+              <p class="player-profile__tags"><span>NYY</span><span>OF</span><span>#22</span></p>
+            </div>
+          </div>
+          <dl class="player-vitals mobile-preview__vitals">
+            <div class="player-vital"><dt>B/T</dt><dd>L/L</dd></div>
+            <div class="player-vital"><dt>Age</dt><dd>26</dd></div>
+            <div class="player-vital"><dt>Height</dt><dd>6' 1"</dd></div>
+          </dl>
+        </div>
+        <div class="mobile-preview__mock-table-wrap">
+          <table class="mobile-preview__mock-table">
+            <thead>
+              <tr><th scope="col">Stat</th><th scope="col">2025</th><th scope="col">Career</th></tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">AVG</th><td>.288</td><td>.285</td></tr>
+              <tr><th scope="row">HR</th><td>41</td><td>236</td></tr>
+              <tr><th scope="row">OPS</th><td>.989</td><td>.956</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="mobile-preview__mock-note">Team pages include rosters, leaders, group standings, and upcoming / recent games.</p>
+      </div>
+    </section>
+
+    <section class="mobile-preview__card" data-preview-card>
+      <button type="button" class="mobile-preview__card-toggle" aria-expanded="false" aria-controls="mobile-preview-games">
+        <span class="mobile-preview__card-icon bi bi-collection-play-fill" aria-hidden="true"></span>
+        <span class="mobile-preview__card-head">
+          <span class="mobile-preview__card-title">Match &amp; game detail</span>
+          <span class="mobile-preview__card-desc">Lineups, timeline, box score, and more</span>
+        </span>
+        <span class="mobile-preview__card-chevron bi bi-chevron-down" aria-hidden="true"></span>
+      </button>
+      <div class="mobile-preview__card-body" id="mobile-preview-games" hidden>
+        <div class="mobile-preview__mock-tabs" role="presentation">
+          <span class="mobile-preview__mock-tab mobile-preview__mock-tab--active">Timeline</span>
+          <span class="mobile-preview__mock-tab">Lineups</span>
+          <span class="mobile-preview__mock-tab">Stats</span>
+          <span class="mobile-preview__mock-tab">Standings</span>
+        </div>
+        <ul class="mobile-preview__list">
+          <li><strong>MLB</strong> — live play feed, box score, due-up batters, pitching decisions, and preview panels.</li>
+          <li><strong>World Cup</strong> — scoring timeline, match commentary, tournament leaders, and group tables.</li>
+          <li><strong>Search</strong> — jump to any team or player across both sports from the nav bar.</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer class="mobile-preview__footer">
+      <p class="mobile-preview__footer-text">For the full experience — live data, search, and every panel — open Scorebore on a <strong>desktop browser</strong>.</p>
+    </footer>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/game-card-score-flash.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/game-card-pack-open.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/game-card-strikeout.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/game-card-walk.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/game-card-match-start.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/game-card-red-card.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/game-card-yellow-card.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/game-card-game-end.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/mobile-preview.js') }}" defer></script>
