@@ -44,7 +44,6 @@
     {% endif %}
   </div>
 </nav>
-{% include "partials/presenting_sponsor_banner.html" %}
 {% if active_sport | default('all') in ['mlb', 'all', 'world_cup'] %}
 <script src="{{ url_for('static', filename='js/scoreboard-search.js') }}" defer></script>
 {% endif %}

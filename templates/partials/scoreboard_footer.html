@@ -1,0 +1,10 @@
+{% set contact_email = scoreboard_contact_email | default('mwdynamicsinc@gmail.com', true) %}
+{% set footer_subject = scoreboard_footer_mailto_subject | default('Scorebore%20contact', true) %}
+<footer class="scoreboard-footer">
+  <div class="scoreboard-footer__inner">
+    <p class="scoreboard-footer__text">
+      Questions, feedback, or ad inquiries? Email
+      <a class="scoreboard-footer__email" href="mailto:{{ contact_email }}?subject={{ footer_subject }}">{{ contact_email }}</a>
+    </p>
+  </div>
+</footer>

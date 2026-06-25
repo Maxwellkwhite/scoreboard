@@ -72,6 +72,7 @@ GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
 DOMAIN = os.environ.get('DOMAIN', 'http://127.0.0.1:5000')
 CANONICAL_BASE_URL = os.environ.get('CANONICAL_BASE_URL', DOMAIN)
 SUPPORT_EMAIL = os.environ.get('SUPPORT_EMAIL', 'support@example.com')
+SCOREBOARD_CONTACT_EMAIL = os.environ.get('SCOREBOARD_CONTACT_EMAIL', 'mwdynamicsinc@gmail.com')
 
 
 def _is_production_env() -> bool:
@@ -79,24 +80,9 @@ def _is_production_env() -> bool:
 
 
 def _presenting_sponsor_context() -> dict:
-    name = os.environ.get('PRESENTING_SPONSOR_NAME', '').strip()
-    show = not _is_production_env() and os.environ.get(
-        'PRESENTING_SPONSOR_ENABLED', 'true'
-    ).strip().lower() != 'false'
-    return {
-        'presenting_sponsor': {
-            'enabled': show,
-            'name': name or None,
-            'logo_url': os.environ.get('PRESENTING_SPONSOR_LOGO_URL', '').strip() or None,
-            'url': os.environ.get('PRESENTING_SPONSOR_URL', '').strip() or None,
-            'tagline': os.environ.get('PRESENTING_SPONSOR_TAGLINE', '').strip() or None,
-        },
-        'app_intro_text': os.environ.get(
-            'APP_INTRO_TEXT',
-            'Live scores with rich animated game cards for MLB and the World Cup. '
-            'Follow today\'s games, standings, and match detail in one place.',
-        ).strip(),
-    }
+    from presenting_sponsor import presenting_sponsor_context
+
+    return presenting_sponsor_context()
 
 #done on max@emailsconfirmed.com
 #os.environ.get('DOMAIN', 'http://127.0.0.1:5002')
@@ -193,6 +179,8 @@ db.init_app(app)
 def inject_support_contact():
     return {
         'support_email': SUPPORT_EMAIL,
+        'scoreboard_contact_email': SCOREBOARD_CONTACT_EMAIL,
+        'scoreboard_footer_mailto_subject': quote('Scorebore contact', safe=''),
         'help_mailto_subject': quote('Scoreboard - Help request', safe=''),
         'show_dev_tools': not _is_production_env(),
         'show_demo': not _is_production_env(),

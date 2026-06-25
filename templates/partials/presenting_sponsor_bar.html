@@ -1,0 +1,42 @@
+{% set sponsor = presenting_sponsor | default({
+  'enabled': false,
+  'name': none,
+  'logo_url': none,
+  'url': none,
+  'tagline': none
+}, true) %}
+{% if sponsor.enabled %}
+<div class="presenting-sponsor-bar" aria-label="Presenting sponsor">
+  <span class="presenting-sponsor-bar__label">Presented by:</span>
+  {% if sponsor.name %}
+  <a
+    class="presenting-sponsor-bar__slot presenting-sponsor-bar__slot--filled"
+    href="{{ sponsor.url or '#' }}"
+    {% if sponsor.url %}target="_blank" rel="noopener sponsored"{% endif %}
+  >
+    {% if sponsor.logo_url %}
+    <span class="presenting-sponsor-bar__logo-wrap">
+      <img
+        class="presenting-sponsor-bar__logo"
+        src="{{ sponsor.logo_url }}"
+        alt=""
+        width="96"
+        height="28"
+        loading="lazy"
+      >
+    </span>
+    {% endif %}
+    <span class="presenting-sponsor-bar__copy">
+      <span class="presenting-sponsor-bar__name">{{ sponsor.name }}</span>
+      {% if sponsor.tagline %}
+      <span class="presenting-sponsor-bar__tagline">{{ sponsor.tagline }}</span>
+      {% endif %}
+    </span>
+  </a>
+  {% else %}
+  <div class="presenting-sponsor-bar__slot presenting-sponsor-bar__slot--placeholder" aria-label="Sponsor advertisement placeholder">
+    <span class="presenting-sponsor-bar__placeholder">Your ad here</span>
+  </div>
+  {% endif %}
+</div>
+{% endif %}

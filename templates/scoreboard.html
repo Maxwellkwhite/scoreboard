@@ -26,6 +26,7 @@
     <section class="scoreboard-section" id="scores-section">
       <div class="scoreboard-section-title">
         <div class="scoreboard-view-nav">
+          {% include "partials/presenting_sponsor_bar.html" %}
           <div class="day-tabs" role="tablist" aria-label="Choose view">
             <button type="button" class="day-tab day-tab--active" id="tab-today" role="tab" aria-selected="true" aria-controls="today-panel" data-day="today">Today</button>
             <button type="button" class="day-tab" id="tab-yesterday" role="tab" aria-selected="false" aria-controls="yesterday-panel" data-day="yesterday">Yesterday</button>
@@ -86,6 +87,8 @@
     </section>
 
   </main>
+
+  {% include "partials/scoreboard_footer.html" %}
 
   <script>
     (function () {

@@ -17,6 +17,7 @@
     <section class="scoreboard-section demo-scoreboard" id="demo-scoreboard" aria-label="MLB demo scoreboard">
       <div class="scoreboard-section-title">
         <div class="scoreboard-view-nav">
+          {% include "partials/presenting_sponsor_bar.html" %}
           <div class="day-tabs" role="presentation" aria-hidden="true">
             <button type="button" class="day-tab day-tab--active" tabindex="-1">Today</button>
             <button type="button" class="day-tab" tabindex="-1">Yesterday</button>
@@ -70,6 +71,8 @@
       </section>
     </section>
   </main>
+
+  {% include "partials/scoreboard_footer.html" %}
 
   <script>
     document.querySelectorAll('.section-date[data-local-date]').forEach(function (el) {
