@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scoreboard — MLB</title>
+  {% include "partials/scoreboard_head_icons.html" %}
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/scoreboard.css') }}">
+</head>
+<body class="scoreboard-page demo-scoreboard-page">
+  {% include "partials/desktop_only_gate.html" %}
+  {% include "partials/scoreboard_nav.html" %}
+
+  <main class="scoreboard-main">
+    <section class="scoreboard-section demo-scoreboard" id="demo-scoreboard" aria-label="MLB demo scoreboard">
+      <div class="scoreboard-section-title">
+        <div class="scoreboard-view-nav">
+          <div class="day-tabs" role="presentation" aria-hidden="true">
+            <button type="button" class="day-tab day-tab--active" tabindex="-1">Today</button>
+            <button type="button" class="day-tab" tabindex="-1">Yesterday</button>
+            <button type="button" class="day-tab" tabindex="-1">Standings</button>
+          </div>
+          <span class="section-date" data-local-date="{{ today.isoformat() }}">{{ today.isoformat() }}</span>
+        </div>
+      </div>
+
+      <div class="scoreboard-grid demo-scoreboard__grid" id="demo-games">
+        {% for game in demo_games %}
+          {% include "partials/demo_game_card.html" %}
+        {% endfor %}
+      </div>
+
+      <section class="demo-scoreboard__controls" id="demo-controls" aria-label="Demo controls">
+        <div class="demo-scoreboard__toolbar">
+          <label class="demo-scoreboard__target-label" for="demo-target">Target card</label>
+          <select class="demo-scoreboard__target" id="demo-target">
+            <option value="all">All cards</option>
+            {% for game in demo_games %}
+            <option value="{{ game.index }}">{{ game.away.short_name }} @ {{ game.home.short_name }}</option>
+            {% endfor %}
+          </select>
+          <button type="button" class="demo-scoreboard__btn demo-scoreboard__btn--primary" id="demo-run-full">Run full demo</button>
+          <button type="button" class="demo-scoreboard__btn" id="demo-reset-all">Reset all</button>
+        </div>
+
+        <div class="demo-scoreboard__groups">
+          <fieldset class="demo-scoreboard__group">
+            <legend>Animations</legend>
+            <div class="demo-scoreboard__buttons">
+              <button type="button" class="demo-scoreboard__btn" data-demo-action="game-start">Pack open</button>
+              <button type="button" class="demo-scoreboard__btn" data-demo-action="pulse-full">Score flash</button>
+              <button type="button" class="demo-scoreboard__btn" data-demo-action="pulse-card">Batting flash</button>
+              <button type="button" class="demo-scoreboard__btn" data-demo-action="strikeout-swinging">Strikeout</button>
+              <button type="button" class="demo-scoreboard__btn" data-demo-action="walk">Walk</button>
+              <button type="button" class="demo-scoreboard__btn" data-demo-action="game-end">Game end</button>
+            </div>
+          </fieldset>
+          <fieldset class="demo-scoreboard__group">
+            <legend>Card state</legend>
+            <div class="demo-scoreboard__buttons">
+              <button type="button" class="demo-scoreboard__btn" data-demo-action="state-pre">Pre-game</button>
+              <button type="button" class="demo-scoreboard__btn" data-demo-action="state-live-away">Live (away batting)</button>
+              <button type="button" class="demo-scoreboard__btn" data-demo-action="state-live-home">Live (home batting)</button>
+              <button type="button" class="demo-scoreboard__btn" data-demo-action="state-final">Final</button>
+            </div>
+          </fieldset>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    document.querySelectorAll('.section-date[data-local-date]').forEach(function (el) {
+      var iso = el.getAttribute('data-local-date');
+      if (!iso) return;
+      var parts = iso.split('-');
+      if (parts.length !== 3) return;
+      var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      el.textContent = d.toLocaleDateString(undefined, {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    });
+  </script>
+  <script id="demo-game-configs" type="application/json">{{ demo_games_js | tojson }}</script>
+  <script src="{{ url_for('static', filename='js/game-card-score-flash.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/game-card-pack-open.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/game-card-strikeout.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/game-card-walk.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/game-card-game-end.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/team-batting-pill.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/demo-scoreboard.js') }}" defer></script>
+</body>
+</html>

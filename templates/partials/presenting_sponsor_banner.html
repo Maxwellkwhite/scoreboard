@@ -1,0 +1,51 @@
+{% set sponsor = presenting_sponsor | default({
+  'enabled': false,
+  'name': none,
+  'logo_url': none,
+  'url': none,
+  'tagline': none
+}, true) %}
+{% set intro = app_intro_text | default(
+  'Live scores with rich animated game cards for MLB and the World Cup. '
+  'Follow today\'s games, standings, and match detail in one place.',
+  true
+) %}
+{% if sponsor.enabled %}
+<aside class="presenting-sponsor" aria-label="About ScoreBore and presenting sponsor">
+  <div class="presenting-sponsor__inner">
+    <div class="presenting-sponsor__about">
+      <p class="presenting-sponsor__text">{{ intro }}</p>
+    </div>
+    <div class="presenting-sponsor__ad">
+      <span class="presenting-sponsor__label">Presented by</span>
+      {% if sponsor.name %}
+      <a
+        class="presenting-sponsor__slot presenting-sponsor__slot--filled"
+        href="{{ sponsor.url or '#' }}"
+        {% if sponsor.url %}target="_blank" rel="noopener sponsored"{% endif %}
+      >
+        {% if sponsor.logo_url %}
+        <img
+          class="presenting-sponsor__logo"
+          src="{{ sponsor.logo_url }}"
+          alt=""
+          width="120"
+          height="40"
+          loading="lazy"
+        >
+        {% endif %}
+        <span class="presenting-sponsor__name">{{ sponsor.name }}</span>
+        {% if sponsor.tagline %}
+        <span class="presenting-sponsor__tagline">{{ sponsor.tagline }}</span>
+        {% endif %}
+      </a>
+      {% else %}
+      <div class="presenting-sponsor__slot presenting-sponsor__slot--placeholder" aria-label="Sponsor advertisement placeholder">
+        <span class="presenting-sponsor__placeholder-title">Your ad here</span>
+        <span class="presenting-sponsor__placeholder-hint">Presenting sponsor slot</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</aside>
+{% endif %}

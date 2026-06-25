@@ -14,4 +14,11 @@
     href="{{ url_for('world_cup_scoreboard') }}"
     {% if active_sport == 'world_cup' %}aria-current="page"{% endif %}
   >World Cup</a>
+  {% if show_demo %}
+  <a
+    class="sport-nav__link{% if active_sport == 'demo' %} sport-nav__link--active{% endif %}"
+    href="{{ url_for('demo_page') }}"
+    {% if active_sport == 'demo' %}aria-current="page"{% endif %}
+  >Demo</a>
+  {% endif %}
 </nav>
